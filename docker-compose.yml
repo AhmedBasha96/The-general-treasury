@@ -28,7 +28,7 @@ services:
       - DB_PASSWORD=CashSafePassword123!
       - DB_NAME=cash_safe_db
     ports:
-      - "5000:5000"
+      - "5001:5000"
     depends_on:
       - db
 
