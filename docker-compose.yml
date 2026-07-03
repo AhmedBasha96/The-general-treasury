@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # 1. MS SQL Server Database Container
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: cash-safe-db
+    restart: always
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=CashSafePassword123!
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+
+  # 2. Node.js Express Backend API Container
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cash-safe-backend
+    restart: always
+    environment:
+      - PORT=5000
+      - DB_SERVER=db
+      - DB_USER=sa
+      - DB_PASSWORD=CashSafePassword123!
+      - DB_NAME=cash_safe_db
+    ports:
+      - "5000:5000"
+    depends_on:
+      - db
+
+  # 3. React Vite Frontend Container (Nginx production build by default)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    container_name: cash-safe-frontend
+    restart: always
+    ports:
+      - "3000:80" # Map container Nginx port 80 to local host port 3000
+    depends_on:
+      - backend
+
+    # NOTE: If you wish to run the frontend in DEVELOPMENT mode with hot-reloading:
+    # 1. Change the build target above to 'dev' (target: dev)
+    # 2. Map container port 3000 to local port 3000 ("3000:3000")
+    # 3. Set the environment variable: VITE_BACKEND_URL: http://backend:5000
+    # 4. Uncomment the volumes below to map your local files:
+    #
+    # build:
+    #   context: ./frontend
+    #   dockerfile: Dockerfile
+    #   target: dev
+    # ports:
+    #   - "3000:3000"
+    # environment:
+    #   - VITE_BACKEND_URL=http://backend:5000
+    # volumes:
+    #   - ./frontend:/app
+    #   - /app/node_modules
+
+volumes:
+  mssql_data:
+    driver: local

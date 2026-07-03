@@ -15,44 +15,51 @@ const baseConfig = {
 let pool;
 
 async function connectDB() {
-  try {
-    const dbName = process.env.DB_NAME || 'cash_safe_db';
-    
-    // 1. Connect to master database first to check/create the target database
-    const masterConfig = { ...baseConfig, database: 'master' };
-    console.log(`Connecting to SQL Server at ${baseConfig.server} (master database) to verify existence of "${dbName}"...`);
-    const masterPool = await sql.connect(masterConfig);
-    
-    // Check if database exists
-    const checkDbResult = await masterPool.request()
-      .input('dbName', sql.VarChar, dbName)
-      .query(`SELECT database_id FROM sys.databases WHERE name = @dbName`);
+  const dbName = process.env.DB_NAME || 'cash_safe_db';
+  const masterConfig = { ...baseConfig, database: 'master' };
+  const maxRetries = 15;
+  const retryInterval = 5000; // 5 seconds
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Connecting to SQL Server at ${baseConfig.server} (master database) to verify existence of "${dbName}" (Attempt ${attempt}/${maxRetries})...`);
+      const masterPool = await sql.connect(masterConfig);
       
-    if (checkDbResult.recordset.length === 0) {
-      console.log(`Database "${dbName}" does not exist. Creating database...`);
-      await masterPool.request().query(`CREATE DATABASE [${dbName}]`);
-      console.log(`Database "${dbName}" created successfully!`);
-    } else {
-      console.log(`Database "${dbName}" already exists.`);
+      // Check if database exists
+      const checkDbResult = await masterPool.request()
+        .input('dbName', sql.VarChar, dbName)
+        .query(`SELECT database_id FROM sys.databases WHERE name = @dbName`);
+        
+      if (checkDbResult.recordset.length === 0) {
+        console.log(`Database "${dbName}" does not exist. Creating database...`);
+        await masterPool.request().query(`CREATE DATABASE [${dbName}]`);
+        console.log(`Database "${dbName}" created successfully!`);
+      } else {
+        console.log(`Database "${dbName}" already exists.`);
+      }
+      
+      await masterPool.close();
+      
+      // 2. Connect to the target database
+      const dbConfig = { ...baseConfig, database: dbName };
+      pool = await sql.connect(dbConfig);
+      console.log(`Connected to MS SQL Server database "${dbName}" successfully.`);
+      
+      // 3. Create tables if they do not exist
+      await createTables();
+      
+      // 4. Seed representatives if empty
+      await seedData();
+      
+      return pool;
+    } catch (error) {
+      console.error(`Database connection / initialization failed (Attempt ${attempt}/${maxRetries}):`, error.message);
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      console.log(`Retrying in ${retryInterval / 1000} seconds...`);
+      await new Promise(resolve => setTimeout(resolve, retryInterval));
     }
-    
-    await masterPool.close();
-    
-    // 2. Connect to the target database
-    const dbConfig = { ...baseConfig, database: dbName };
-    pool = await sql.connect(dbConfig);
-    console.log(`Connected to MS SQL Server database "${dbName}" successfully.`);
-    
-    // 3. Create tables if they do not exist
-    await createTables();
-    
-    // 4. Seed representatives if empty
-    await seedData();
-    
-    return pool;
-  } catch (error) {
-    console.error('Database connection / initialization failed:', error);
-    throw error;
   }
 }
 
