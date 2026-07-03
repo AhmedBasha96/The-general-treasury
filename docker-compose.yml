@@ -41,13 +41,13 @@ services:
     container_name: cash-safe-frontend
     restart: always
     ports:
-      - "3000:80" # Map container Nginx port 80 to local host port 3000
+      - "3008:80" # Map container Nginx port 80 to local host port 3008
     depends_on:
       - backend
 
     # NOTE: If you wish to run the frontend in DEVELOPMENT mode with hot-reloading:
     # 1. Change the build target above to 'dev' (target: dev)
-    # 2. Map container port 3000 to local port 3000 ("3000:3000")
+    # 2. Map container port 3000 to local port 3008 ("3008:3000")
     # 3. Set the environment variable: VITE_BACKEND_URL: http://backend:5000
     # 4. Uncomment the volumes below to map your local files:
     #
@@ -56,7 +56,7 @@ services:
     #   dockerfile: Dockerfile
     #   target: dev
     # ports:
-    #   - "3000:3000"
+    #   - "3008:3000"
     # environment:
     #   - VITE_BACKEND_URL=http://backend:5000
     # volumes:
