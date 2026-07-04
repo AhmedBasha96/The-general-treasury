@@ -1123,6 +1123,16 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
     return { ...rep, total };
   }).filter(r => r.total > 0).sort((a, b) => b.total - a.total);
 
+  // Group reps by agency for display
+  const repsByAgency = agencies.map(agency => {
+    return {
+      agency,
+      repsList: reps.filter(r => r.agency_id === agency.id)
+    };
+  }).filter(group => group.repsList.length > 0);
+
+  const uncategorizedReps = reps.filter(r => !r.agency_id);
+
   const selectedRepName = reps.find(r => r.id === Number(newTx.repId))?.name || '';
 
   if (!currentUser) {
@@ -2069,66 +2079,148 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                 </div>
               </div>
             ) : (
-              /* ALL REPS TABLE */
-              <div className="table-container">
+              /* ALL REPS TABLE (GROUPED) */
+              <div className="reps-grouped-container" style={{ width: '100%' }}>
                 {reps.length === 0 ? (
                   <div className="no-data-msg">لا يوجد مناديب مسجلين بالنظام حالياً.</div>
                 ) : (
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>كود المندوب</th>
-                        <th>الاسم بالكامل</th>
-                        <th>التوكيل</th>
-                        <th>المشرف المسؤول</th>
-                        <th>رقم الهاتف</th>
-                        <th>نوع المندوب</th>
-                        <th>الرصيد الحالي</th>
-                        <th>الإجراءات</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reps.map((rep) => (
-                        <tr key={rep.id}>
-                          <td><strong>{rep.code}</strong></td>
-                          <td>{rep.name}</td>
-                          <td>{rep.agency_name ? `${rep.agency_name} (${rep.agency_code})` : '—'}</td>
-                          <td>{rep.supervisor_name ? `${rep.supervisor_name} (${rep.supervisor_code})` : <em style={{ color: 'var(--text-secondary)' }}>لا يوجد</em>}</td>
-                          <td>{rep.phone || '—'}</td>
-                          <td>
-                            <span className={`badge badge-${rep.type}`}>
-                              {rep.type === 'wholesale' ? '💼 جملة' : '🛍️ تجزئة'}
-                            </span>
-                          </td>
-                          <td>
-                            <span style={{ fontWeight: 800, color: Number(rep.balance) >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                              {Number(rep.balance).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
-                            </span>
-                          </td>
-                          <td>
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                              <button 
-                                className="btn btn-secondary" 
-                                style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
-                                onClick={() => handleViewLedger(rep.id)}
-                              >
-                                📂 كشف حساب
-                              </button>
-                              {currentUser.role === 'manager' && (
-                                <button 
-                                  className="btn btn-secondary" 
-                                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
-                                  onClick={() => handleDeleteRep(rep.id, rep.name)}
-                                >
-                                  🗑️ حذف
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <>
+                    {repsByAgency.map(group => (
+                      <div className="panel" key={group.agency.id} style={{ marginBottom: '2rem', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div className="panel-header" style={{ background: 'rgba(255,255,255,0.02)', padding: '0.8rem 1.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--primary)', fontWeight: 700 }}>
+                            🏢 {group.agency.name} <small style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginRight: '0.5rem' }}>({group.agency.code})</small>
+                          </h3>
+                          <span className="badge badge-retail" style={{ background: 'rgba(14,165,233,0.12)', color: 'var(--primary)' }}>
+                            {group.repsList.length} مندوب
+                          </span>
+                        </div>
+                        <div className="table-container" style={{ margin: 0, border: 'none', borderRadius: 0 }}>
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>كود المندوب</th>
+                                <th>الاسم بالكامل</th>
+                                <th>المشرف المسؤول</th>
+                                <th>رقم الهاتف</th>
+                                <th>نوع المندوب</th>
+                                <th>الرصيد الحالي</th>
+                                <th>الإجراءات</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {group.repsList.map((rep) => (
+                                <tr key={rep.id}>
+                                  <td><strong>{rep.code}</strong></td>
+                                  <td>{rep.name}</td>
+                                  <td>{rep.supervisor_name ? `${rep.supervisor_name} (${rep.supervisor_code})` : <em style={{ color: 'var(--text-secondary)' }}>لا يوجد</em>}</td>
+                                  <td>{rep.phone || '—'}</td>
+                                  <td>
+                                    <span className={`badge badge-${rep.type}`}>
+                                      {rep.type === 'wholesale' ? '💼 جملة' : '🛍️ تجزئة'}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <span style={{ fontWeight: 800, color: Number(rep.balance) >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                                      {Number(rep.balance).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                      <button 
+                                        className="btn btn-secondary" 
+                                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                                        onClick={() => handleViewLedger(rep.id)}
+                                      >
+                                        📂 كشف حساب
+                                      </button>
+                                      {currentUser.role === 'manager' && (
+                                        <button 
+                                          className="btn btn-secondary" 
+                                          style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
+                                          onClick={() => handleDeleteRep(rep.id, rep.name)}
+                                        >
+                                          🗑️ حذف
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))}
+
+                    {uncategorizedReps.length > 0 && (
+                      <div className="panel" style={{ marginBottom: '2rem', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div className="panel-header" style={{ background: 'rgba(255,255,255,0.02)', padding: '0.8rem 1.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-secondary)', fontWeight: 700 }}>
+                            ❓ مناديب غير مصنفين (بدون توكيل)
+                          </h3>
+                          <span className="badge badge-retail" style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--text-secondary)' }}>
+                            {uncategorizedReps.length} مندوب
+                          </span>
+                        </div>
+                        <div className="table-container" style={{ margin: 0, border: 'none', borderRadius: 0 }}>
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>كود المندوب</th>
+                                <th>الاسم بالكامل</th>
+                                <th>المشرف المسؤول</th>
+                                <th>رقم الهاتف</th>
+                                <th>نوع المندوب</th>
+                                <th>الرصيد الحالي</th>
+                                <th>الإجراءات</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {uncategorizedReps.map((rep) => (
+                                <tr key={rep.id}>
+                                  <td><strong>{rep.code}</strong></td>
+                                  <td>{rep.name}</td>
+                                  <td>{rep.supervisor_name ? `${rep.supervisor_name} (${rep.supervisor_code})` : <em style={{ color: 'var(--text-secondary)' }}>لا يوجد</em>}</td>
+                                  <td>{rep.phone || '—'}</td>
+                                  <td>
+                                    <span className={`badge badge-${rep.type}`}>
+                                      {rep.type === 'wholesale' ? '💼 جملة' : '🛍️ تجزئة'}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <span style={{ fontWeight: 800, color: Number(rep.balance) >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                                      {Number(rep.balance).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                      <button 
+                                        className="btn btn-secondary" 
+                                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                                        onClick={() => handleViewLedger(rep.id)}
+                                      >
+                                        📂 كشف حساب
+                                      </button>
+                                      {currentUser.role === 'manager' && (
+                                        <button 
+                                          className="btn btn-secondary" 
+                                          style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
+                                          onClick={() => handleDeleteRep(rep.id, rep.name)}
+                                        >
+                                          🗑️ حذف
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
