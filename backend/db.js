@@ -136,6 +136,7 @@ async function createTables() {
           name NVARCHAR(255) NOT NULL,
           phone VARCHAR(50),
           type VARCHAR(20) DEFAULT 'retail',
+          classification VARCHAR(50) DEFAULT 'retail_rep',
           password VARCHAR(255) NULL,
           agency_id INT,
           supervisor_id INT,
@@ -151,6 +152,13 @@ async function createTables() {
         BEGIN
           ALTER TABLE representatives ADD type VARCHAR(20) DEFAULT 'retail';
           EXEC('UPDATE representatives SET type = ''retail'' WHERE type IS NULL');
+        END
+
+        -- Add classification column if missing
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('representatives') AND name = 'classification')
+        BEGIN
+          ALTER TABLE representatives ADD classification VARCHAR(50) DEFAULT 'retail_rep';
+          EXEC('UPDATE representatives SET classification = CASE WHEN type = ''wholesale'' THEN ''wholesale_rep'' ELSE ''retail_rep'' END WHERE classification IS NULL');
         END
 
         -- Add password column if missing

@@ -413,7 +413,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   const [supervisorSuccess, setSupervisorSuccess] = useState('');
 
   // New Representative Form State
-  const [newRep, setNewRep] = useState({ code: '', name: '', phone: '', type: 'retail', agency_id: '', supervisor_id: '', password: '' });
+  const [newRep, setNewRep] = useState({ code: '', name: '', phone: '', type: 'retail', classification: 'retail_rep', agency_id: '', supervisor_id: '', password: '' });
   const [repError, setRepError] = useState('');
   const [repSuccess, setRepSuccess] = useState('');
 
@@ -1457,7 +1457,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               className={`tab-btn ${activeTab === 'reps' ? 'active' : ''}`}
               onClick={() => { setActiveTab('reps'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
             >
-              👥 المناديب
+              👥 الموظفين والمناديب
             </button>
 
             <button 
@@ -2232,7 +2232,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                                 <th>الاسم بالكامل</th>
                                 <th>المشرف المسؤول</th>
                                 <th>رقم الهاتف</th>
-                                <th>نوع المندوب</th>
+                                <th>التصنيف الوظيفي</th>
                                 <th>الرصيد الحالي</th>
                                 <th>الإجراءات</th>
                               </tr>
@@ -2245,8 +2245,8 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                                   <td>{rep.supervisor_name ? `${rep.supervisor_name} (${rep.supervisor_code})` : <em style={{ color: 'var(--text-secondary)' }}>لا يوجد</em>}</td>
                                   <td>{rep.phone || '—'}</td>
                                   <td>
-                                    <span className={`badge badge-${rep.type}`}>
-                                      {rep.type === 'wholesale' ? '💼 جملة' : '🛍️ تجزئة'}
+                                    <span className="badge" style={getClassificationBadgeStyle(rep.classification)}>
+                                      {getClassificationLabel(rep.classification)}
                                     </span>
                                   </td>
                                   <td>
@@ -2295,21 +2295,21 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                       <div className="panel" style={{ marginBottom: '2rem', border: '1px solid rgba(255,255,255,0.06)' }}>
                         <div className="panel-header" style={{ background: 'rgba(255,255,255,0.02)', padding: '0.8rem 1.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-secondary)', fontWeight: 700 }}>
-                            ❓ مناديب غير مصنفين (بدون توكيل)
+                            👥 الموظفون والكوادر الأخرى (بدون توكيل)
                           </h3>
                           <span className="badge badge-retail" style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--text-secondary)' }}>
-                            {uncategorizedReps.length} مندوب
+                            {uncategorizedReps.length} موظف
                           </span>
                         </div>
                         <div className="table-container" style={{ margin: 0, border: 'none', borderRadius: 0 }}>
                           <table>
                             <thead>
                               <tr>
-                                <th>كود المندوب</th>
+                                <th>كود الحساب</th>
                                 <th>الاسم بالكامل</th>
                                 <th>المشرف المسؤول</th>
                                 <th>رقم الهاتف</th>
-                                <th>نوع المندوب</th>
+                                <th>التصنيف الوظيفي</th>
                                 <th>الرصيد الحالي</th>
                                 <th>الإجراءات</th>
                               </tr>
@@ -2322,8 +2322,8 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                                   <td>{rep.supervisor_name ? `${rep.supervisor_name} (${rep.supervisor_code})` : <em style={{ color: 'var(--text-secondary)' }}>لا يوجد</em>}</td>
                                   <td>{rep.phone || '—'}</td>
                                   <td>
-                                    <span className={`badge badge-${rep.type}`}>
-                                      {rep.type === 'wholesale' ? '💼 جملة' : '🛍️ تجزئة'}
+                                    <span className="badge" style={getClassificationBadgeStyle(rep.classification)}>
+                                      {getClassificationLabel(rep.classification)}
                                     </span>
                                   </td>
                                   <td>
@@ -2377,7 +2377,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
           {currentUser.role === 'manager' && (
             <div className="panel">
               <div className="panel-header">
-                <h2 className="panel-title">➕ إضافة مندوب جديد</h2>
+                <h2 className="panel-title">➕ إضافة موظف / مندوب جديد</h2>
               </div>
             
             {repError && <div className="alert alert-error">⚠️ {repError}</div>}
@@ -2385,7 +2385,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
 
             <form onSubmit={handleAddRep}>
               <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>كود المندوب <span style={{ color: 'var(--danger)' }}>*</span></label>
+                <label>كود الحساب <span style={{ color: 'var(--danger)' }}>*</span></label>
                 <input 
                   type="text" 
                   value={newRep.code}
@@ -2395,7 +2395,34 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                 />
               </div>
               <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>اسم المندوب بالكامل <span style={{ color: 'var(--danger)' }}>*</span></label>
+                <label>تصنيف الحساب الوظيفي <span style={{ color: 'var(--danger)' }}>*</span></label>
+                <select 
+                  value={newRep.classification || 'retail_rep'}
+                  onChange={(e) => {
+                    const cls = e.target.value;
+                    const isRep = (cls === 'retail_rep' || cls === 'wholesale_rep');
+                    setNewRep({ 
+                      ...newRep, 
+                      classification: cls,
+                      type: cls === 'wholesale_rep' ? 'wholesale' : 'retail',
+                      agency_id: isRep ? newRep.agency_id : '',
+                      supervisor_id: isRep ? newRep.supervisor_id : '',
+                      password: isRep ? newRep.password : ''
+                    });
+                  }}
+                  required
+                >
+                  <option value="retail_rep">🛍️ مندوب تجزئة</option>
+                  <option value="wholesale_rep">💼 مندوب جملة</option>
+                  <option value="supervisor_staff">👔 مشرف</option>
+                  <option value="admin_staff">👑 موظف إداري</option>
+                  <option value="warehouse_staff">📦 أمين/عامل مخزن</option>
+                  <option value="driver">🚚 سائق</option>
+                  <option value="worker">🔧 عامل</option>
+                </select>
+              </div>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>الاسم بالكامل <span style={{ color: 'var(--danger)' }}>*</span></label>
                 <input 
                   type="text" 
                   placeholder="مثال: محمد السيد أحمد"
@@ -2404,42 +2431,47 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                   required
                 />
               </div>
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>التوكيل التابع له المندوب <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <select 
-                  value={newRep.agency_id}
-                  onChange={(e) => setNewRep({ ...newRep, agency_id: e.target.value })}
-                  required
-                >
-                  <option value="">اختر التوكيل...</option>
-                  {agencies.map(a => (
-                    <option key={a.id} value={a.id}>{a.name} ({a.code})</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>المشرف المسؤول</label>
-                <select 
-                  value={newRep.supervisor_id}
-                  onChange={(e) => setNewRep({ ...newRep, supervisor_id: e.target.value })}
-                >
-                  <option value="">اختر المشرف (اختياري)...</option>
-                  {supervisors.map(s => (
-                    <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>نوع المندوب <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <select 
-                  value={newRep.type}
-                  onChange={(e) => setNewRep({ ...newRep, type: e.target.value })}
-                  required
-                >
-                  <option value="retail">🛍️ تجزئة</option>
-                  <option value="wholesale">💼 جملة</option>
-                </select>
-              </div>
+
+              {(newRep.classification === 'retail_rep' || newRep.classification === 'wholesale_rep') && (
+                <>
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label>التوكيل التابع له المندوب <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <select 
+                      value={newRep.agency_id}
+                      onChange={(e) => setNewRep({ ...newRep, agency_id: e.target.value })}
+                      required
+                    >
+                      <option value="">اختر التوكيل...</option>
+                      {agencies.map(a => (
+                        <option key={a.id} value={a.id}>{a.name} ({a.code})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label>المشرف المسؤول</label>
+                    <select 
+                      value={newRep.supervisor_id}
+                      onChange={(e) => setNewRep({ ...newRep, supervisor_id: e.target.value })}
+                    >
+                      <option value="">اختر المشرف (اختياري)...</option>
+                      {supervisors.map(s => (
+                        <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                    <label>كلمة مرور المندوب <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <input 
+                      type="password" 
+                      placeholder="أدخل كلمة مرور قوية لتسجيل الدخول"
+                      value={newRep.password || ''}
+                      onChange={(e) => setNewRep({ ...newRep, password: e.target.value })}
+                      required
+                    />
+                  </div>
+                </>
+              )}
+
               <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                 <label>رقم الهاتف</label>
                 <input 
@@ -2449,17 +2481,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                   onChange={(e) => setNewRep({ ...newRep, phone: e.target.value })}
                 />
               </div>
-              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                <label>كلمة مرور المندوب <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input 
-                  type="password" 
-                  placeholder="أدخل كلمة مرور قوية لتسجيل الدخول"
-                  value={newRep.password || ''}
-                  onChange={(e) => setNewRep({ ...newRep, password: e.target.value })}
-                  required
-                />
-              </div>
-              <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>حفظ المندوب الجديد</button>
+              <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>حفظ الموظف الجديد</button>
             </form>
           </div>
           )}
@@ -2863,7 +2885,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
 
               {/* Party Type Switcher */}
               <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                <label>{newTx.type === 'withdrawal' ? 'نوع الصرف' : 'الجهة المعنية بالعملية'}</label>
+                <label>{newTx.type === 'withdrawal' ? 'جهة الصرف' : 'الجهة المعنية بالعملية'}</label>
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
                   <button 
                     type="button" 
@@ -2871,17 +2893,27 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                     style={{ flex: 1 }}
                     onClick={() => { setTxSourceType('rep'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
                   >
-                    {newTx.type === 'withdrawal' ? '👥 صرف لمندوب' : '👥 مندوب توريد'}
+                    {newTx.type === 'withdrawal' ? '👥 صرف لموظف/مندوب' : '👥 مندوب توريد'}
                   </button>
                   {newTx.type === 'withdrawal' && (
-                    <button 
-                      type="button" 
-                      className={`btn ${txSourceType === 'bank' ? 'btn-primary' : 'btn-secondary'}`}
-                      style={{ flex: 1 }}
-                      onClick={() => { setTxSourceType('bank'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
-                    >
-                      🏦 صرف لبنك
-                    </button>
+                    <>
+                      <button 
+                        type="button" 
+                        className={`btn ${txSourceType === 'bank' ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{ flex: 1 }}
+                        onClick={() => { setTxSourceType('bank'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
+                      >
+                        🏦 صرف لبنك
+                      </button>
+                      <button 
+                        type="button" 
+                        className={`btn ${txSourceType === 'direct' ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{ flex: 1 }}
+                        onClick={() => { setTxSourceType('direct'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
+                      >
+                        💸 صرف مباشر (نثريات)
+                      </button>
+                    </>
                   )}
                   {newTx.type === 'deposit' && (
                     <>
@@ -2967,7 +2999,10 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               {/* Direct Safe Info Notice */}
               {txSourceType === 'direct' && (
                 <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px', border: '1px dashed var(--border-color)', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                  ℹ️ سيتم تسجيل العملية كحركة مباشرة بالخزينة دون ربطها بمندوب.
+                  {newTx.type === 'withdrawal' 
+                    ? 'ℹ️ سيتم تسجيل العملية كحركة صرف نثريات ومصاريف عامة مباشرة دون ربطها بموظف.'
+                    : 'ℹ️ سيتم تسجيل العملية كحركة توريد مباشرة بالخزينة دون ربطها بمندوب.'
+                  }
                 </div>
               )}
 
@@ -3173,8 +3208,8 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                     </>
                   )}
 
-                  {/* Representative Sub Type Selection */}
-                  {txSourceType === 'rep' && (
+                  {/* Withdrawal Sub Type Selection */}
+                  {(txSourceType === 'rep' || txSourceType === 'direct') && (
                     <>
                       <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                         <label>نوع الصرف <span style={{ color: 'var(--danger)' }}>*</span></label>
@@ -3191,9 +3226,9 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                           required
                         >
                           <option value="">اختر نوع الصرف...</option>
-                          <option value="car">مصاريف سيارات</option>
-                          <option value="salary">راتب</option>
-                          <option value="commission">عمولة</option>
+                          {getWithdrawalSubTypes().map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
                         </select>
                       </div>
 
@@ -4340,8 +4375,16 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                       <td>
                         <span className="badge badge-withdrawal">
                           {tx.withdrawal_sub_type === 'car' ? '🚗 سيارة' : 
+                           tx.withdrawal_sub_type === 'car_gas' ? '⛽ سيارة (جاز)' : 
+                           tx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)' : 
+                           tx.withdrawal_sub_type === 'car_other' ? '🔧 سيارة (أخرى)' : 
                            tx.withdrawal_sub_type === 'salary' ? '💼 راتب' : 
-                           tx.withdrawal_sub_type === 'commission' ? '💰 عمولة' : 'صرف'}
+                           tx.withdrawal_sub_type === 'commission' ? '💰 عمولة' : 
+                           tx.withdrawal_sub_type === 'loan' ? '💸 سلفة' : 
+                           tx.withdrawal_sub_type === 'direct_rent' ? '🏢 إيجار' : 
+                           tx.withdrawal_sub_type === 'direct_operational' ? '🔧 تشغيل عامة' : 
+                           tx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى' : 
+                           tx.withdrawal_sub_type === 'other' ? 'صرف عام' : 'صرف'}
                         </span>
                       </td>
                       <td style={{ color: 'var(--danger)', fontWeight: 'bold' }}>
@@ -4470,7 +4513,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                 />
               </div>
               
-              {editingTx.type === 'withdrawal' && editingTx.rep_id && (
+              {editingTx.type === 'withdrawal' && (
                 <>
                   <div className="form-group" style={{ marginBottom: '1rem' }}>
                     <label>نوع الصرف <span style={{ color: 'var(--danger)' }}>*</span></label>
@@ -4487,9 +4530,34 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                       required
                       style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
                     >
-                      <option value="car">مصاريف سيارات</option>
-                      <option value="salary">راتب</option>
-                      <option value="commission">عمولة</option>
+                      <option value="">اختر نوع الصرف...</option>
+                      {(() => {
+                        if (!editingTx.rep_id) {
+                          return [
+                            { value: 'direct_rent', label: '🏢 الإيجار' },
+                            { value: 'direct_operational', label: '🔧 مصاريف تشغيل عامة' },
+                            { value: 'direct_other', label: '📝 مصاريف عامة أخرى' }
+                          ];
+                        }
+                        const rep = reps.find(r => r.id === editingTx.rep_id);
+                        if (rep && (rep.classification === 'retail_rep' || rep.classification === 'wholesale_rep')) {
+                          return [
+                            { value: 'car', label: '🚗 مصاريف سيارات' },
+                            { value: 'salary', label: '💵 راتب' },
+                            { value: 'commission', label: '💰 عمولة' },
+                            { value: 'loan', label: '💸 سلفة' },
+                            { value: 'other', label: '📝 أخرى' }
+                          ];
+                        }
+                        return [
+                          { value: 'salary', label: '💵 راتب' },
+                          { value: 'loan', label: '💸 سلفة' },
+                          { value: 'commission', label: '💰 عمولة / مكافآت' },
+                          { value: 'other', label: '📝 صرف عام / أخرى' }
+                        ];
+                      })().map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -4896,7 +4964,12 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                     : printingTx.withdrawal_sub_type === 'car_oil' ? 'مصاريف سيارات (زيت)'
                     : printingTx.withdrawal_sub_type === 'car_other' ? 'مصاريف سيارات (مصاريف أخرى)'
                     : printingTx.withdrawal_sub_type === 'salary' ? 'رواتب وأجور'
-                    : printingTx.withdrawal_sub_type === 'commission' ? 'عمولات'
+                    : printingTx.withdrawal_sub_type === 'commission' ? 'عمولات / مكافآت'
+                    : printingTx.withdrawal_sub_type === 'loan' ? 'سلفة'
+                    : printingTx.withdrawal_sub_type === 'direct_rent' ? 'إيجار'
+                    : printingTx.withdrawal_sub_type === 'direct_operational' ? 'مصاريف تشغيل عامة'
+                    : printingTx.withdrawal_sub_type === 'direct_other' ? 'مصاريف عامة أخرى'
+                    : printingTx.withdrawal_sub_type === 'other' ? 'صرف عام / أخرى'
                     : printingTx.withdrawal_sub_type}
                 </span>
               </div>

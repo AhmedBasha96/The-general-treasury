@@ -804,7 +804,7 @@ app.get('/api/reps', async (req, res) => {
 
     const result = await request.query(`
       SELECT 
-        r.id, r.code, r.name, r.phone, r.type, r.agency_id, r.supervisor_id, r.created_at,
+        r.id, r.code, r.name, r.phone, r.type, r.classification, r.agency_id, r.supervisor_id, r.created_at,
         a.name AS agency_name, a.code AS agency_code,
         s.name AS supervisor_name, s.code AS supervisor_code,
         ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.amount WHEN t.type = 'withdrawal' THEN -t.amount ELSE 0 END), 0) AS balance
@@ -816,7 +816,7 @@ app.get('/api/reps', async (req, res) => {
          OR (t.type = 'withdrawal' AND (t.status = 'disbursed' OR t.status IS NULL))
       )
       ${agencyFilter}
-      GROUP BY r.id, r.code, r.name, r.phone, r.type, r.agency_id, r.supervisor_id, r.created_at, a.name, a.code, s.name, s.code
+      GROUP BY r.id, r.code, r.name, r.phone, r.type, r.classification, r.agency_id, r.supervisor_id, r.created_at, a.name, a.code, s.name, s.code
       ORDER BY r.name
     `);
     res.json(result.recordset);
@@ -828,30 +828,39 @@ app.get('/api/reps', async (req, res) => {
 
 // 3. POST /api/reps (Add new representative mapped to agency)
 app.post('/api/reps', async (req, res) => {
-  const { code, name, phone, type, agency_id, supervisor_id, password } = req.body;
+  const { code, name, phone, type, classification, agency_id, supervisor_id, password } = req.body;
   
-  if (!code || !name || !agency_id) {
-    return res.status(400).json({ error: 'كود المندوب، الاسم، والتوكيل مطلوبان' });
+  const repClassification = classification || 'retail_rep';
+  const isRep = (repClassification === 'retail_rep' || repClassification === 'wholesale_rep');
+
+  if (!code || !name) {
+    return res.status(400).json({ error: 'كود الموظف واسمه مطلوبان' });
   }
   
+  if (isRep && !agency_id) {
+    return res.status(400).json({ error: 'التوكيل مطلوب للمناديب' });
+  }
+
   const repType = type || 'retail';
-  if (repType !== 'retail' && repType !== 'wholesale') {
+  if (isRep && repType !== 'retail' && repType !== 'wholesale') {
     return res.status(400).json({ error: 'نوع المندوب غير صالح' });
   }
   
   try {
     const pool = getPool();
     
-    // Verify agency exists
-    const checkAgency = await pool.request()
-      .input('agencyId', sql.Int, agency_id)
-      .query('SELECT id FROM agencies WHERE id = @agencyId');
-    if (checkAgency.recordset.length === 0) {
-      return res.status(400).json({ error: 'التوكيل المحدد غير موجود' });
+    // Verify agency exists if provided
+    if (isRep && agency_id) {
+      const checkAgency = await pool.request()
+        .input('agencyId', sql.Int, agency_id)
+        .query('SELECT id FROM agencies WHERE id = @agencyId');
+      if (checkAgency.recordset.length === 0) {
+        return res.status(400).json({ error: 'التوكيل المحدد غير موجود' });
+      }
     }
 
     // Verify supervisor exists if provided
-    if (supervisor_id) {
+    if (isRep && supervisor_id) {
       const checkSup = await pool.request()
         .input('supervisorId', sql.Int, supervisor_id)
         .query('SELECT id FROM supervisors WHERE id = @supervisorId');
@@ -866,7 +875,7 @@ app.post('/api/reps', async (req, res) => {
       .query('SELECT id FROM representatives WHERE code = @code');
       
     if (checkCode.recordset.length > 0) {
-      return res.status(400).json({ error: 'كود المندوب مسجل مسبقاً لمندوب آخر' });
+      return res.status(400).json({ error: 'كود الموظف/المندوب مسجل مسبقاً لشخص آخر' });
     }
     
     // Hash password if provided
@@ -880,19 +889,20 @@ app.post('/api/reps', async (req, res) => {
       .input('code', sql.VarChar, code)
       .input('name', sql.NVarChar, name)
       .input('phone', sql.VarChar, phone || null)
-      .input('type', sql.VarChar, repType)
-      .input('agency_id', sql.Int, agency_id)
-      .input('supervisor_id', sql.Int, supervisor_id || null)
+      .input('type', sql.VarChar, isRep ? repType : 'retail')
+      .input('classification', sql.VarChar, repClassification)
+      .input('agency_id', sql.Int, isRep ? agency_id : null)
+      .input('supervisor_id', sql.Int, isRep ? supervisor_id || null : null)
       .input('password', sql.VarChar, hashedPassword)
       .query(`
-        INSERT INTO representatives (code, name, phone, type, agency_id, supervisor_id, password)
-        VALUES (@code, @name, @phone, @type, @agency_id, @supervisor_id, @password)
+        INSERT INTO representatives (code, name, phone, type, classification, agency_id, supervisor_id, password)
+        VALUES (@code, @name, @phone, @type, @classification, @agency_id, @supervisor_id, @password)
       `);
       
-    res.status(201).json({ message: 'تم إضافة المندوب بنجاح' });
+    res.status(201).json({ message: 'تم إضافة الموظف/المندوب بنجاح' });
   } catch (error) {
     console.error('Error creating representative:', error);
-    res.status(500).json({ error: 'حدث خطأ أثناء حفظ المندوب' });
+    res.status(500).json({ error: 'حدث خطأ أثناء حفظ الموظف/المندوب' });
   }
 });
 
@@ -987,7 +997,7 @@ app.get('/api/reps/:id/transactions', async (req, res) => {
     const repResult = await pool.request()
       .input('repId', sql.Int, repId)
       .query(`
-        SELECT r.id, r.code, r.name, r.phone, r.type, r.created_at,
+        SELECT r.id, r.code, r.name, r.phone, r.type, r.classification, r.created_at,
                a.name AS agency_name, a.code AS agency_code,
                s.name AS supervisor_name, s.code AS supervisor_code
         FROM representatives r
