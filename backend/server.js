@@ -24,6 +24,31 @@ app.post('/api/auth/login', async (req, res) => {
   
   try {
     const pool = getPool();
+    
+    // First, check if the username corresponds to a representative code
+    const repResult = await pool.request()
+      .input('username', sql.VarChar, username.trim())
+      .query('SELECT * FROM representatives WHERE UPPER(code) = UPPER(@username)');
+      
+    if (repResult.recordset.length > 0) {
+      const rep = repResult.recordset[0];
+      if (!rep.password) {
+        return res.status(401).json({ error: 'لم يتم تعيين كلمة مرور لهذا المندوب بعد' });
+      }
+      const isPasswordValid = bcrypt.compareSync(password, rep.password);
+      if (!isPasswordValid) {
+        return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
+      }
+      return res.json({
+        id: rep.id,
+        username: rep.code,
+        name: rep.name,
+        role: 'representative',
+        assigned_agency_id: rep.agency_id
+      });
+    }
+    
+    // Fallback to checking the users table
     const userResult = await pool.request()
       .input('username', sql.VarChar, username.trim())
       .query('SELECT * FROM users WHERE UPPER(username) = UPPER(@username)');
@@ -803,7 +828,7 @@ app.get('/api/reps', async (req, res) => {
 
 // 3. POST /api/reps (Add new representative mapped to agency)
 app.post('/api/reps', async (req, res) => {
-  const { code, name, phone, type, agency_id, supervisor_id } = req.body;
+  const { code, name, phone, type, agency_id, supervisor_id, password } = req.body;
   
   if (!code || !name || !agency_id) {
     return res.status(400).json({ error: 'كود المندوب، الاسم، والتوكيل مطلوبان' });
@@ -844,6 +869,12 @@ app.post('/api/reps', async (req, res) => {
       return res.status(400).json({ error: 'كود المندوب مسجل مسبقاً لمندوب آخر' });
     }
     
+    // Hash password if provided
+    let hashedPassword = null;
+    if (password && password.trim() !== '') {
+      hashedPassword = bcrypt.hashSync(password, 10);
+    }
+    
     // Insert rep
     await pool.request()
       .input('code', sql.VarChar, code)
@@ -852,15 +883,56 @@ app.post('/api/reps', async (req, res) => {
       .input('type', sql.VarChar, repType)
       .input('agency_id', sql.Int, agency_id)
       .input('supervisor_id', sql.Int, supervisor_id || null)
+      .input('password', sql.VarChar, hashedPassword)
       .query(`
-        INSERT INTO representatives (code, name, phone, type, agency_id, supervisor_id)
-        VALUES (@code, @name, @phone, @type, @agency_id, @supervisor_id)
+        INSERT INTO representatives (code, name, phone, type, agency_id, supervisor_id, password)
+        VALUES (@code, @name, @phone, @type, @agency_id, @supervisor_id, @password)
       `);
       
     res.status(201).json({ message: 'تم إضافة المندوب بنجاح' });
   } catch (error) {
     console.error('Error creating representative:', error);
     res.status(500).json({ error: 'حدث خطأ أثناء حفظ المندوب' });
+  }
+});
+
+// 3.2 PUT /api/reps/:id/password (Set/Change representative password) - Manager only
+app.put('/api/reps/:id/password', async (req, res) => {
+  const repId = req.params.id;
+  const { password } = req.body;
+  const userRole = req.headers['x-user-role'];
+  
+  if (userRole !== 'manager') {
+    return res.status(403).json({ error: 'غير مسموح لغير المدراء بتعديل كلمة المرور للمناديب' });
+  }
+  
+  if (!password || password.trim() === '') {
+    return res.status(400).json({ error: 'كلمة المرور مطلوبة' });
+  }
+  
+  try {
+    const pool = getPool();
+    
+    // Verify representative exists
+    const checkRep = await pool.request()
+      .input('repId', sql.Int, repId)
+      .query('SELECT id FROM representatives WHERE id = @repId');
+      
+    if (checkRep.recordset.length === 0) {
+      return res.status(404).json({ error: 'المندوب غير موجود' });
+    }
+    
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    
+    await pool.request()
+      .input('repId', sql.Int, repId)
+      .input('password', sql.VarChar, hashedPassword)
+      .query('UPDATE representatives SET password = @password WHERE id = @repId');
+      
+    res.json({ message: 'تم تحديث كلمة المرور للمندوب بنجاح' });
+  } catch (error) {
+    console.error('Error updating representative password:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء تحديث كلمة المرور' });
   }
 });
 
@@ -981,10 +1053,9 @@ app.get('/api/reps/:id/transactions', async (req, res) => {
     res.status(500).json({ error: 'حدث خطأ أثناء جلب كشف حساب المندوب' });
   }
 });
-
 // 5. GET /api/transactions (All transactions with filters)
 app.get('/api/transactions', async (req, res) => {
-  const { type, rep_id, bank_id, start_date, end_date, withdrawal_sub_type } = req.query;
+  const { type, rep_id, bank_id, start_date, end_date, withdrawal_sub_type, status } = req.query;
   const userRole = req.headers['x-user-role'];
   const userAgencyId = parseInt(req.headers['x-user-agency-id']);
   
@@ -1030,6 +1101,11 @@ app.get('/api/transactions', async (req, res) => {
       request.input('bank_id', sql.Int, bank_id);
     }
 
+    if (status) {
+      query += ` AND t.status = @status`;
+      request.input('status', sql.VarChar, status);
+    }
+
     if (withdrawal_sub_type) {
       if (withdrawal_sub_type === 'car') {
         query += ` AND (t.withdrawal_sub_type = 'car' OR t.withdrawal_sub_type LIKE 'car_%')`;
@@ -1058,7 +1134,6 @@ app.get('/api/transactions', async (req, res) => {
     res.status(500).json({ error: 'حدث خطأ أثناء جلب المعاملات' });
   }
 });
-
 // 6. POST /api/transactions (Add deposit with denominations check or withdrawal)
 app.post('/api/transactions', async (req, res) => {
   const { rep_id, bank_id, agency_id, type, amount, notes, denominations, payment_method, cash_amount, bank_transfer_amount, receipt_image_bank, withdrawal_sub_type } = req.body;
@@ -1078,10 +1153,12 @@ app.post('/api/transactions', async (req, res) => {
     const pool = getPool();
     const date = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-    // 1. If rep_id is provided, verify representative exists
-    if (rep_id) {
+    const targetRepId = (userRole === 'representative') ? userId : (rep_id || null);
+
+    // 1. If targetRepId is provided, verify representative exists
+    if (targetRepId) {
       const repCheck = await pool.request()
-        .input('repId', sql.Int, rep_id)
+        .input('repId', sql.Int, targetRepId)
         .query('SELECT id FROM representatives WHERE id = @repId');
 
       if (repCheck.recordset.length === 0) {
@@ -1091,13 +1168,21 @@ app.post('/api/transactions', async (req, res) => {
 
     // Resolve agency
     let resolvedAgencyId = agency_id || null;
-    if (rep_id) {
+    if (targetRepId) {
       const repCheck = await pool.request()
-        .input('repId', sql.Int, rep_id)
+        .input('repId', sql.Int, targetRepId)
         .query('SELECT agency_id FROM representatives WHERE id = @repId');
       if (repCheck.recordset.length > 0) {
         resolvedAgencyId = repCheck.recordset[0].agency_id;
       }
+    }
+
+    // Determine status (withdrawal by accountant/representative requires approval, manager withdrawals auto-finalized to disbursed)
+    let statusVal = 'approved';
+    if (type === 'withdrawal') {
+      statusVal = (userRole === 'manager' ? 'disbursed' : 'pending');
+    } else if (type === 'deposit') {
+      statusVal = (userRole === 'representative' ? 'pending_receipt' : 'approved');
     }
 
     // CHECK FOR SPLIT DEPOSIT MODE
@@ -1164,7 +1249,7 @@ app.post('/api/transactions', async (req, res) => {
         if (cashAmt > 0) {
           const cashNotes = notes ? `${notes} (نقدي)` : 'توريد نقدي بالخزينة';
           const insertCash = await transaction.request()
-            .input('rep_id', sql.Int, rep_id || null)
+            .input('rep_id', sql.Int, targetRepId)
             .input('bank_id', sql.Int, null)
             .input('agency_id', sql.Int, resolvedAgencyId)
             .input('type', sql.VarChar, 'deposit')
@@ -1180,10 +1265,11 @@ app.post('/api/transactions', async (req, res) => {
             .input('denom_5', sql.Int, d5)
             .input('denom_1', sql.Int, d1)
             .input('created_by', sql.Int, isNaN(userId) ? null : userId)
+            .input('status', sql.VarChar, statusVal)
             .query(`
               INSERT INTO transactions (rep_id, bank_id, agency_id, type, payment_method, amount, date, notes, status, created_by, denom_200, denom_100, denom_50, denom_20, denom_10, denom_5, denom_1)
               OUTPUT INSERTED.id
-              VALUES (@rep_id, @bank_id, @agency_id, @type, @payment_method, @amount, @date, @notes, 'approved', @created_by, @denom_200, @denom_100, @denom_50, @denom_20, @denom_10, @denom_5, @denom_1)
+              VALUES (@rep_id, @bank_id, @agency_id, @type, @payment_method, @amount, @date, @notes, @status, @created_by, @denom_200, @denom_100, @denom_50, @denom_20, @denom_10, @denom_5, @denom_1)
             `);
           cashId = insertCash.recordset[0].id;
         }
@@ -1192,7 +1278,7 @@ app.post('/api/transactions', async (req, res) => {
         if (bankAmt > 0) {
           const bankNotes = notes ? `${notes} (تحويل كاش)` : 'تحويل كاش / بنكي مباشر';
           const insertBank = await transaction.request()
-            .input('rep_id', sql.Int, rep_id || null)
+            .input('rep_id', sql.Int, targetRepId)
             .input('bank_id', sql.Int, bank_id)
             .input('agency_id', sql.Int, resolvedAgencyId)
             .input('type', sql.VarChar, 'deposit')
@@ -1209,10 +1295,11 @@ app.post('/api/transactions', async (req, res) => {
             .input('denom_5', sql.Int, 0)
             .input('denom_1', sql.Int, 0)
             .input('created_by', sql.Int, isNaN(userId) ? null : userId)
+            .input('status', sql.VarChar, statusVal)
             .query(`
               INSERT INTO transactions (rep_id, bank_id, agency_id, type, payment_method, amount, date, notes, status, created_by, receipt_image, denom_200, denom_100, denom_50, denom_20, denom_10, denom_5, denom_1)
               OUTPUT INSERTED.id
-              VALUES (@rep_id, @bank_id, @agency_id, @type, @payment_method, @amount, @date, @notes, 'approved', @created_by, @receipt_image, @denom_200, @denom_100, @denom_50, @denom_20, @denom_10, @denom_5, @denom_1)
+              VALUES (@rep_id, @bank_id, @agency_id, @type, @payment_method, @amount, @date, @notes, @status, @created_by, @receipt_image, @denom_200, @denom_100, @denom_50, @denom_20, @denom_10, @denom_5, @denom_1)
             `);
           bankId = insertBank.recordset[0].id;
         }
@@ -1297,11 +1384,6 @@ app.post('/api/transactions', async (req, res) => {
       }
     }
 
-    // Determine status (withdrawal by accountant requires approval, manager withdrawals auto-finalized to disbursed)
-    const statusVal = (type === 'withdrawal') 
-      ? (userRole === 'manager' ? 'disbursed' : 'pending')
-      : 'approved';
-
     // Execute single withdrawal or direct transaction inside a locked transaction block
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
@@ -1343,7 +1425,7 @@ app.post('/api/transactions', async (req, res) => {
 
       // 3. Insert transaction
       const insertSingle = await transaction.request()
-        .input('rep_id', sql.Int, rep_id || null)
+        .input('rep_id', sql.Int, targetRepId)
         .input('bank_id', sql.Int, bank_id || null)
         .input('agency_id', sql.Int, resolvedAgencyId)
         .input('type', sql.VarChar, type)
@@ -1391,7 +1473,7 @@ app.post('/api/transactions', async (req, res) => {
         `);
 
       res.status(201).json({ 
-        message: statusVal === 'pending' ? 'تم تسجيل طلب الصرف وبانتظار موافقة المدير' : 'تم تسجيل العملية بنجاح',
+        message: statusVal === 'pending' ? 'تم تسجيل طلب الصرف وبانتظار موافقة المدير' : statusVal === 'pending_receipt' ? 'تم تقديم طلب التوريد بنجاح وبانتظار استلام الحسابات' : 'تم تسجيل العملية بنجاح',
         status: statusVal,
         transaction: txResult.recordset[0]
       });
@@ -1531,7 +1613,65 @@ app.post('/api/transactions/:id/reject', async (req, res) => {
   }
 });
 
-// POST /api/transactions/:id/disburse - Confirm physical cash payout/disbursement with safe balance check
+// POST /api/transactions/:id/receive - Confirm receipt of a pending deposit - Accountant/Manager only
+app.post('/api/transactions/:id/receive', async (req, res) => {
+  const txId = req.params.id;
+  const userId = parseInt(req.headers['x-user-id']);
+  const userRole = req.headers['x-user-role'];
+  
+  if (userRole !== 'accountant' && userRole !== 'manager') {
+    return res.status(403).json({ error: 'غير مسموح لغير المحاسبين والمديرين بتأكيد استلام التوريدات' });
+  }
+  
+  try {
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      // Find transaction
+      const txResult = await transaction.request()
+        .input('txId', sql.Int, txId)
+        .query('SELECT * FROM transactions WITH (UPDLOCK) WHERE id = @txId');
+        
+      if (txResult.recordset.length === 0) {
+        await transaction.rollback();
+        return res.status(404).json({ error: 'العملية غير موجودة' });
+      }
+      
+      const tx = txResult.recordset[0];
+      if (tx.type !== 'deposit') {
+        await transaction.rollback();
+        return res.status(400).json({ error: 'تأكيد الاستلام متاح لعمليات الإيداع والتوريد فقط' });
+      }
+      
+      if (tx.status !== 'pending_receipt') {
+        await transaction.rollback();
+        return res.status(400).json({ error: 'هذه العملية تم استلامها أو البت فيها بالفعل' });
+      }
+      
+      // Update status to approved
+      await transaction.request()
+        .input('txId', sql.Int, txId)
+        .input('approvedBy', sql.Int, isNaN(userId) ? null : userId)
+        .query(`
+          UPDATE transactions 
+          SET status = 'approved', approved_by = @approvedBy 
+          WHERE id = @txId
+        `);
+        
+      await transaction.commit();
+      res.json({ message: 'تم تأكيد استلام المبلغ بنجاح وإضافته إلى رصيد المندوب والخزينة' });
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+  } catch (error) {
+    console.error('Error receiving transaction:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء تأكيد استلام العملية' });
+  }
+});
+
+// POST /api/transactions/:id/disburse - Finalize a withdrawal - Manager only
 app.post('/api/transactions/:id/disburse', async (req, res) => {
   const txId = req.params.id;
   try {
@@ -1539,7 +1679,6 @@ app.post('/api/transactions/:id/disburse', async (req, res) => {
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
     try {
-      // Fetch current transaction details
       const txResult = await transaction.request()
         .input('txId', sql.Int, txId)
         .query('SELECT * FROM transactions WITH (UPDLOCK) WHERE id = @txId');

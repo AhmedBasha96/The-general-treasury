@@ -13,7 +13,7 @@ async function resetDB() {
     await pool.request().query('DELETE FROM agencies');
     await pool.request().query('DELETE FROM users');
     
-    console.log('All data wiped successfully! Default seeds will be automatically recreated on server restart.');
+    console.log('All data wiped successfully! Default user, bank, and supervisor seeds will be automatically recreated on server restart (agencies and representatives must be entered manually).');
   } catch (error) {
     console.error('Reset failed:', error);
   } finally {

@@ -136,6 +136,7 @@ async function createTables() {
           name NVARCHAR(255) NOT NULL,
           phone VARCHAR(50),
           type VARCHAR(20) DEFAULT 'retail',
+          password VARCHAR(255) NULL,
           agency_id INT,
           supervisor_id INT,
           created_at DATETIME DEFAULT GETDATE(),
@@ -150,6 +151,12 @@ async function createTables() {
         BEGIN
           ALTER TABLE representatives ADD type VARCHAR(20) DEFAULT 'retail';
           EXEC('UPDATE representatives SET type = ''retail'' WHERE type IS NULL');
+        END
+
+        -- Add password column if missing
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('representatives') AND name = 'password')
+        BEGIN
+          ALTER TABLE representatives ADD password VARCHAR(255) NULL;
         END
 
         -- Add agency_id column if missing
@@ -315,49 +322,8 @@ async function createTables() {
 
 async function seedData() {
   try {
-    // 1. Seed initial agencies if table is empty
-    const agenciesCount = await pool.request().query(`SELECT COUNT(*) as count FROM agencies`);
-    if (agenciesCount.recordset[0].count === 0) {
-      console.log('Seeding initial agencies data...');
-      await pool.request().query(`
-        INSERT INTO agencies (code, name) VALUES 
-        ('AGN001', N'توكيل القاهرة الكبرى'),
-        ('AGN002', N'توكيل الإسكندرية'),
-        ('AGN003', N'توكيل الدلتا');
-      `);
-      console.log('Agencies seeding completed.');
-    }
+    // Agencies and Representatives seeding has been removed to respect user's real data entry.
 
-    // 2. Seed initial representatives if empty
-    const repsCount = await pool.request().query(`SELECT COUNT(*) as count FROM representatives`);
-    if (repsCount.recordset[0].count === 0) {
-      console.log('Seeding initial representatives data...');
-      // Get the ID of the first agency to link to
-      const firstAgencyResult = await pool.request().query(`SELECT TOP 1 id FROM agencies ORDER BY id ASC`);
-      const defaultAgencyId = firstAgencyResult.recordset[0].id;
-      
-      await pool.request()
-        .input('defaultAgencyId', sql.Int, defaultAgencyId)
-        .query(`
-          INSERT INTO representatives (code, name, phone, type, agency_id) VALUES 
-          ('REP001', N'أحمد محمد الشناوي', '01012345678', 'retail', @defaultAgencyId),
-          ('REP002', N'محمود علي عبد الرحمن', '01298765432', 'wholesale', @defaultAgencyId),
-          ('REP003', N'سارة أحمد كمال', '01155544433', 'retail', @defaultAgencyId);
-        `);
-      console.log('Representatives seeding completed.');
-    } else {
-      // If representatives table already has rows but they don't have an agency_id, assign them to default agency
-      const repsWithNoAgency = await pool.request().query(`SELECT COUNT(*) as count FROM representatives WHERE agency_id IS NULL`);
-      if (repsWithNoAgency.recordset[0].count > 0) {
-        console.log('Linking existing representatives to default agency...');
-        const firstAgencyResult = await pool.request().query(`SELECT TOP 1 id FROM agencies ORDER BY id ASC`);
-        const defaultAgencyId = firstAgencyResult.recordset[0].id;
-        await pool.request()
-          .input('defaultAgencyId', sql.Int, defaultAgencyId)
-          .query(`UPDATE representatives SET agency_id = @defaultAgencyId WHERE agency_id IS NULL`);
-        console.log('Link completed.');
-      }
-    }
 
     // 3. Seed initial banks if empty
     const banksCount = await pool.request().query(`SELECT COUNT(*) as count FROM banks`);

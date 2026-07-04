@@ -30,6 +30,28 @@ export default function App() {
   // Printing State
   const [printingTx, setPrintingTx] = useState(null);
 
+  // Representative States
+  const [repLedgerData, setRepLedgerData] = useState(null);
+  const [repLedgerLoading, setRepLedgerLoading] = useState(false);
+
+  const loadRepLedger = async () => {
+    const saved = localStorage.getItem('currentUser');
+    const user = saved ? JSON.parse(saved) : null;
+    if (!user || user.role !== 'representative') return;
+    setRepLedgerLoading(true);
+    try {
+      const res = await fetch(`/api/reps/${user.id}/transactions`);
+      if (res.ok) {
+        const data = await res.json();
+        setRepLedgerData(data);
+      }
+    } catch (err) {
+      console.error('Failed to load representative ledger:', err);
+    } finally {
+      setRepLedgerLoading(false);
+    }
+  };
+
   const handlePrintReceipt = (tx) => {
     const id = String(tx.id).padStart(6, '0');
     const date = new Date(tx.date).toLocaleString('ar-EG');
@@ -391,7 +413,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   const [supervisorSuccess, setSupervisorSuccess] = useState('');
 
   // New Representative Form State
-  const [newRep, setNewRep] = useState({ code: '', name: '', phone: '', type: 'retail', agency_id: '', supervisor_id: '' });
+  const [newRep, setNewRep] = useState({ code: '', name: '', phone: '', type: 'retail', agency_id: '', supervisor_id: '', password: '' });
   const [repError, setRepError] = useState('');
   const [repSuccess, setRepSuccess] = useState('');
 
@@ -459,17 +481,28 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   // Load Initial Data
   useEffect(() => {
     if (currentUser) {
-      loadDashboard();
-      loadReps();
-      loadAgencies();
-      loadBanks();
-      loadSupervisors();
-      loadTransactions();
-      loadCarExpenses();
-      if (currentUser.role === 'manager') {
-        loadPendingTx();
-        loadUsers();
+      if (currentUser.role === 'representative') {
+        loadRepLedger();
+      } else {
+        loadDashboard();
+        loadReps();
+        loadAgencies();
+        loadBanks();
+        loadSupervisors();
+        loadTransactions();
+        loadCarExpenses();
+        if (currentUser.role === 'manager') {
+          loadPendingTx();
+          loadUsers();
+        }
       }
+    }
+  }, [currentUser]);
+
+  // Force active tab for representatives
+  useEffect(() => {
+    if (currentUser && currentUser.role === 'representative') {
+      setActiveTab('rep-dashboard');
     }
   }, [currentUser]);
 
@@ -788,7 +821,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
       const data = await res.json();
       if (res.ok) {
         setRepSuccess('تم إضافة المندوب بنجاح!');
-        setNewRep({ code: '', name: '', phone: '', type: 'retail', agency_id: '', supervisor_id: '' });
+        setNewRep({ code: '', name: '', phone: '', type: 'retail', agency_id: '', supervisor_id: '', password: '' });
         loadReps();
         loadDashboard();
         loadAgencies();
@@ -822,6 +855,33 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
       } catch (err) {
         alert('تعذر الاتصال بالسيرفر');
       }
+    }
+  };
+
+  const handleUpdateRepPassword = async (repId, repName) => {
+    const password = window.prompt(`أدخل كلمة المرور الجديدة للمندوب "${repName}":`);
+    if (password === null) return;
+    if (password.trim() === '') {
+      alert('لا يمكن أن تكون كلمة المرور فارغة');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/reps/${repId}/password`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-role': currentUser.role
+        },
+        body: JSON.stringify({ password })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert('تم تعيين كلمة المرور بنجاح! ✔️');
+      } else {
+        alert(data.error || 'حدث خطأ أثناء تعيين كلمة المرور');
+      }
+    } catch (err) {
+      alert('تعذر الاتصال بالسيرفر');
     }
   };
 
@@ -1286,7 +1346,11 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', direction: 'rtl' }}>
           <div style={{ textAlign: 'left', marginLeft: '1rem' }}>
             <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>
-              {currentUser.role === 'manager' ? '👑 مدير النظام' : `👤 محاسب: ${currentUser.username}`}
+              {currentUser.role === 'manager' 
+                ? '👑 مدير النظام' 
+                : currentUser.role === 'representative' 
+                  ? `👤 مندوب: ${currentUser.name || currentUser.username}` 
+                  : `👤 محاسب: ${currentUser.username}`}
             </div>
             {currentUser.assigned_agency_id && (
               <div style={{ fontSize: '0.78rem', color: 'var(--primary)' }}>
@@ -1306,92 +1370,111 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
 
       {/* Navigation Tabs */}
       <nav className="tabs-nav" style={{ marginBottom: '2rem' }}>
-        <button 
-          className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('dashboard'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-        >
-          📊 الرئيسية
-        </button>
-
-        {currentUser.role === 'manager' && (
-          <button 
-            className={`tab-btn ${activeTab === 'pending-approvals' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('pending-approvals'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-          >
-            📥 طلبات الصرف المعلقة
-          </button>
-        )}
-
-        <button 
-          className={`tab-btn ${activeTab === 'transactions' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('transactions'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-        >
-          📃 المعاملات
-        </button>
-
-        {currentUser.role === 'manager' ? (
-          <button 
-            className={`tab-btn ${activeTab === 'agencies' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('agencies'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-          >
-            🏢 التوكيلات
-          </button>
+        {currentUser.role === 'representative' ? (
+          <>
+            <button 
+              className={`tab-btn ${activeTab === 'rep-dashboard' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('rep-dashboard'); loadRepLedger(); }}
+            >
+              📊 كشف حسابي ورصيدي
+            </button>
+            <button 
+              className={`tab-btn ${activeTab === 'rep-new-tx' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('rep-new-tx'); setTxSuccess(null); setTxError(''); }}
+            >
+              💸 طلب توريد أو صرف جديد
+            </button>
+          </>
         ) : (
-          <button 
-            className={`tab-btn ${activeTab === 'agencies' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('agencies'); setSelectedRepLedger(null); handleViewAgencyLedger(currentUser.assigned_agency_id); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-          >
-            🏢 التوكيل الخاص بي
-          </button>
+          <>
+            <button 
+              className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('dashboard'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+            >
+              📊 الرئيسية
+            </button>
+
+            {currentUser.role === 'manager' && (
+              <button 
+                className={`tab-btn ${activeTab === 'pending-approvals' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('pending-approvals'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+              >
+                📥 طلبات الصرف المعلقة
+              </button>
+            )}
+
+            <button 
+              className={`tab-btn ${activeTab === 'transactions' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('transactions'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+            >
+              📃 المعاملات
+            </button>
+
+            {currentUser.role === 'manager' ? (
+              <button 
+                className={`tab-btn ${activeTab === 'agencies' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('agencies'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+              >
+                🏢 التوكيلات
+              </button>
+            ) : (
+              <button 
+                className={`tab-btn ${activeTab === 'agencies' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('agencies'); setSelectedRepLedger(null); handleViewAgencyLedger(currentUser.assigned_agency_id); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+              >
+                🏢 التوكيل الخاص بي
+              </button>
+            )}
+
+            {currentUser.role === 'manager' && (
+              <button 
+                className={`tab-btn ${activeTab === 'banks' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('banks'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+              >
+                🏦 البنوك
+              </button>
+            )}
+
+            {currentUser.role === 'manager' && (
+              <button 
+                className={`tab-btn ${activeTab === 'supervisors' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('supervisors'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+              >
+                👔 المشرفين
+              </button>
+            )}
+
+            {currentUser.role === 'manager' && (
+              <button 
+                className={`tab-btn ${activeTab === 'users' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('users'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+              >
+                👥 المستخدمين
+              </button>
+            )}
+
+            <button 
+              className={`tab-btn ${activeTab === 'reps' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('reps'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+            >
+              👥 المناديب
+            </button>
+
+            <button 
+              className={`tab-btn ${activeTab === 'car-expenses' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('car-expenses'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+            >
+              🚗 مصاريف السيارات
+            </button>
+
+            <button 
+              className={`tab-btn ${activeTab === 'new-tx' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('new-tx'); setTxSuccess(null); setTxError(''); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+            >
+              💸 حركة جديدة
+            </button>
+          </>
         )}
-
-        {currentUser.role === 'manager' && (
-          <button 
-            className={`tab-btn ${activeTab === 'banks' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('banks'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-          >
-            🏦 البنوك
-          </button>
-        )}
-
-        {currentUser.role === 'manager' && (
-          <button 
-            className={`tab-btn ${activeTab === 'supervisors' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('supervisors'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-          >
-            👔 المشرفين
-          </button>
-        )}
-
-        {currentUser.role === 'manager' && (
-          <button 
-            className={`tab-btn ${activeTab === 'users' ? 'active' : ''}`}
-            onClick={() => { setActiveTab('users'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-          >
-            👥 المستخدمين
-          </button>
-        )}
-
-        <button 
-          className={`tab-btn ${activeTab === 'reps' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('reps'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-        >
-          👥 المناديب
-        </button>
-
-        <button 
-          className={`tab-btn ${activeTab === 'car-expenses' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('car-expenses'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-        >
-          🚗 مصاريف السيارات
-        </button>
-
-        <button 
-          className={`tab-btn ${activeTab === 'new-tx' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('new-tx'); setTxSuccess(null); setTxError(''); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-        >
-          💸 حركة جديدة
-        </button>
       </nav>
 
       {/* DASHBOARD TAB */}
@@ -1737,6 +1820,33 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                               onClick={() => handlePrintReceipt(tx)}
                             >
                               🖨️ طباعة
+                            </button>
+                          )}
+                          {tx.status === 'pending_receipt' && tx.type === 'deposit' && (
+                            <button
+                              className="btn btn-primary"
+                              style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', background: 'linear-gradient(135deg, var(--success), var(--success-hover))', boxShadow: 'none' }}
+                              onClick={async () => {
+                                if (window.confirm('هل تؤكد استلام هذا المبلغ نقداً وإضافته للخزينة ورصيد المندوب؟')) {
+                                  try {
+                                    const res = await fetch(`/api/transactions/${tx.id}/receive`, {
+                                      method: 'POST'
+                                    });
+                                    if (res.ok) {
+                                      loadDashboard();
+                                      loadTransactions();
+                                      loadCarExpenses();
+                                    } else {
+                                      const err = await res.json();
+                                      alert(err.error || 'حدث خطأ أثناء تأكيد الاستلام');
+                                    }
+                                  } catch (e) {
+                                    alert('تعذر الاتصال بالسيرفر');
+                                  }
+                                }
+                              }}
+                            >
+                              📥 تأكيد الاستلام
                             </button>
                           )}
                           {tx.status === 'approved' && tx.type === 'withdrawal' && (
@@ -2154,13 +2264,22 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                                         📂 كشف حساب
                                       </button>
                                       {currentUser.role === 'manager' && (
-                                        <button 
-                                          className="btn btn-secondary" 
-                                          style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
-                                          onClick={() => handleDeleteRep(rep.id, rep.name)}
-                                        >
-                                          🗑️ حذف
-                                        </button>
+                                        <>
+                                          <button 
+                                            className="btn btn-secondary" 
+                                            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'rgba(234, 179, 8, 0.1)', color: '#eab308', borderColor: 'rgba(234, 179, 8, 0.2)' }}
+                                            onClick={() => handleUpdateRepPassword(rep.id, rep.name)}
+                                          >
+                                            🔑 تعيين كلمة المرور
+                                          </button>
+                                          <button 
+                                            className="btn btn-secondary" 
+                                            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
+                                            onClick={() => handleDeleteRep(rep.id, rep.name)}
+                                          >
+                                            🗑️ حذف
+                                          </button>
+                                        </>
                                       )}
                                     </div>
                                   </td>
@@ -2222,13 +2341,22 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                                         📂 كشف حساب
                                       </button>
                                       {currentUser.role === 'manager' && (
-                                        <button 
-                                          className="btn btn-secondary" 
-                                          style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
-                                          onClick={() => handleDeleteRep(rep.id, rep.name)}
-                                        >
-                                          🗑️ حذف
-                                        </button>
+                                        <>
+                                          <button 
+                                            className="btn btn-secondary" 
+                                            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'rgba(234, 179, 8, 0.1)', color: '#eab308', borderColor: 'rgba(234, 179, 8, 0.2)' }}
+                                            onClick={() => handleUpdateRepPassword(rep.id, rep.name)}
+                                          >
+                                            🔑 تعيين كلمة المرور
+                                          </button>
+                                          <button 
+                                            className="btn btn-secondary" 
+                                            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
+                                            onClick={() => handleDeleteRep(rep.id, rep.name)}
+                                          >
+                                            🗑️ حذف
+                                          </button>
+                                        </>
                                       )}
                                     </div>
                                   </td>
@@ -2319,6 +2447,16 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                   placeholder="مثال: 010xxxxxxxx"
                   value={newRep.phone}
                   onChange={(e) => setNewRep({ ...newRep, phone: e.target.value })}
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                <label>كلمة مرور المندوب <span style={{ color: 'var(--danger)' }}>*</span></label>
+                <input 
+                  type="password" 
+                  placeholder="أدخل كلمة مرور قوية لتسجيل الدخول"
+                  value={newRep.password || ''}
+                  onChange={(e) => setNewRep({ ...newRep, password: e.target.value })}
+                  required
                 />
               </div>
               <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>حفظ المندوب الجديد</button>
@@ -3201,6 +3339,492 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               </button>
             </form>
           )}
+        </div>
+      )}
+
+      {/* REPRESENTATIVE DASHBOARD TAB */}
+      {activeTab === 'rep-dashboard' && (
+        <div className="rep-dashboard-container" style={{ direction: 'rtl' }}>
+          {repLedgerLoading && !repLedgerData ? (
+            <div className="no-data-msg">جاري تحميل البيانات... ⏳</div>
+          ) : !repLedgerData ? (
+            <div className="no-data-msg">لا توجد بيانات متاحة لحسابك حالياً.</div>
+          ) : (
+            <>
+              {/* Rep Balance Card */}
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(14,165,233,0.15) 0%, rgba(3,105,161,0.08) 100%)',
+                border: '2px solid rgba(14,165,233,0.35)',
+                borderRadius: '20px', padding: '2rem',
+                position: 'relative', overflow: 'hidden',
+                marginBottom: '2rem'
+              }}>
+                <div style={{ position: 'absolute', top: '-20px', left: '-20px', width: '120px', height: '120px', background: 'rgba(14,165,233,0.08)', borderRadius: '50%' }} />
+                <div style={{ position: 'relative' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.75rem' }}>
+                    <span style={{ fontSize: '1.8rem' }}>👤</span>
+                    <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#38bdf8', textTransform: 'uppercase' }}>
+                      المندوب: {repLedgerData.representative.name} ({repLedgerData.representative.code})
+                    </span>
+                  </div>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+                    <div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.2rem' }}>الرصيد الإجمالي الحالي</div>
+                      <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#0ea5e9', letterSpacing: '-1px', lineHeight: 1 }}>
+                        {(repLedgerData.summary.balance ?? 0).toLocaleString('ar-EG', { minimumFractionDigits: 2 })}
+                        <span style={{ fontSize: '1rem', fontWeight: 400, color: '#7dd3fc', marginRight: '0.4rem' }}>ج.م</span>
+                      </div>
+                    </div>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', borderRight: '1px solid rgba(255,255,255,0.1)', paddingRight: '2rem' }}>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>الهاتف: {repLedgerData.representative.phone || 'غير مسجل'}</div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>التوكيل: {repLedgerData.representative.agency_name}</div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>المشرف: {repLedgerData.representative.supervisor_name || 'بدون مشرف'}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1.5rem' }}>
+                    <div style={{ background: 'rgba(16,185,129,0.05)', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid rgba(16,185,129,0.15)' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#34d399', marginBottom: '0.1rem' }}>إجمالي التوريدات النقدية</div>
+                      <strong style={{ color: '#10b981', fontSize: '1.1rem' }}>{(repLedgerData.summary.cashDeposits ?? 0).toLocaleString('ar-EG')} ج.م</strong>
+                    </div>
+                    <div style={{ background: 'rgba(124,58,237,0.05)', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid rgba(124,58,237,0.15)' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#c4b5fd', marginBottom: '0.1rem' }}>إجمالي تحويلات البنك</div>
+                      <strong style={{ color: '#a78bfa', fontSize: '1.1rem' }}>{(repLedgerData.summary.bankTransferDeposits ?? 0).toLocaleString('ar-EG')} ج.م</strong>
+                    </div>
+                    <div style={{ background: 'rgba(239,68,68,0.05)', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid rgba(239,68,68,0.15)' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#f87171', marginBottom: '0.1rem' }}>إجمالي الصرف الفعلي</div>
+                      <strong style={{ color: '#ef4444', fontSize: '1.1rem' }}>{(repLedgerData.summary.totalWithdrawals ?? 0).toLocaleString('ar-EG')} ج.م</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Transactions History Table */}
+              <div className="panel">
+                <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h2 className="panel-title">📃 طلبات العمليات وكشف حسابي</h2>
+                  <button className="btn btn-secondary" onClick={loadRepLedger} disabled={repLedgerLoading} style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}>
+                    🔄 تحديث البيانات
+                  </button>
+                </div>
+                
+                <div className="table-container" style={{ margin: 0 }}>
+                  {repLedgerData.transactions.length === 0 ? (
+                    <div className="no-data-msg" style={{ padding: '2rem' }}>لا توجد عمليات مسجلة لحسابك بعد.</div>
+                  ) : (
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>رقم الإيصال</th>
+                          <th>التاريخ والوقت</th>
+                          <th>النوع</th>
+                          <th>طريقة الدفع / بند الصرف</th>
+                          <th>المبلغ</th>
+                          <th>حالة الطلب</th>
+                          <th>ملاحظات</th>
+                          <th>إجراءات</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {repLedgerData.transactions.map((tx) => {
+                          const idStr = String(tx.id).padStart(6, '0');
+                          const txDate = new Date(tx.date).toLocaleString('ar-EG');
+                          
+                          let statusLabel = 'مكتمل';
+                          let statusClass = 'approved';
+                          
+                          if (tx.status === 'pending_receipt') {
+                            statusLabel = '⏳ بانتظار استلام الحسابات';
+                            statusClass = 'pending';
+                          } else if (tx.status === 'pending') {
+                            statusLabel = '⏳ بانتظار موافقة المدير';
+                            statusClass = 'pending';
+                          } else if (tx.status === 'approved') {
+                            statusLabel = tx.type === 'deposit' ? '✔️ تم الاستلام' : '🔑 معتمد - بانتظار الصرف';
+                            statusClass = 'approved';
+                          } else if (tx.status === 'disbursed') {
+                            statusLabel = '💵 تم الصرف والاستلام';
+                            statusClass = 'approved';
+                          } else if (tx.status === 'rejected') {
+                            statusLabel = '❌ مرفوض';
+                            statusClass = 'rejected';
+                          }
+
+                          const displayPaymentOrSubType = tx.type === 'deposit' 
+                            ? (tx.payment_method === 'bank_transfer' ? '🏧 تحويل بنكي' : '💵 نقدي بالخزينة')
+                            : (tx.withdrawal_sub_type === 'salary' ? '💸 راتب' : tx.withdrawal_sub_type === 'commission' ? '💼 عمولة' : tx.withdrawal_sub_type === 'car' ? '🚗 مصاريف سيارة' : `📤 صرف: ${tx.withdrawal_sub_type || 'عام'}`);
+
+                          return (
+                            <tr key={tx.id}>
+                              <td><strong>TX-{idStr}</strong></td>
+                              <td>{txDate}</td>
+                              <td>
+                                <span className={`badge badge-${tx.type === 'deposit' ? 'wholesale' : 'retail'}`}>
+                                  {tx.type === 'deposit' ? '📥 توريد إيداع' : '📤 إذن صرف'}
+                                </span>
+                              </td>
+                              <td>{displayPaymentOrSubType}</td>
+                              <td>
+                                <span className={`amount-${tx.type}`} style={{ fontWeight: 'bold' }}>
+                                  {tx.type === 'withdrawal' ? '-' : ''}
+                                  {Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                                </span>
+                              </td>
+                              <td>
+                                <span className={`status-badge-inline status-${tx.status || 'approved'}`} style={{
+                                  padding: '0.3rem 0.6rem',
+                                  borderRadius: '6px',
+                                  fontSize: '0.8rem',
+                                  fontWeight: 'bold',
+                                  background: tx.status === 'pending_receipt' ? 'rgba(245,158,11,0.15)' : tx.status === 'pending' ? 'rgba(234,179,8,0.15)' : tx.status === 'rejected' ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)',
+                                  color: tx.status === 'pending_receipt' ? '#fbbf24' : tx.status === 'pending' ? '#eab308' : tx.status === 'rejected' ? '#f87171' : '#34d399'
+                                }}>
+                                  {statusLabel}
+                                </span>
+                              </td>
+                              <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={tx.notes}>
+                                {tx.notes || '—'}
+                              </td>
+                              <td>
+                                <button
+                                  className="btn btn-secondary"
+                                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', backgroundColor: 'rgba(14,165,233,0.08)', color: 'var(--primary)', borderColor: 'rgba(14,165,233,0.2)' }}
+                                  onClick={() => handlePrintReceipt({
+                                    ...tx,
+                                    rep_name: repLedgerData.representative.name,
+                                    rep_code: repLedgerData.representative.code,
+                                    agency_name: repLedgerData.representative.agency_name
+                                  })}
+                                >
+                                  🖨️ طباعة الإيصال
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* REPRESENTATIVE REQUEST NEW TRANSACTION TAB */}
+      {activeTab === 'rep-new-tx' && (
+        <div className="panel" style={{ maxWidth: '600px', margin: '0 auto', direction: 'rtl' }}>
+          <div className="panel-header">
+            <h2 className="panel-title">💸 طلب حركة جديدة (توريد / إذن صرف)</h2>
+          </div>
+          
+          {txError && <div className="alert alert-error">⚠️ {txError}</div>}
+          {txSuccess && <div className="alert alert-success">✔️ {txSuccess}</div>}
+
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            setTxError('');
+            setTxSuccess(null);
+
+            const amountVal = parseFloat(newTx.type === 'withdrawal' ? newTx.amount : (newTx.payment_method === 'bank_transfer' ? newTx.bankTransferAmount : newTx.cashAmount)) || 0;
+            if (amountVal <= 0) {
+              setTxError('يرجى إدخال مبلغ صالح أكبر من الصفر');
+              return;
+            }
+
+            // Build request body
+            const body = {
+              type: newTx.type,
+              amount: amountVal,
+              notes: newTx.notes,
+              payment_method: newTx.type === 'deposit' ? newTx.payment_method : 'cash'
+            };
+
+            if (newTx.type === 'deposit') {
+              if (newTx.payment_method === 'cash') {
+                body.denominations = denominations;
+              } else if (newTx.payment_method === 'bank_transfer') {
+                if (!newTx.bankId) {
+                  setTxError('يرجى اختيار الحساب البنكي المودع به');
+                  return;
+                }
+                body.bank_id = newTx.bankId;
+                body.receipt_image_bank = receiptImageBank;
+              }
+            } else if (newTx.type === 'withdrawal') {
+              body.withdrawal_sub_type = newTx.withdrawal_sub_type || 'general';
+            }
+
+            try {
+              const res = await fetch('/api/transactions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+              });
+              const data = await res.json();
+              if (res.ok) {
+                setTxSuccess(data.message || 'تم تقديم طلبك بنجاح!');
+                setNewTx({ type: 'deposit', repId: '', bankId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash', withdrawal_sub_type: 'general' });
+                setDenominations({ denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0 });
+                setReceiptImageBank(null);
+                loadRepLedger();
+                setTimeout(() => setActiveTab('rep-dashboard'), 1500);
+              } else {
+                setTxError(data.error || 'حدث خطأ أثناء حفظ المعاملة');
+              }
+            } catch (err) {
+              setTxError('تعذر الاتصال بالسيرفر');
+            }
+          }}>
+            {/* Request Type */}
+            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+              <label>نوع الطلب <span style={{ color: 'var(--danger)' }}>*</span></label>
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '0.4rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setNewTx({ ...newTx, type: 'deposit' })}
+                  style={{
+                    flex: 1, padding: '0.75rem', borderRadius: '10px', fontWeight: 'bold', border: '2px solid',
+                    borderColor: newTx.type === 'deposit' ? 'var(--success)' : 'transparent',
+                    background: newTx.type === 'deposit' ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)',
+                    color: newTx.type === 'deposit' ? '#10b981' : 'var(--text-secondary)',
+                    transition: 'all 0.2s', cursor: 'pointer'
+                  }}
+                >
+                  📥 طلب توريد نقدية
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewTx({ ...newTx, type: 'withdrawal' })}
+                  style={{
+                    flex: 1, padding: '0.75rem', borderRadius: '10px', fontWeight: 'bold', border: '2px solid',
+                    borderColor: newTx.type === 'withdrawal' ? 'var(--danger)' : 'transparent',
+                    background: newTx.type === 'withdrawal' ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.05)',
+                    color: newTx.type === 'withdrawal' ? '#ef4444' : 'var(--text-secondary)',
+                    transition: 'all 0.2s', cursor: 'pointer'
+                  }}
+                >
+                  📤 طلب إذن صرف نقدية
+                </button>
+              </div>
+            </div>
+
+            {/* Deposit-specific Fields */}
+            {newTx.type === 'deposit' && (
+              <>
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label>طريقة التوريد <span style={{ color: 'var(--danger)' }}>*</span></label>
+                  <select
+                    value={newTx.payment_method}
+                    onChange={(e) => setNewTx({ ...newTx, payment_method: e.target.value })}
+                    required
+                  >
+                    <option value="cash">💵 نقدي بالخزينة</option>
+                    <option value="bank_transfer">🏧 تحويل بنكي مباشر</option>
+                  </select>
+                </div>
+
+                {newTx.payment_method === 'cash' ? (
+                  /* Cash Deposit Inputs */
+                  <>
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                      <label>قيمة المبلغ النقدي (ج.م) <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="أدخل المبلغ النقدي المودع بالخزينة"
+                        value={newTx.cashAmount}
+                        onChange={(e) => setNewTx({ ...newTx, cashAmount: e.target.value })}
+                        required
+                      />
+                    </div>
+
+                    {/* Denominations Calculator */}
+                    {parseFloat(newTx.cashAmount) > 0 && (
+                      <div className="denom-section" style={{ marginBottom: '1.5rem' }}>
+                        <div className="denom-section-title">
+                          <span>💵 فئات المبلغ المودع</span>
+                          <button 
+                            type="button" 
+                            className="btn btn-secondary" 
+                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                            onClick={() => {
+                              const amt = parseFloat(newTx.cashAmount) || 0;
+                              let remaining = amt;
+                              const breakdown = { denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0 };
+                              breakdown.denom_200 = Math.floor(remaining / 200); remaining %= 200;
+                              breakdown.denom_100 = Math.floor(remaining / 100); remaining %= 100;
+                              breakdown.denom_50 = Math.floor(remaining / 50); remaining %= 50;
+                              breakdown.denom_20 = Math.floor(remaining / 20); remaining %= 20;
+                              breakdown.denom_10 = Math.floor(remaining / 10); remaining %= 10;
+                              breakdown.denom_5 = Math.floor(remaining / 5); remaining %= 5;
+                              breakdown.denom_1 = Math.floor(remaining);
+                              setDenominations(breakdown);
+                            }}
+                          >
+                            💡 ملء تلقائي للفئات
+                          </button>
+                        </div>
+                        <div className="denom-grid">
+                          {[200, 100, 50, 20, 10, 5, 1].map((denom) => (
+                            <div className="denom-input-group" key={denom}>
+                              <span className="denom-label">{denom} ج.م</span>
+                              <input 
+                                type="number" 
+                                min="0"
+                                placeholder="0"
+                                value={denominations[`denom_${denom}`] || ''}
+                                onChange={(e) => {
+                                  const val = Math.max(0, parseInt(e.target.value) || 0);
+                                  setDenominations(prev => ({ ...prev, [`denom_${denom}`]: val }));
+                                }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  /* Bank Transfer Deposit Inputs */
+                  <>
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                      <label>الحساب البنكي المحول إليه <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <select
+                        value={newTx.bankId}
+                        onChange={(e) => setNewTx({ ...newTx, bankId: e.target.value })}
+                        required
+                      >
+                        <option value="">اختر الحساب البنكي...</option>
+                        {banks.map(b => (
+                          <option key={b.id} value={b.id}>{b.name} ({b.code}) — {b.account_number}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                      <label>قيمة التحويل البنكي (ج.م) <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="أدخل مبلغ التحويل"
+                        value={newTx.bankTransferAmount}
+                        onChange={(e) => setNewTx({ ...newTx, bankTransferAmount: e.target.value })}
+                        required
+                      />
+                    </div>
+
+                    {/* Image Upload */}
+                    {parseFloat(newTx.bankTransferAmount) > 0 && (
+                      <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                        <label>📎 صورة إيصال التحويل البنكي (اختياري)</label>
+                        <div style={{ marginTop: '0.4rem' }}>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            id="rep-receipt-upload"
+                            style={{ display: 'none' }}
+                            onChange={(e) => {
+                              const file = e.target.files[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onloadend = () => setReceiptImageBank(reader.result);
+                              reader.readAsDataURL(file);
+                            }}
+                          />
+                          <label
+                            htmlFor="rep-receipt-upload"
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+                              padding: '0.5rem 1rem', borderRadius: '8px', cursor: 'pointer',
+                              background: receiptImageBank ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.05)',
+                              border: receiptImageBank ? '1px solid rgba(16,185,129,0.4)' : '1px dashed rgba(255,255,255,0.2)',
+                              color: receiptImageBank ? 'var(--success)' : 'var(--text-secondary)',
+                              fontSize: '0.9rem', transition: 'all 0.2s'
+                            }}
+                          >
+                            {receiptImageBank ? '✅ تم رفع الصورة' : '📷 اختر صورة الإيصال'}
+                          </label>
+                          {receiptImageBank && (
+                            <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+                              <img
+                                src={receiptImageBank}
+                                alt="Receipt preview"
+                                style={{ maxWidth: '180px', maxHeight: '120px', borderRadius: '8px', border: '1px solid var(--border-color)', objectFit: 'cover' }}
+                              />
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', color: 'var(--danger)' }}
+                                onClick={() => { setReceiptImageBank(null); document.getElementById('rep-receipt-upload').value = ''; }}
+                              >
+                                ✕ إزالة الصورة
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+
+            {/* Withdrawal-specific Fields */}
+            {newTx.type === 'withdrawal' && (
+              <>
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label>بند الصرف (إذن صرف) <span style={{ color: 'var(--danger)' }}>*</span></label>
+                  <select
+                    value={newTx.withdrawal_sub_type || 'general'}
+                    onChange={(e) => setNewTx({ ...newTx, withdrawal_sub_type: e.target.value })}
+                    required
+                  >
+                    <option value="general">📤 إذن صرف عام</option>
+                    <option value="salary">💸 رواتب وأجور</option>
+                    <option value="commission">💼 عمولات</option>
+                    <option value="car_gas">⛽ مصاريف سيارات (جاز)</option>
+                    <option value="car_oil">🛢️ مصاريف سيارات (زيت)</option>
+                    <option value="car_other">🚗 مصاريف سيارات (مصاريف أخرى)</option>
+                  </select>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label>قيمة مبلغ الصرف المطلوبة (ج.م) <span style={{ color: 'var(--danger)' }}>*</span></label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="أدخل مبلغ الصرف المطلوب"
+                    value={newTx.amount}
+                    onChange={(e) => setNewTx({ ...newTx, amount: e.target.value })}
+                    required
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Common Notes */}
+            <div className="form-group" style={{ marginBottom: '2rem' }}>
+              <label>بيان الملاحظات / التفاصيل</label>
+              <textarea
+                rows="3"
+                placeholder="اكتب تفاصيل أو بيان إضافي عن العملية..."
+                value={newTx.notes}
+                onChange={(e) => setNewTx({ ...newTx, notes: e.target.value })}
+              ></textarea>
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn-primary"
+              style={{ width: '100%', background: newTx.type === 'deposit' ? 'var(--success)' : 'var(--danger)', fontSize: '1.1rem', padding: '0.9rem' }}
+            >
+              {newTx.type === 'deposit' ? '📥 تقديم طلب التوريد' : '📤 تقديم طلب إذن الصرف'}
+            </button>
+          </form>
         </div>
       )}
 
