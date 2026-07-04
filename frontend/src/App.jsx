@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(() => {
@@ -374,12 +374,14 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   };
 
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('activeTab') || 'dashboard');
+  const [repsSubTab, setRepsSubTab] = useState('delegates');
 
   const getClassificationLabel = (cls) => {
     switch(cls) {
       case 'retail_rep': return '🛍️ مندوب تجزئة';
       case 'wholesale_rep': return '💼 مندوب جملة';
       case 'supervisor_staff': return '👔 مشرف';
+      case 'accountant_staff': return '💼 محاسب';
       case 'admin_staff': return '👑 موظف إداري';
       case 'warehouse_staff': return '📦 أمين/عامل مخزن';
       case 'driver': return '🚚 سائق';
@@ -396,6 +398,8 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
         return { background: 'var(--warning-bg)', color: 'var(--warning)', border: '1px solid rgba(245, 158, 11, 0.2)' };
       case 'supervisor_staff':
         return { background: 'rgba(139, 92, 246, 0.1)', color: '#8b5cf6', border: '1px solid rgba(139, 92, 246, 0.2)' };
+      case 'accountant_staff':
+        return { background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.2)' };
       case 'admin_staff':
         return { background: 'rgba(236, 72, 153, 0.1)', color: '#ec4899', border: '1px solid rgba(236, 72, 153, 0.2)' };
       case 'warehouse_staff':
@@ -1285,6 +1289,72 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
 
   const uncategorizedReps = reps.filter(r => !r.agency_id);
 
+  // Helper: render a table of representatives by classification
+  const renderClassTable = (classification, label) => {
+    const filtered = reps.filter(r => r.classification === classification);
+    if (filtered.length === 0) {
+      return <div className="no-data-msg">لا يوجد {label} مسجلين بالنظام حالياً.</div>;
+    }
+    return (
+      <div className="table-container" style={{ margin: 0, border: 'none', borderRadius: 0 }}>
+        <table>
+          <thead>
+            <tr>
+              <th>الكود</th>
+              <th>الاسم</th>
+              <th>الهاتف</th>
+              <th>الرصيد الحالي</th>
+              <th>الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(rep => (
+              <tr key={rep.id}>
+                <td><strong>{rep.code}</strong></td>
+                <td>{rep.name}</td>
+                <td>{rep.phone || '—'}</td>
+                <td>
+                  <span style={{ fontWeight: 800, color: Number(rep.balance) >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                    {Number(rep.balance).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                  </span>
+                </td>
+                <td>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                      onClick={() => handleViewLedger(rep.id)}
+                    >
+                      📂 كشف حساب
+                    </button>
+                    {currentUser.role === 'manager' && (
+                      <>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'rgba(234, 179, 8, 0.1)', color: '#eab308', borderColor: 'rgba(234, 179, 8, 0.2)' }}
+                          onClick={() => handleUpdateRepPassword(rep.id, rep.name)}
+                        >
+                          🔑 كلمة مرور
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
+                          onClick={() => handleDeleteRep(rep.id, rep.name)}
+                        >
+                          🗑️ حذف
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   const selectedRepName = reps.find(r => r.id === Number(newTx.repId))?.name || '';
 
   if (!currentUser) {
@@ -1508,14 +1578,6 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               </button>
             )}
 
-            {currentUser.role === 'manager' && (
-              <button 
-                className={`tab-btn ${activeTab === 'supervisors' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('supervisors'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-              >
-                👔 المشرفين
-              </button>
-            )}
 
             {currentUser.role === 'manager' && (
               <button 
@@ -2015,163 +2077,39 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
         </div>
       )}
 
-      {/* SUPERVISORS TAB */}
-      {activeTab === 'supervisors' && currentUser.role === 'manager' && (
-        <div className="grid-2col">
-          {/* Supervisors list */}
-          <div className="panel">
-            <div className="panel-header">
-              <h2 className="panel-title">👔 دليل المشرفين والمناديب</h2>
-            </div>
-            
-            {selectedSupervisorReps ? (
-              /* INDIVIDUAL SUPERVISOR DETAILS VIEW */
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-                  <div>
-                    <h3 style={{ color: 'var(--primary)', fontWeight: 800 }}>{selectedSupervisorReps.supervisor.name}</h3>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                      كود المشرف: {selectedSupervisorReps.supervisor.code} | عدد المناديب التابعين: {selectedSupervisorReps.representatives.length}
-                    </p>
-                  </div>
-                  <button className="btn btn-secondary" onClick={() => setSelectedSupervisorReps(null)}>العودة للقائمة ⬅</button>
-                </div>
-                
-                <h4 style={{ marginBottom: '1rem', color: 'var(--text-primary)' }}>👤 المناديب التابعين للمشرف:</h4>
-                <div className="table-container">
-                  {selectedSupervisorReps.representatives.length === 0 ? (
-                    <div className="no-data-msg">لا يوجد مناديب مسجلين تحت إشراف هذا المشرف حالياً.</div>
-                  ) : (
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>كود المندوب</th>
-                          <th>اسم المندوب</th>
-                          <th>التوكيل</th>
-                          <th>نوع المندوب</th>
-                          <th>الرصيد الحالي بالخزينة</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedSupervisorReps.representatives.map(r => (
-                          <tr key={r.id}>
-                            <td><strong>{r.code}</strong></td>
-                            <td>{r.name}</td>
-                            <td>{r.agency_name ? `${r.agency_name} (${r.agency_code})` : '—'}</td>
-                            <td>
-                              <span className={`badge badge-${r.type}`}>
-                                {r.type === 'wholesale' ? '💼 جملة' : '🛍️ تجزئة'}
-                              </span>
-                            </td>
-                            <td>
-                              <span style={{ fontWeight: 800, color: Number(r.balance) >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                                {Number(r.balance).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              </div>
-            ) : (
-              /* ALL SUPERVISORS TABLE */
-              <div className="table-container">
-                {supervisors.length === 0 ? (
-                  <div className="no-data-msg">لا يوجد مشرفين مسجلين بالنظام حالياً.</div>
-                ) : (
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>كود المشرف</th>
-                        <th>اسم المشرف</th>
-                        <th>عدد المناديب</th>
-                        <th>الإجراءات</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {supervisors.map((sup) => (
-                        <tr key={sup.id}>
-                          <td><strong>{sup.code}</strong></td>
-                          <td>{sup.name}</td>
-                          <td>
-                            <span className="badge badge-retail" style={{ backgroundColor: 'rgba(255,255,255,0.08)', color: 'var(--text-primary)' }}>
-                              {sup.reps_count} مندوب
-                            </span>
-                          </td>
-                          <td>
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                              <button 
-                                className="btn btn-secondary" 
-                                style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
-                                onClick={() => handleViewSupervisorReps(sup.id)}
-                              >
-                                👥 عرض المناديب
-                              </button>
-                              <button 
-                                className="btn btn-secondary" 
-                                style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
-                                onClick={() => handleDeleteSupervisor(sup.id, sup.name)}
-                              >
-                                🗑️ حذف
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Add Supervisor panel */}
-          <div className="panel">
-            <div className="panel-header">
-              <h2 className="panel-title">➕ إضافة مشرف جديد</h2>
-            </div>
-            
-            {supervisorError && <div className="alert alert-error">⚠️ {supervisorError}</div>}
-            {supervisorSuccess && <div className="alert alert-success">✔️ {supervisorSuccess}</div>}
-
-            <form onSubmit={handleAddSupervisor}>
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>كود المشرف <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input 
-                  type="text" 
-                  value={newSupervisor.code}
-                  readOnly
-                  disabled
-                  style={{ background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed' }}
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                <label>اسم المشرف بالكامل <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input 
-                  type="text" 
-                  placeholder="مثال: أحمد عبد الله محمد"
-                  value={newSupervisor.name}
-                  onChange={(e) => setNewSupervisor({ ...newSupervisor, name: e.target.value })}
-                  required
-                />
-              </div>
-              <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>حفظ المشرف الجديد</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* REPRESENTATIVES TAB */}
+      {/* REPRESENTATIVES / EMPLOYEES TAB */}
       {activeTab === 'reps' && (
         <div className="grid-2col" style={{ gridTemplateColumns: currentUser.role === 'manager' ? '2fr 1fr' : '1fr' }}>
-          {/* Reps list */}
+          {/* Main list panel */}
           <div className="panel" style={{ width: '100%' }}>
             <div className="panel-header">
-              <h2 className="panel-title">👥 دليل المناديب والحسابات</h2>
+              <h2 className="panel-title">👥 دليل الموظفين والمناديب</h2>
             </div>
-            
+
+            {/* Sub-tabs - only show when not in a detail view */}
+            {!selectedRepLedger && !selectedSupervisorReps && (
+              <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1.5rem', flexWrap: 'wrap', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
+                {[
+                  { id: 'delegates', label: '🛍️ المناديب' },
+                  { id: 'supervisors', label: '👔 المشرفين' },
+                  { id: 'accountants', label: '💼 المحاسبين' },
+                  { id: 'admin', label: '👑 الإدارة' },
+                  { id: 'warehouse', label: '📦 المخازن' },
+                  { id: 'drivers', label: '🚚 السائقين' },
+                  { id: 'workers', label: '🔧 العمال' },
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    className={`tab-btn ${repsSubTab === tab.id ? 'active' : ''}`}
+                    onClick={() => setRepsSubTab(tab.id)}
+                    style={{ padding: '0.4rem 0.9rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {selectedRepLedger ? (
               /* INDIVIDUAL REP LEDGER */
               <div>
@@ -2179,7 +2117,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                   <div>
                     <h3 style={{ color: 'var(--primary)', fontWeight: 800 }}>{selectedRepLedger.representative.name}</h3>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                      كود المندوب: {selectedRepLedger.representative.code} | هاتف: {selectedRepLedger.representative.phone || 'غير مسجل'} | التوكيل: {selectedRepLedger.representative.agency_name ? `${selectedRepLedger.representative.agency_name} (${selectedRepLedger.representative.agency_code})` : 'بدون توكيل'}
+                      كود الحساب: {selectedRepLedger.representative.code} | هاتف: {selectedRepLedger.representative.phone || 'غير مسجل'} | التوكيل: {selectedRepLedger.representative.agency_name ? `${selectedRepLedger.representative.agency_name} (${selectedRepLedger.representative.agency_code})` : 'بدون توكيل'}
                     </p>
                   </div>
                   <button className="btn btn-secondary" onClick={() => setSelectedRepLedger(null)}>العودة للقائمة ⬅</button>
@@ -2195,7 +2133,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                     <span className="metric-value currency" style={{ fontSize: '1.2rem', color: '#f43f5e' }}>{(selectedRepLedger.summary.totalWithdrawals ?? 0).toLocaleString()} ج.م</span>
                   </div>
                   <div className="metric-card balance" style={{ padding: '1rem', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)' }}>
-                    <span className="metric-title" style={{ fontSize: '0.8rem', color: '#34d399', fontWeight: 'bold' }}>💵 رصيد خزينة المندوب</span>
+                    <span className="metric-title" style={{ fontSize: '0.8rem', color: '#34d399', fontWeight: 'bold' }}>💵 رصيد خزينة الحساب</span>
                     <span className="metric-value currency" style={{ fontSize: '1.25rem', color: '#10b981', fontWeight: 800 }}>{(selectedRepLedger.summary.cashBalance ?? 0).toLocaleString()} ج.م</span>
                   </div>
                   <div className="metric-card deposits" style={{ padding: '1rem', background: 'rgba(124,58,237,0.05)', border: '1px solid rgba(124,58,237,0.2)' }}>
@@ -2203,14 +2141,14 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                     <span className="metric-value currency" style={{ fontSize: '1.2rem', color: '#a78bfa' }}>{(selectedRepLedger.summary.bankTransferDeposits ?? 0).toLocaleString()} ج.م</span>
                   </div>
                   <div className="metric-card balance" style={{ padding: '1rem', background: 'linear-gradient(135deg, rgba(16,185,129,0.1) 0%, rgba(124,58,237,0.1) 100%)', border: '1px solid rgba(255,255,255,0.15)' }}>
-                    <span className="metric-title" style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: 'bold' }}>📈 الرصيد الإجمالي للمندوب</span>
+                    <span className="metric-title" style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: 'bold' }}>📈 الرصيد الإجمالي</span>
                     <span className="metric-value currency" style={{ fontSize: '1.25rem', color: 'var(--text-primary)', fontWeight: 900 }}>{(selectedRepLedger.summary.balance ?? 0).toLocaleString()} ج.م</span>
                   </div>
                 </div>
 
                 <div className="table-container">
                   {selectedRepLedger.transactions.length === 0 ? (
-                    <div className="no-data-msg">لم يسجل هذا المندوب أي عمليات نقدية بعد.</div>
+                    <div className="no-data-msg">لم يسجل هذا الحساب أي عمليات مالية بعد.</div>
                   ) : (
                     <table>
                       <thead>
@@ -2280,286 +2218,276 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                   )}
                 </div>
               </div>
-            ) : (
-              /* ALL REPS TABLE (GROUPED) */
-              <div className="reps-grouped-container" style={{ width: '100%' }}>
-                {reps.length === 0 ? (
-                  <div className="no-data-msg">لا يوجد مناديب مسجلين بالنظام حالياً.</div>
-                ) : (
-                  <>
-                    {repsByAgency.map(group => (
-                      <div className="panel" key={group.agency.id} style={{ marginBottom: '2rem', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div className="panel-header" style={{ background: 'rgba(255,255,255,0.02)', padding: '0.8rem 1.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--primary)', fontWeight: 700 }}>
-                            🏢 {group.agency.name} <small style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginRight: '0.5rem' }}>({group.agency.code})</small>
-                          </h3>
-                          <span className="badge badge-retail" style={{ background: 'rgba(14,165,233,0.12)', color: 'var(--primary)' }}>
-                            {group.repsList.length} مندوب
-                          </span>
-                        </div>
-                        <div className="table-container" style={{ margin: 0, border: 'none', borderRadius: 0 }}>
-                          <table>
-                            <thead>
-                              <tr>
-                                <th>كود المندوب</th>
-                                <th>الاسم بالكامل</th>
-                                <th>المشرف المسؤول</th>
-                                <th>رقم الهاتف</th>
-                                <th>التصنيف الوظيفي</th>
-                                <th>الرصيد الحالي</th>
-                                <th>الإجراءات</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {group.repsList.map((rep) => (
-                                <tr key={rep.id}>
-                                  <td><strong>{rep.code}</strong></td>
-                                  <td>{rep.name}</td>
-                                  <td>{rep.supervisor_name ? `${rep.supervisor_name} (${rep.supervisor_code})` : <em style={{ color: 'var(--text-secondary)' }}>لا يوجد</em>}</td>
-                                  <td>{rep.phone || '—'}</td>
-                                  <td>
-                                    <span className="badge" style={getClassificationBadgeStyle(rep.classification)}>
-                                      {getClassificationLabel(rep.classification)}
-                                    </span>
-                                  </td>
-                                  <td>
-                                    <span style={{ fontWeight: 800, color: Number(rep.balance) >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                                      {Number(rep.balance).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
-                                    </span>
-                                  </td>
-                                  <td>
-                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                      <button 
-                                        className="btn btn-secondary" 
-                                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
-                                        onClick={() => handleViewLedger(rep.id)}
-                                      >
-                                        📂 كشف حساب
-                                      </button>
-                                      {currentUser.role === 'manager' && (
-                                        <>
-                                          <button 
-                                            className="btn btn-secondary" 
-                                            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'rgba(234, 179, 8, 0.1)', color: '#eab308', borderColor: 'rgba(234, 179, 8, 0.2)' }}
-                                            onClick={() => handleUpdateRepPassword(rep.id, rep.name)}
-                                          >
-                                            🔑 تعيين كلمة المرور
-                                          </button>
-                                          <button 
-                                            className="btn btn-secondary" 
-                                            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
-                                            onClick={() => handleDeleteRep(rep.id, rep.name)}
-                                          >
-                                            🗑️ حذف
-                                          </button>
-                                        </>
-                                      )}
-                                    </div>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    ))}
 
-                    {uncategorizedReps.length > 0 && (
-                      <div className="panel" style={{ marginBottom: '2rem', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div className="panel-header" style={{ background: 'rgba(255,255,255,0.02)', padding: '0.8rem 1.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-secondary)', fontWeight: 700 }}>
-                            👥 الموظفون والكوادر الأخرى (بدون توكيل)
-                          </h3>
-                          <span className="badge badge-retail" style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--text-secondary)' }}>
-                            {uncategorizedReps.length} موظف
-                          </span>
-                        </div>
-                        <div className="table-container" style={{ margin: 0, border: 'none', borderRadius: 0 }}>
-                          <table>
-                            <thead>
-                              <tr>
-                                <th>كود الحساب</th>
-                                <th>الاسم بالكامل</th>
-                                <th>المشرف المسؤول</th>
-                                <th>رقم الهاتف</th>
-                                <th>التصنيف الوظيفي</th>
-                                <th>الرصيد الحالي</th>
-                                <th>الإجراءات</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {uncategorizedReps.map((rep) => (
-                                <tr key={rep.id}>
-                                  <td><strong>{rep.code}</strong></td>
-                                  <td>{rep.name}</td>
-                                  <td>{rep.supervisor_name ? `${rep.supervisor_name} (${rep.supervisor_code})` : <em style={{ color: 'var(--text-secondary)' }}>لا يوجد</em>}</td>
-                                  <td>{rep.phone || '—'}</td>
-                                  <td>
-                                    <span className="badge" style={getClassificationBadgeStyle(rep.classification)}>
-                                      {getClassificationLabel(rep.classification)}
-                                    </span>
-                                  </td>
-                                  <td>
-                                    <span style={{ fontWeight: 800, color: Number(rep.balance) >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                                      {Number(rep.balance).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
-                                    </span>
-                                  </td>
-                                  <td>
-                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                      <button 
-                                        className="btn btn-secondary" 
-                                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
-                                        onClick={() => handleViewLedger(rep.id)}
-                                      >
-                                        📂 كشف حساب
-                                      </button>
-                                      {currentUser.role === 'manager' && (
-                                        <>
-                                          <button 
-                                            className="btn btn-secondary" 
-                                            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'rgba(234, 179, 8, 0.1)', color: '#eab308', borderColor: 'rgba(234, 179, 8, 0.2)' }}
-                                            onClick={() => handleUpdateRepPassword(rep.id, rep.name)}
-                                          >
-                                            🔑 تعيين كلمة المرور
-                                          </button>
-                                          <button 
-                                            className="btn btn-secondary" 
-                                            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
-                                            onClick={() => handleDeleteRep(rep.id, rep.name)}
-                                          >
-                                            🗑️ حذف
-                                          </button>
-                                        </>
-                                      )}
-                                    </div>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
+            ) : selectedSupervisorReps ? (
+              /* SUPERVISOR DETAIL VIEW */
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                  <div>
+                    <h3 style={{ color: 'var(--primary)', fontWeight: 800 }}>{selectedSupervisorReps.supervisor.name}</h3>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                      كود المشرف: {selectedSupervisorReps.supervisor.code} | عدد المناديب التابعين: {selectedSupervisorReps.representatives.length}
+                    </p>
+                  </div>
+                  <button className="btn btn-secondary" onClick={() => setSelectedSupervisorReps(null)}>العودة للقائمة ⬅</button>
+                </div>
+                <h4 style={{ marginBottom: '1rem', color: 'var(--text-primary)' }}>👤 المناديب التابعين للمشرف:</h4>
+                <div className="table-container">
+                  {selectedSupervisorReps.representatives.length === 0 ? (
+                    <div className="no-data-msg">لا يوجد مناديب مسجلين تحت إشراف هذا المشرف حالياً.</div>
+                  ) : (
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>كود المندوب</th><th>اسم المندوب</th><th>التوكيل</th><th>النوع</th><th>الرصيد</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedSupervisorReps.representatives.map(r => (
+                          <tr key={r.id}>
+                            <td><strong>{r.code}</strong></td>
+                            <td>{r.name}</td>
+                            <td>{r.agency_name ? `${r.agency_name} (${r.agency_code})` : '—'}</td>
+                            <td><span className={`badge badge-${r.type}`}>{r.type === 'wholesale' ? '💼 جملة' : '🛍️ تجزئة'}</span></td>
+                            <td>
+                              <span style={{ fontWeight: 800, color: Number(r.balance) >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                                {Number(r.balance).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+
+            ) : (
+              /* SUB-TAB CONTENT */
+              <div>
+                {/* ── DELEGATES ── */}
+                {repsSubTab === 'delegates' && (
+                  <div>
+                    {reps.filter(r => r.classification === 'retail_rep' || r.classification === 'wholesale_rep' || !r.classification).length === 0 ? (
+                      <div className="no-data-msg">لا يوجد مناديب مسجلين بالنظام حالياً.</div>
+                    ) : (
+                      <>
+                        {repsByAgency.map(group => (
+                          <div className="panel" key={group.agency.id} style={{ marginBottom: '2rem', border: '1px solid rgba(255,255,255,0.06)' }}>
+                            <div className="panel-header" style={{ background: 'rgba(255,255,255,0.02)', padding: '0.8rem 1.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--primary)', fontWeight: 700 }}>
+                                🏢 {group.agency.name} <small style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginRight: '0.5rem' }}>({group.agency.code})</small>
+                              </h3>
+                              <span className="badge badge-retail" style={{ background: 'rgba(14,165,233,0.12)', color: 'var(--primary)' }}>{group.repsList.length} مندوب</span>
+                            </div>
+                            <div className="table-container" style={{ margin: 0, border: 'none', borderRadius: 0 }}>
+                              <table>
+                                <thead>
+                                  <tr>
+                                    <th>كود المندوب</th><th>الاسم</th><th>المشرف</th><th>الهاتف</th><th>التصنيف</th><th>الرصيد</th><th>الإجراءات</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {group.repsList.map(rep => (
+                                    <tr key={rep.id}>
+                                      <td><strong>{rep.code}</strong></td>
+                                      <td>{rep.name}</td>
+                                      <td>{rep.supervisor_name ? `${rep.supervisor_name} (${rep.supervisor_code})` : <em style={{ color: 'var(--text-secondary)' }}>لا يوجد</em>}</td>
+                                      <td>{rep.phone || '—'}</td>
+                                      <td><span className="badge" style={getClassificationBadgeStyle(rep.classification)}>{getClassificationLabel(rep.classification)}</span></td>
+                                      <td><span style={{ fontWeight: 800, color: Number(rep.balance) >= 0 ? 'var(--success)' : 'var(--danger)' }}>{Number(rep.balance).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</span></td>
+                                      <td>
+                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                          <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => handleViewLedger(rep.id)}>📂 كشف حساب</button>
+                                          {currentUser.role === 'manager' && (<>
+                                            <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'rgba(234,179,8,0.1)', color: '#eab308', borderColor: 'rgba(234,179,8,0.2)' }} onClick={() => handleUpdateRepPassword(rep.id, rep.name)}>🔑</button>
+                                            <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244,63,94,0.2)' }} onClick={() => handleDeleteRep(rep.id, rep.name)}>🗑️</button>
+                                          </>)}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        ))}
+                        {uncategorizedReps.filter(r => r.classification === 'retail_rep' || r.classification === 'wholesale_rep' || !r.classification).length > 0 && (
+                          <div className="panel" style={{ marginBottom: '2rem', border: '1px solid rgba(255,255,255,0.06)' }}>
+                            <div className="panel-header" style={{ background: 'rgba(255,255,255,0.02)', padding: '0.8rem 1.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-secondary)', fontWeight: 700 }}>👥 مناديب بدون توكيل</h3>
+                            </div>
+                            <div className="table-container" style={{ margin: 0, border: 'none', borderRadius: 0 }}>
+                              <table>
+                                <thead><tr><th>الكود</th><th>الاسم</th><th>الهاتف</th><th>الرصيد</th><th>الإجراءات</th></tr></thead>
+                                <tbody>
+                                  {uncategorizedReps.filter(r => r.classification === 'retail_rep' || r.classification === 'wholesale_rep' || !r.classification).map(rep => (
+                                    <tr key={rep.id}>
+                                      <td><strong>{rep.code}</strong></td><td>{rep.name}</td><td>{rep.phone || '—'}</td>
+                                      <td><span style={{ fontWeight: 800, color: Number(rep.balance) >= 0 ? 'var(--success)' : 'var(--danger)' }}>{Number(rep.balance).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</span></td>
+                                      <td>
+                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                          <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => handleViewLedger(rep.id)}>📂 كشف حساب</button>
+                                          {currentUser.role === 'manager' && (<>
+                                            <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'rgba(234,179,8,0.1)', color: '#eab308', borderColor: 'rgba(234,179,8,0.2)' }} onClick={() => handleUpdateRepPassword(rep.id, rep.name)}>🔑</button>
+                                            <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244,63,94,0.2)' }} onClick={() => handleDeleteRep(rep.id, rep.name)}>🗑️</button>
+                                          </>)}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </>
                     )}
-                  </>
+                  </div>
                 )}
+
+                {/* ── SUPERVISORS ── */}
+                {repsSubTab === 'supervisors' && (
+                  <div>
+                    <h4 style={{ marginBottom: '1rem', color: 'var(--primary)', fontWeight: 700 }}>📋 الهيكل الإشرافي</h4>
+                    <div className="table-container" style={{ marginBottom: '2rem' }}>
+                      {supervisors.length === 0 ? (
+                        <div className="no-data-msg">لا يوجد مشرفين مسجلين بالنظام حالياً.</div>
+                      ) : (
+                        <table>
+                          <thead><tr><th>الكود</th><th>الاسم</th><th>عدد المناديب</th><th>الإجراءات</th></tr></thead>
+                          <tbody>
+                            {supervisors.map(sup => (
+                              <tr key={sup.id}>
+                                <td><strong>{sup.code}</strong></td>
+                                <td>{sup.name}</td>
+                                <td><span className="badge badge-retail" style={{ backgroundColor: 'rgba(255,255,255,0.08)', color: 'var(--text-primary)' }}>{sup.reps_count} مندوب</span></td>
+                                <td>
+                                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => handleViewSupervisorReps(sup.id)}>👥 عرض المناديب</button>
+                                    {currentUser.role === 'manager' && (
+                                      <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244,63,94,0.2)' }} onClick={() => handleDeleteSupervisor(sup.id, sup.name)}>🗑️ حذف</button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                    <h4 style={{ marginBottom: '1rem', color: 'var(--primary)', fontWeight: 700 }}>💵 الحسابات المالية للمشرفين</h4>
+                    {renderClassTable('supervisor_staff', 'مشرفين')}
+                  </div>
+                )}
+
+                {/* ── OTHER CLASSIFICATIONS ── */}
+                {repsSubTab === 'accountants' && renderClassTable('accountant_staff', 'محاسبين')}
+                {repsSubTab === 'admin' && renderClassTable('admin_staff', 'موظفي الإدارة')}
+                {repsSubTab === 'warehouse' && renderClassTable('warehouse_staff', 'أمناء/عمال المخازن')}
+                {repsSubTab === 'drivers' && renderClassTable('driver', 'سائقين')}
+                {repsSubTab === 'workers' && renderClassTable('worker', 'عمال')}
               </div>
             )}
           </div>
 
-          {/* Add rep panel */}
+          {/* Right panel: Add Supervisor (supervisors tab) or Add Rep/Employee (other tabs) */}
           {currentUser.role === 'manager' && (
-            <div className="panel">
-              <div className="panel-header">
-                <h2 className="panel-title">➕ إضافة موظف / مندوب جديد</h2>
-              </div>
-            
-            {repError && <div className="alert alert-error">⚠️ {repError}</div>}
-            {repSuccess && <div className="alert alert-success">✔️ {repSuccess}</div>}
-
-            <form onSubmit={handleAddRep}>
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>كود الحساب <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input 
-                  type="text" 
-                  value={newRep.code}
-                  readOnly
-                  disabled
-                  style={{ background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed' }}
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>تصنيف الحساب الوظيفي <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <select 
-                  value={newRep.classification || 'retail_rep'}
-                  onChange={(e) => {
-                    const cls = e.target.value;
-                    const isRep = (cls === 'retail_rep' || cls === 'wholesale_rep');
-                    setNewRep({ 
-                      ...newRep, 
-                      classification: cls,
-                      type: cls === 'wholesale_rep' ? 'wholesale' : 'retail',
-                      agency_id: isRep ? newRep.agency_id : '',
-                      supervisor_id: isRep ? newRep.supervisor_id : '',
-                      password: isRep ? newRep.password : ''
-                    });
-                  }}
-                  required
-                >
-                  <option value="retail_rep">🛍️ مندوب تجزئة</option>
-                  <option value="wholesale_rep">💼 مندوب جملة</option>
-                  <option value="supervisor_staff">👔 مشرف</option>
-                  <option value="admin_staff">👑 موظف إداري</option>
-                  <option value="warehouse_staff">📦 أمين/عامل مخزن</option>
-                  <option value="driver">🚚 سائق</option>
-                  <option value="worker">🔧 عامل</option>
-                </select>
-              </div>
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>الاسم بالكامل <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input 
-                  type="text" 
-                  placeholder="مثال: محمد السيد أحمد"
-                  value={newRep.name}
-                  onChange={(e) => setNewRep({ ...newRep, name: e.target.value })}
-                  required
-                />
-              </div>
-
-              {(newRep.classification === 'retail_rep' || newRep.classification === 'wholesale_rep') && (
-                <>
-                  <div className="form-group" style={{ marginBottom: '1rem' }}>
-                    <label>التوكيل التابع له المندوب <span style={{ color: 'var(--danger)' }}>*</span></label>
-                    <select 
-                      value={newRep.agency_id}
-                      onChange={(e) => setNewRep({ ...newRep, agency_id: e.target.value })}
-                      required
-                    >
-                      <option value="">اختر التوكيل...</option>
-                      {agencies.map(a => (
-                        <option key={a.id} value={a.id}>{a.name} ({a.code})</option>
-                      ))}
-                    </select>
+            <div>
+              {repsSubTab === 'supervisors' && !selectedRepLedger && !selectedSupervisorReps ? (
+                <div className="panel">
+                  <div className="panel-header">
+                    <h2 className="panel-title">➕ إضافة مشرف جديد</h2>
                   </div>
-                  <div className="form-group" style={{ marginBottom: '1rem' }}>
-                    <label>المشرف المسؤول</label>
-                    <select 
-                      value={newRep.supervisor_id}
-                      onChange={(e) => setNewRep({ ...newRep, supervisor_id: e.target.value })}
-                    >
-                      <option value="">اختر المشرف (اختياري)...</option>
-                      {supervisors.map(s => (
-                        <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
-                      ))}
-                    </select>
+                  {supervisorError && <div className="alert alert-error">⚠️ {supervisorError}</div>}
+                  {supervisorSuccess && <div className="alert alert-success">✔️ {supervisorSuccess}</div>}
+                  <form onSubmit={handleAddSupervisor}>
+                    <div className="form-group" style={{ marginBottom: '1rem' }}>
+                      <label>كود المشرف <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <input type="text" value={newSupervisor.code} readOnly disabled style={{ background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed' }} />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                      <label>اسم المشرف بالكامل <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <input type="text" placeholder="مثال: أحمد عبد الله محمد" value={newSupervisor.name} onChange={(e) => setNewSupervisor({ ...newSupervisor, name: e.target.value })} required />
+                    </div>
+                    <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>حفظ المشرف الجديد</button>
+                  </form>
+                </div>
+              ) : (
+                <div className="panel">
+                  <div className="panel-header">
+                    <h2 className="panel-title">➕ إضافة موظف / مندوب جديد</h2>
                   </div>
-                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                    <label>كلمة مرور المندوب <span style={{ color: 'var(--danger)' }}>*</span></label>
-                    <input 
-                      type="password" 
-                      placeholder="أدخل كلمة مرور قوية لتسجيل الدخول"
-                      value={newRep.password || ''}
-                      onChange={(e) => setNewRep({ ...newRep, password: e.target.value })}
-                      required
-                    />
-                  </div>
-                </>
+                  {repError && <div className="alert alert-error">⚠️ {repError}</div>}
+                  {repSuccess && <div className="alert alert-success">✔️ {repSuccess}</div>}
+                  <form onSubmit={handleAddRep}>
+                    <div className="form-group" style={{ marginBottom: '1rem' }}>
+                      <label>كود الحساب <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <input type="text" value={newRep.code} readOnly disabled style={{ background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed' }} />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '1rem' }}>
+                      <label>تصنيف الحساب الوظيفي <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <select
+                        value={newRep.classification || 'retail_rep'}
+                        onChange={(e) => {
+                          const cls = e.target.value;
+                          const isRep = (cls === 'retail_rep' || cls === 'wholesale_rep');
+                          setNewRep({ ...newRep, classification: cls, type: cls === 'wholesale_rep' ? 'wholesale' : 'retail', agency_id: isRep ? newRep.agency_id : '', supervisor_id: isRep ? newRep.supervisor_id : '', password: isRep ? newRep.password : '' });
+                        }}
+                        required
+                      >
+                        <option value="retail_rep">🛍️ مندوب تجزئة</option>
+                        <option value="wholesale_rep">💼 مندوب جملة</option>
+                        <option value="supervisor_staff">👔 مشرف</option>
+                        <option value="accountant_staff">💼 محاسب</option>
+                        <option value="admin_staff">👑 موظف إداري</option>
+                        <option value="warehouse_staff">📦 أمين/عامل مخزن</option>
+                        <option value="driver">🚚 سائق</option>
+                        <option value="worker">🔧 عامل</option>
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '1rem' }}>
+                      <label>الاسم بالكامل <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <input type="text" placeholder="مثال: محمد السيد أحمد" value={newRep.name} onChange={(e) => setNewRep({ ...newRep, name: e.target.value })} required />
+                    </div>
+                    {(newRep.classification === 'retail_rep' || newRep.classification === 'wholesale_rep') && (
+                      <>
+                        <div className="form-group" style={{ marginBottom: '1rem' }}>
+                          <label>التوكيل التابع له المندوب <span style={{ color: 'var(--danger)' }}>*</span></label>
+                          <select value={newRep.agency_id} onChange={(e) => setNewRep({ ...newRep, agency_id: e.target.value })} required>
+                            <option value="">اختر التوكيل...</option>
+                            {agencies.map(a => <option key={a.id} value={a.id}>{a.name} ({a.code})</option>)}
+                          </select>
+                        </div>
+                        <div className="form-group" style={{ marginBottom: '1rem' }}>
+                          <label>المشرف المسؤول</label>
+                          <select value={newRep.supervisor_id} onChange={(e) => setNewRep({ ...newRep, supervisor_id: e.target.value })}>
+                            <option value="">اختر المشرف (اختياري)...</option>
+                            {supervisors.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
+                          </select>
+                        </div>
+                        <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                          <label>كلمة مرور المندوب <span style={{ color: 'var(--danger)' }}>*</span></label>
+                          <input type="password" placeholder="أدخل كلمة مرور قوية لتسجيل الدخول" value={newRep.password || ''} onChange={(e) => setNewRep({ ...newRep, password: e.target.value })} required />
+                        </div>
+                      </>
+                    )}
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                      <label>رقم الهاتف</label>
+                      <input type="text" placeholder="مثال: 010xxxxxxxx" value={newRep.phone} onChange={(e) => setNewRep({ ...newRep, phone: e.target.value })} />
+                    </div>
+                    <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>حفظ الموظف الجديد</button>
+                  </form>
+                </div>
               )}
-
-              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                <label>رقم الهاتف</label>
-                <input 
-                  type="text" 
-                  placeholder="مثال: 010xxxxxxxx"
-                  value={newRep.phone}
-                  onChange={(e) => setNewRep({ ...newRep, phone: e.target.value })}
-                />
-              </div>
-              <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>حفظ الموظف الجديد</button>
-            </form>
-          </div>
+            </div>
           )}
         </div>
       )}
+
+
+
+            
 
       {/* CAR EXPENSES TAB */}
       {activeTab === 'car-expenses' && (
