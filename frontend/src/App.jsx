@@ -491,6 +491,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   };
 
   const loadReps = async () => {
+    setRepsLoaded(false);
     try {
       const res = await fetch('/api/reps');
       if (res.ok) {
@@ -504,6 +505,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   };
 
   const loadAgencies = async () => {
+    setAgenciesLoaded(false);
     try {
       const res = await fetch('/api/agencies');
       if (res.ok) {
@@ -517,6 +519,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   };
 
   const loadBanks = async () => {
+    setBanksLoaded(false);
     try {
       const res = await fetch('/api/banks');
       if (res.ok) {
@@ -530,6 +533,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   };
 
   const loadSupervisors = async () => {
+    setSupervisorsLoaded(false);
     try {
       const res = await fetch('/api/supervisors');
       if (res.ok) {
