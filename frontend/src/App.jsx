@@ -291,7 +291,9 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
 
   const handleLogout = () => {
     localStorage.removeItem('currentUser');
+    localStorage.removeItem('activeTab');
     setCurrentUser(null);
+    setActiveTab('dashboard');
   };
 
   const loadPendingTx = async () => {
@@ -349,7 +351,12 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
     }
   };
 
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('activeTab') || 'dashboard');
+
+  useEffect(() => {
+    localStorage.setItem('activeTab', activeTab);
+  }, [activeTab]);
+
   const [dashboardData, setDashboardData] = useState({
     summary: { totalDeposits: 0, totalWithdrawals: 0, safeBalance: 0, repsCount: 0 },
     recentTransactions: []
