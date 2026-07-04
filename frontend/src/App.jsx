@@ -358,6 +358,10 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   const [agencies, setAgencies] = useState([]);
   const [banks, setBanks] = useState([]);
   const [supervisors, setSupervisors] = useState([]);
+  const [repsLoaded, setRepsLoaded] = useState(false);
+  const [agenciesLoaded, setAgenciesLoaded] = useState(false);
+  const [banksLoaded, setBanksLoaded] = useState(false);
+  const [supervisorsLoaded, setSupervisorsLoaded] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [selectedRepLedger, setSelectedRepLedger] = useState(null); // Detailed statement modal/view
   const [selectedAgencyLedger, setSelectedAgencyLedger] = useState(null); // Detailed agency ledger view
@@ -397,28 +401,28 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
 
   // Auto-generate codes for forms
   useEffect(() => {
-    if (reps && reps.length > 0 && !newRep.code) {
-      setNewRep(prev => ({ ...prev, code: getNextCode(reps, '1001') }));
+    if (repsLoaded && !newRep.code) {
+      setNewRep(prev => ({ ...prev, code: getNextCode(reps, '5001') }));
     }
-  }, [reps, newRep.code]);
+  }, [reps, repsLoaded, newRep.code]);
 
   useEffect(() => {
-    if (agencies && agencies.length > 0 && !newAgency.code) {
+    if (agenciesLoaded && !newAgency.code) {
       setNewAgency(prev => ({ ...prev, code: getNextCode(agencies, '1001') }));
     }
-  }, [agencies, newAgency.code]);
+  }, [agencies, agenciesLoaded, newAgency.code]);
 
   useEffect(() => {
-    if (banks && banks.length > 0 && !newBank.code) {
-      setNewBank(prev => ({ ...prev, code: getNextCode(banks, '1001') }));
+    if (banksLoaded && !newBank.code) {
+      setNewBank(prev => ({ ...prev, code: getNextCode(banks, '8001') }));
     }
-  }, [banks, newBank.code]);
+  }, [banks, banksLoaded, newBank.code]);
 
   useEffect(() => {
-    if (supervisors && supervisors.length > 0 && !newSupervisor.code) {
-      setNewSupervisor(prev => ({ ...prev, code: getNextCode(supervisors, '1001') }));
+    if (supervisorsLoaded && !newSupervisor.code) {
+      setNewSupervisor(prev => ({ ...prev, code: getNextCode(supervisors, '3001') }));
     }
-  }, [supervisors, newSupervisor.code]);
+  }, [supervisors, supervisorsLoaded, newSupervisor.code]);
   
   // New Transaction Form State
   const [newTx, setNewTx] = useState({ type: 'deposit', repId: '', bankId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash' });
@@ -492,6 +496,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
       if (res.ok) {
         const data = await res.json();
         setReps(data);
+        setRepsLoaded(true);
       }
     } catch (err) {
       console.error('Failed to load representatives:', err);
@@ -504,6 +509,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
       if (res.ok) {
         const data = await res.json();
         setAgencies(data);
+        setAgenciesLoaded(true);
       }
     } catch (err) {
       console.error('Failed to load agencies:', err);
@@ -516,6 +522,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
       if (res.ok) {
         const data = await res.json();
         setBanks(data);
+        setBanksLoaded(true);
       }
     } catch (err) {
       console.error('Failed to load banks:', err);
@@ -528,6 +535,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
       if (res.ok) {
         const data = await res.json();
         setSupervisors(data);
+        setSupervisorsLoaded(true);
       }
     } catch (err) {
       console.error('Failed to load supervisors:', err);
