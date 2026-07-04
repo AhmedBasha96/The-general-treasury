@@ -375,6 +375,79 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
 
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('activeTab') || 'dashboard');
 
+  const getClassificationLabel = (cls) => {
+    switch(cls) {
+      case 'retail_rep': return '🛍️ مندوب تجزئة';
+      case 'wholesale_rep': return '💼 مندوب جملة';
+      case 'supervisor_staff': return '👔 مشرف';
+      case 'admin_staff': return '👑 موظف إداري';
+      case 'warehouse_staff': return '📦 أمين/عامل مخزن';
+      case 'driver': return '🚚 سائق';
+      case 'worker': return '🔧 عامل';
+      default: return '👤 موظف';
+    }
+  };
+
+  const getClassificationBadgeStyle = (cls) => {
+    switch(cls) {
+      case 'retail_rep':
+        return { background: 'var(--primary-glow)', color: 'var(--primary)', border: '1px solid rgba(14, 165, 233, 0.2)' };
+      case 'wholesale_rep':
+        return { background: 'var(--warning-bg)', color: 'var(--warning)', border: '1px solid rgba(245, 158, 11, 0.2)' };
+      case 'supervisor_staff':
+        return { background: 'rgba(139, 92, 246, 0.1)', color: '#8b5cf6', border: '1px solid rgba(139, 92, 246, 0.2)' };
+      case 'admin_staff':
+        return { background: 'rgba(236, 72, 153, 0.1)', color: '#ec4899', border: '1px solid rgba(236, 72, 153, 0.2)' };
+      case 'warehouse_staff':
+        return { background: 'rgba(14, 116, 144, 0.1)', color: '#0e7490', border: '1px solid rgba(14, 116, 144, 0.2)' };
+      case 'driver':
+        return { background: 'rgba(20, 184, 166, 0.1)', color: '#14b8a6', border: '1px solid rgba(20, 184, 166, 0.2)' };
+      case 'worker':
+        return { background: 'rgba(100, 116, 139, 0.1)', color: '#94a3b8', border: '1px solid rgba(100, 116, 139, 0.2)' };
+      default:
+        return { background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-secondary)', border: '1px solid var(--border-color)' };
+    }
+  };
+
+  const getWithdrawalSubTypes = () => {
+    if (txSourceType === 'direct') {
+      return [
+        { value: 'direct_rent', label: '🏢 الإيجار' },
+        { value: 'direct_operational', label: '🔧 مصاريف تشغيل عامة' },
+        { value: 'direct_other', label: '📝 أخرى' }
+      ];
+    }
+    
+    const selectedRep = reps.find(r => r.id === Number(newTx.repId));
+    if (selectedRep) {
+      const cls = selectedRep.classification;
+      if (cls === 'retail_rep' || cls === 'wholesale_rep') {
+        return [
+          { value: 'car', label: '🚗 مصاريف سيارات' },
+          { value: 'salary', label: '💵 راتب' },
+          { value: 'commission', label: '💰 عمولة' },
+          { value: 'loan', label: '💸 سلفة' },
+          { value: 'other', label: '📝 أخرى' }
+        ];
+      } else {
+        return [
+          { value: 'salary', label: '💵 راتب' },
+          { value: 'loan', label: '💸 سلفة' },
+          { value: 'commission', label: '💰 عمولة / مكافآت' },
+          { value: 'other', label: '📝 صرف عام' }
+        ];
+      }
+    }
+    
+    return [
+      { value: 'car', label: '🚗 مصاريف سيارات' },
+      { value: 'salary', label: '💵 راتب' },
+      { value: 'commission', label: '💰 عمولة' },
+      { value: 'loan', label: '💸 سلفة' },
+      { value: 'other', label: '📝 أخرى' }
+    ];
+  };
+
   useEffect(() => {
     localStorage.setItem('activeTab', activeTab);
   }, [activeTab]);
