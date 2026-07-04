@@ -383,6 +383,42 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   const [newRep, setNewRep] = useState({ code: '', name: '', phone: '', type: 'retail', agency_id: '', supervisor_id: '' });
   const [repError, setRepError] = useState('');
   const [repSuccess, setRepSuccess] = useState('');
+
+  // Helper to compute next sequential numeric code
+  const getNextCode = (list, defaultCode = '1001') => {
+    if (!list || list.length === 0) return defaultCode;
+    const numericCodes = list
+      .map(item => parseInt(item.code))
+      .filter(num => !isNaN(num));
+    if (numericCodes.length === 0) return defaultCode;
+    const maxCode = Math.max(...numericCodes);
+    return (maxCode + 1).toString();
+  };
+
+  // Auto-generate codes for forms
+  useEffect(() => {
+    if (reps && reps.length > 0 && !newRep.code) {
+      setNewRep(prev => ({ ...prev, code: getNextCode(reps, '1001') }));
+    }
+  }, [reps, newRep.code]);
+
+  useEffect(() => {
+    if (agencies && agencies.length > 0 && !newAgency.code) {
+      setNewAgency(prev => ({ ...prev, code: getNextCode(agencies, '1001') }));
+    }
+  }, [agencies, newAgency.code]);
+
+  useEffect(() => {
+    if (banks && banks.length > 0 && !newBank.code) {
+      setNewBank(prev => ({ ...prev, code: getNextCode(banks, '1001') }));
+    }
+  }, [banks, newBank.code]);
+
+  useEffect(() => {
+    if (supervisors && supervisors.length > 0 && !newSupervisor.code) {
+      setNewSupervisor(prev => ({ ...prev, code: getNextCode(supervisors, '1001') }));
+    }
+  }, [supervisors, newSupervisor.code]);
   
   // New Transaction Form State
   const [newTx, setNewTx] = useState({ type: 'deposit', repId: '', bankId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash' });
