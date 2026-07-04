@@ -3529,33 +3529,44 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
             setTxError('');
             setTxSuccess(null);
 
-            const amountVal = parseFloat(newTx.type === 'withdrawal' ? newTx.amount : (newTx.payment_method === 'bank_transfer' ? newTx.bankTransferAmount : newTx.cashAmount)) || 0;
-            if (amountVal <= 0) {
-              setTxError('يرجى إدخال مبلغ صالح أكبر من الصفر');
-              return;
-            }
-
             // Build request body
-            const body = {
+            let body = {
               type: newTx.type,
-              amount: amountVal,
-              notes: newTx.notes,
-              payment_method: newTx.type === 'deposit' ? newTx.payment_method : 'cash'
+              notes: newTx.notes
             };
 
             if (newTx.type === 'deposit') {
-              if (newTx.payment_method === 'cash') {
+              const cashAmt = parseFloat(newTx.cashAmount) || 0;
+              const bankAmt = parseFloat(newTx.bankTransferAmount) || 0;
+
+              if (cashAmt <= 0 && bankAmt <= 0) {
+                setTxError('يرجى إدخال مبلغ توريد نقدي أو تحويل بنكي');
+                return;
+              }
+
+              body.cash_amount = cashAmt;
+              body.bank_transfer_amount = bankAmt;
+
+              if (cashAmt > 0) {
                 body.denominations = denominations;
-              } else if (newTx.payment_method === 'bank_transfer') {
+              }
+
+              if (bankAmt > 0) {
                 if (!newTx.bankId) {
-                  setTxError('يرجى اختيار الحساب البنكي المودع به');
+                  setTxError('يرجى اختيار الحساب البنكي للتوريد بالتحويل');
                   return;
                 }
                 body.bank_id = newTx.bankId;
                 body.receipt_image_bank = receiptImageBank;
               }
-            } else if (newTx.type === 'withdrawal') {
-              body.withdrawal_sub_type = newTx.withdrawal_sub_type || 'general';
+            } else {
+              const amountVal = parseFloat(newTx.amount) || 0;
+              if (amountVal <= 0) {
+                setTxError('يرجى إدخال مبلغ الصرف المطلوب');
+                return;
+              }
+              body.amount = amountVal;
+              body.withdrawal_sub_type = newTx.withdrawal_sub_type || 'loan';
             }
 
             try {
@@ -3567,7 +3578,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               const data = await res.json();
               if (res.ok) {
                 setTxSuccess(data.message || 'تم تقديم طلبك بنجاح!');
-                setNewTx({ type: 'deposit', repId: '', bankId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash', withdrawal_sub_type: 'general' });
+                setNewTx({ type: 'deposit', repId: '', bankId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash', withdrawal_sub_type: '' });
                 setDenominations({ denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0 });
                 setReceiptImageBank(null);
                 loadRepLedger();
@@ -3585,7 +3596,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               <div style={{ display: 'flex', gap: '1rem', marginTop: '0.4rem' }}>
                 <button
                   type="button"
-                  onClick={() => setNewTx({ ...newTx, type: 'deposit' })}
+                  onClick={() => setNewTx({ ...newTx, type: 'deposit', withdrawal_sub_type: '' })}
                   style={{
                     flex: 1, padding: '0.75rem', borderRadius: '10px', fontWeight: 'bold', border: '2px solid',
                     borderColor: newTx.type === 'deposit' ? 'var(--success)' : 'transparent',
@@ -3598,7 +3609,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setNewTx({ ...newTx, type: 'withdrawal' })}
+                  onClick={() => setNewTx({ ...newTx, type: 'withdrawal', withdrawal_sub_type: 'loan' })}
                   style={{
                     flex: 1, padding: '0.75rem', borderRadius: '10px', fontWeight: 'bold', border: '2px solid',
                     borderColor: newTx.type === 'withdrawal' ? 'var(--danger)' : 'transparent',
@@ -3615,160 +3626,145 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
             {/* Deposit-specific Fields */}
             {newTx.type === 'deposit' && (
               <>
-                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                  <label>طريقة التوريد <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <select
-                    value={newTx.payment_method}
-                    onChange={(e) => setNewTx({ ...newTx, payment_method: e.target.value })}
-                    required
-                  >
-                    <option value="cash">💵 نقدي بالخزينة</option>
-                    <option value="bank_transfer">🏧 تحويل بنكي مباشر</option>
-                  </select>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                  {/* Cash portion */}
+                  <div className="form-group">
+                    <label>💵 توريد نقدي بالخزينة (ج.م)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="0.00"
+                      value={newTx.cashAmount}
+                      onChange={(e) => setNewTx({ ...newTx, cashAmount: e.target.value })}
+                    />
+                  </div>
+
+                  {/* Bank transfer portion */}
+                  <div className="form-group">
+                    <label>🏦 تحويل بنكي مباشر (ج.م)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="0.00"
+                      value={newTx.bankTransferAmount}
+                      onChange={(e) => setNewTx({ ...newTx, bankTransferAmount: e.target.value })}
+                    />
+                  </div>
                 </div>
 
-                {newTx.payment_method === 'cash' ? (
-                  /* Cash Deposit Inputs */
-                  <>
-                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                      <label>قيمة المبلغ النقدي (ج.م) <span style={{ color: 'var(--danger)' }}>*</span></label>
-                      <input
-                        type="number"
-                        min="1"
-                        placeholder="أدخل المبلغ النقدي المودع بالخزينة"
-                        value={newTx.cashAmount}
-                        onChange={(e) => setNewTx({ ...newTx, cashAmount: e.target.value })}
-                        required
-                      />
-                    </div>
+                {/* Bank Account Selection - show if bankTransferAmount > 0 */}
+                {parseFloat(newTx.bankTransferAmount) > 0 && (
+                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                    <label>الحساب البنكي / المحفظة المستلمة <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <select
+                      value={newTx.bankId}
+                      onChange={(e) => setNewTx({ ...newTx, bankId: e.target.value })}
+                      required
+                    >
+                      <option value="">اختر الحساب البنكي / المحفظة...</option>
+                      {banks.map(b => (
+                        <option key={b.id} value={b.id}>{b.name} ({b.code}) — {b.account_number}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
-                    {/* Denominations Calculator */}
-                    {parseFloat(newTx.cashAmount) > 0 && (
-                      <div className="denom-section" style={{ marginBottom: '1.5rem' }}>
-                        <div className="denom-section-title">
-                          <span>💵 فئات المبلغ المودع</span>
-                          <button 
-                            type="button" 
-                            className="btn btn-secondary" 
-                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
-                            onClick={() => {
-                              const amt = parseFloat(newTx.cashAmount) || 0;
-                              let remaining = amt;
-                              const breakdown = { denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0 };
-                              breakdown.denom_200 = Math.floor(remaining / 200); remaining %= 200;
-                              breakdown.denom_100 = Math.floor(remaining / 100); remaining %= 100;
-                              breakdown.denom_50 = Math.floor(remaining / 50); remaining %= 50;
-                              breakdown.denom_20 = Math.floor(remaining / 20); remaining %= 20;
-                              breakdown.denom_10 = Math.floor(remaining / 10); remaining %= 10;
-                              breakdown.denom_5 = Math.floor(remaining / 5); remaining %= 5;
-                              breakdown.denom_1 = Math.floor(remaining);
-                              setDenominations(breakdown);
-                            }}
+                {/* Receipt Image Upload - show if bankTransferAmount > 0 */}
+                {parseFloat(newTx.bankTransferAmount) > 0 && (
+                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                    <label>📎 صورة إيصال / فاتورة التحويل (اختياري)</label>
+                    <div style={{ marginTop: '0.4rem' }}>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        id="rep-receipt-upload"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onloadend = () => setReceiptImageBank(reader.result);
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                      <label
+                        htmlFor="rep-receipt-upload"
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+                          padding: '0.5rem 1rem', borderRadius: '8px', cursor: 'pointer',
+                          background: receiptImageBank ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.05)',
+                          border: receiptImageBank ? '1px solid rgba(16,185,129,0.4)' : '1px dashed rgba(255,255,255,0.2)',
+                          color: receiptImageBank ? 'var(--success)' : 'var(--text-secondary)',
+                          fontSize: '0.9rem', transition: 'all 0.2s'
+                        }}
+                      >
+                        {receiptImageBank ? '✅ تم رفع الصورة' : '📷 اختر صورة الإيصال'}
+                      </label>
+                      {receiptImageBank && (
+                        <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+                          <img
+                            src={receiptImageBank}
+                            alt="Receipt preview"
+                            style={{ maxWidth: '180px', maxHeight: '120px', borderRadius: '8px', border: '1px solid var(--border-color)', objectFit: 'cover' }}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', color: 'var(--danger)' }}
+                            onClick={() => { setReceiptImageBank(null); document.getElementById('rep-receipt-upload').value = ''; }}
                           >
-                            💡 ملء تلقائي للفئات
+                            ✕ إزالة الصورة
                           </button>
                         </div>
-                        <div className="denom-grid">
-                          {[200, 100, 50, 20, 10, 5, 1].map((denom) => (
-                            <div className="denom-input-group" key={denom}>
-                              <span className="denom-label">{denom} ج.م</span>
-                              <input 
-                                type="number" 
-                                min="0"
-                                placeholder="0"
-                                value={denominations[`denom_${denom}`] || ''}
-                                onChange={(e) => {
-                                  const val = Math.max(0, parseInt(e.target.value) || 0);
-                                  setDenominations(prev => ({ ...prev, [`denom_${denom}`]: val }));
-                                }}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  /* Bank Transfer Deposit Inputs */
-                  <>
-                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                      <label>الحساب البنكي المحول إليه <span style={{ color: 'var(--danger)' }}>*</span></label>
-                      <select
-                        value={newTx.bankId}
-                        onChange={(e) => setNewTx({ ...newTx, bankId: e.target.value })}
-                        required
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Denominations Calculator - show if cashAmount > 0 */}
+                {parseFloat(newTx.cashAmount) > 0 && (
+                  <div className="denom-section" style={{ marginBottom: '1.5rem' }}>
+                    <div className="denom-section-title">
+                      <span>💵 فئات المبلغ النقدي المودع بالخزينة</span>
+                      <button 
+                        type="button" 
+                        className="btn btn-secondary" 
+                        style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                        onClick={() => {
+                          const amt = parseFloat(newTx.cashAmount) || 0;
+                          let remaining = amt;
+                          const breakdown = { denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0 };
+                          breakdown.denom_200 = Math.floor(remaining / 200); remaining %= 200;
+                          breakdown.denom_100 = Math.floor(remaining / 100); remaining %= 100;
+                          breakdown.denom_50 = Math.floor(remaining / 50); remaining %= 50;
+                          breakdown.denom_20 = Math.floor(remaining / 20); remaining %= 20;
+                          breakdown.denom_10 = Math.floor(remaining / 10); remaining %= 10;
+                          breakdown.denom_5 = Math.floor(remaining / 5); remaining %= 5;
+                          breakdown.denom_1 = Math.floor(remaining);
+                          setDenominations(breakdown);
+                        }}
                       >
-                        <option value="">اختر الحساب البنكي...</option>
-                        {banks.map(b => (
-                          <option key={b.id} value={b.id}>{b.name} ({b.code}) — {b.account_number}</option>
-                        ))}
-                      </select>
+                        💡 ملء تلقائي للفئات
+                      </button>
                     </div>
-
-                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                      <label>قيمة التحويل البنكي (ج.م) <span style={{ color: 'var(--danger)' }}>*</span></label>
-                      <input
-                        type="number"
-                        min="1"
-                        placeholder="أدخل مبلغ التحويل"
-                        value={newTx.bankTransferAmount}
-                        onChange={(e) => setNewTx({ ...newTx, bankTransferAmount: e.target.value })}
-                        required
-                      />
-                    </div>
-
-                    {/* Image Upload */}
-                    {parseFloat(newTx.bankTransferAmount) > 0 && (
-                      <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                        <label>📎 صورة إيصال التحويل البنكي (اختياري)</label>
-                        <div style={{ marginTop: '0.4rem' }}>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            id="rep-receipt-upload"
-                            style={{ display: 'none' }}
+                    <div className="denom-grid">
+                      {[200, 100, 50, 20, 10, 5, 1].map((denom) => (
+                        <div className="denom-input-group" key={denom}>
+                          <span className="denom-label">{denom} ج.م</span>
+                          <input 
+                            type="number" 
+                            min="0"
+                            placeholder="0"
+                            value={denominations[`denom_${denom}`] || ''}
                             onChange={(e) => {
-                              const file = e.target.files[0];
-                              if (!file) return;
-                              const reader = new FileReader();
-                              reader.onloadend = () => setReceiptImageBank(reader.result);
-                              reader.readAsDataURL(file);
+                              const val = Math.max(0, parseInt(e.target.value) || 0);
+                              setDenominations(prev => ({ ...prev, [`denom_${denom}`]: val }));
                             }}
                           />
-                          <label
-                            htmlFor="rep-receipt-upload"
-                            style={{
-                              display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
-                              padding: '0.5rem 1rem', borderRadius: '8px', cursor: 'pointer',
-                              background: receiptImageBank ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.05)',
-                              border: receiptImageBank ? '1px solid rgba(16,185,129,0.4)' : '1px dashed rgba(255,255,255,0.2)',
-                              color: receiptImageBank ? 'var(--success)' : 'var(--text-secondary)',
-                              fontSize: '0.9rem', transition: 'all 0.2s'
-                            }}
-                          >
-                            {receiptImageBank ? '✅ تم رفع الصورة' : '📷 اختر صورة الإيصال'}
-                          </label>
-                          {receiptImageBank && (
-                            <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-                              <img
-                                src={receiptImageBank}
-                                alt="Receipt preview"
-                                style={{ maxWidth: '180px', maxHeight: '120px', borderRadius: '8px', border: '1px solid var(--border-color)', objectFit: 'cover' }}
-                              />
-                              <button
-                                type="button"
-                                className="btn btn-secondary"
-                                style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', color: 'var(--danger)' }}
-                                onClick={() => { setReceiptImageBank(null); document.getElementById('rep-receipt-upload').value = ''; }}
-                              >
-                                ✕ إزالة الصورة
-                              </button>
-                            </div>
-                          )}
                         </div>
-                      </div>
-                    )}
-                  </>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </>
             )}
@@ -3779,16 +3775,14 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                 <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                   <label>بند الصرف (إذن صرف) <span style={{ color: 'var(--danger)' }}>*</span></label>
                   <select
-                    value={newTx.withdrawal_sub_type || 'general'}
+                    value={newTx.withdrawal_sub_type || 'loan'}
                     onChange={(e) => setNewTx({ ...newTx, withdrawal_sub_type: e.target.value })}
                     required
                   >
-                    <option value="general">📤 إذن صرف عام</option>
-                    <option value="salary">💸 رواتب وأجور</option>
-                    <option value="commission">💼 عمولات</option>
-                    <option value="car_gas">⛽ مصاريف سيارات (جاز)</option>
-                    <option value="car_oil">🛢️ مصاريف سيارات (زيت)</option>
-                    <option value="car_other">🚗 مصاريف سيارات (مصاريف أخرى)</option>
+                    <option value="loan">💵 طلب سلفة</option>
+                    <option value="car_gas">⛽ مصاريف سيارة (جاز)</option>
+                    <option value="car_oil">🛢️ مصاريف سيارة (زيت/صيانة)</option>
+                    <option value="car_other">🚗 مصاريف سيارة (مصاريف أخرى)</option>
                   </select>
                 </div>
 
