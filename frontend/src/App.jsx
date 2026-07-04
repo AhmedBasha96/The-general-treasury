@@ -1929,10 +1929,10 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                 <label>كود المشرف <span style={{ color: 'var(--danger)' }}>*</span></label>
                 <input 
                   type="text" 
-                  placeholder="مثال: SUP01"
                   value={newSupervisor.code}
-                  onChange={(e) => setNewSupervisor({ ...newSupervisor, code: e.target.value.toUpperCase() })}
-                  required
+                  readOnly
+                  disabled
+                  style={{ background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed' }}
                 />
               </div>
               <div className="form-group" style={{ marginBottom: '1.5rem' }}>
@@ -2149,10 +2149,10 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                 <label>كود المندوب <span style={{ color: 'var(--danger)' }}>*</span></label>
                 <input 
                   type="text" 
-                  placeholder="مثال: REP105"
                   value={newRep.code}
-                  onChange={(e) => setNewRep({ ...newRep, code: e.target.value.toUpperCase() })}
-                  required
+                  readOnly
+                  disabled
+                  style={{ background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed' }}
                 />
               </div>
               <div className="form-group" style={{ marginBottom: '1rem' }}>
@@ -3269,10 +3269,10 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                   <label>كود التوكيل <span style={{ color: 'var(--danger)' }}>*</span></label>
                   <input 
                     type="text" 
-                    placeholder="مثال: AGN005"
                     value={newAgency.code}
-                    onChange={(e) => setNewAgency({ ...newAgency, code: e.target.value.toUpperCase() })}
-                    required
+                    readOnly
+                    disabled
+                    style={{ background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed' }}
                   />
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
@@ -3519,10 +3519,10 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                 <label>كود الحساب (مختصر) <span style={{ color: 'var(--danger)' }}>*</span></label>
                 <input 
                   type="text" 
-                  placeholder="مثال: CIB-01"
                   value={newBank.code}
-                  onChange={(e) => setNewBank({ ...newBank, code: e.target.value.toUpperCase() })}
-                  required
+                  readOnly
+                  disabled
+                  style={{ background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed' }}
                 />
               </div>
               <div className="form-group" style={{ marginBottom: '1rem' }}>
