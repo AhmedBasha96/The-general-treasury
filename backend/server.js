@@ -207,7 +207,7 @@ app.get('/api/dashboard', async (req, res) => {
       FROM transactions t
       ${agencyJoin}
       WHERE t.type = 'withdrawal'
-        AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL)
+        AND (t.status = 'disbursed' OR t.status IS NULL)
         ${agencyFilter}
     `);
     
@@ -230,13 +230,46 @@ app.get('/api/dashboard', async (req, res) => {
         t.id, t.rep_id, t.bank_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.withdrawal_sub_type, t.status,
         t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
         r.name AS rep_name, r.code AS rep_code,
-        b.name AS bank_name, b.code AS bank_code
+        b.name AS bank_name, b.code AS bank_code,
+        u.username AS creator_name, u2.username AS approver_name
       FROM transactions t
       LEFT JOIN representatives r ON t.rep_id = r.id
       LEFT JOIN banks b ON t.bank_id = b.id
+      LEFT JOIN users u ON t.created_by = u.id
+      LEFT JOIN users u2 ON t.approved_by = u2.id
       WHERE 1=1 ${agencyFilter}
       ORDER BY t.date DESC
     `);
+
+    // Safe Denominations Breakdown
+    const denomsResult = await createFilteredRequest().query(`
+      SELECT 
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_200 ELSE -t.denom_200 END), 0) AS denom_200,
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_100 ELSE -t.denom_100 END), 0) AS denom_100,
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_50 ELSE -t.denom_50 END), 0) AS denom_50,
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_20 ELSE -t.denom_20 END), 0) AS denom_20,
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_10 ELSE -t.denom_10 END), 0) AS denom_10,
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_5 ELSE -t.denom_5 END), 0) AS denom_5,
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_1 ELSE -t.denom_1 END), 0) AS denom_1
+      FROM transactions t
+      ${agencyJoin}
+      WHERE (
+        (t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
+        OR 
+        (t.type = 'withdrawal' AND (t.status = 'disbursed' OR t.status IS NULL))
+      )
+      ${agencyFilter}
+    `);
+
+    const safeDenominations = {
+      denom_200: Number(denomsResult.recordset[0].denom_200) || 0,
+      denom_100: Number(denomsResult.recordset[0].denom_100) || 0,
+      denom_50: Number(denomsResult.recordset[0].denom_50) || 0,
+      denom_20: Number(denomsResult.recordset[0].denom_20) || 0,
+      denom_10: Number(denomsResult.recordset[0].denom_10) || 0,
+      denom_5: Number(denomsResult.recordset[0].denom_5) || 0,
+      denom_1: Number(denomsResult.recordset[0].denom_1) || 0,
+    };
     
     res.json({
       summary: {
@@ -246,7 +279,8 @@ app.get('/api/dashboard', async (req, res) => {
         totalWithdrawals,
         cashSafeBalance,
         safeBalance: cashSafeBalance, // backward compat
-        repsCount: repsCountResult.recordset[0].count
+        repsCount: repsCountResult.recordset[0].count,
+        safeDenominations
       },
       recentTransactions: recentTxResult.recordset
     });
@@ -285,7 +319,10 @@ app.get('/api/agencies', async (req, res) => {
       LEFT JOIN transactions t ON (
          t.rep_id IN (SELECT id FROM representatives WHERE agency_id = a.id)
          OR t.agency_id = a.id
-      ) AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL)
+      ) AND (
+         (t.type = 'deposit' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
+         OR (t.type = 'withdrawal' AND (t.status = 'disbursed' OR t.status IS NULL))
+      )
       ${agencyFilter}
       GROUP BY a.id, a.code, a.name, a.created_at
       ORDER BY a.name
@@ -384,10 +421,13 @@ app.get('/api/agencies/:id/transactions', async (req, res) => {
         SELECT t.id, t.type, t.payment_method, t.amount, t.date, t.notes, t.withdrawal_sub_type, t.status,
                t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
                r.name AS rep_name, r.code AS rep_code,
-               b.name AS bank_name, b.code AS bank_code
+               b.name AS bank_name, b.code AS bank_code,
+               u.username AS creator_name, u2.username AS approver_name
         FROM transactions t
         LEFT JOIN representatives r ON t.rep_id = r.id
         LEFT JOIN banks b ON t.bank_id = b.id
+        LEFT JOIN users u ON t.created_by = u.id
+        LEFT JOIN users u2 ON t.approved_by = u2.id
         WHERE r.agency_id = @agencyId OR t.agency_id = @agencyId
         ORDER BY t.date DESC
       `);
@@ -397,11 +437,14 @@ app.get('/api/agencies/:id/transactions', async (req, res) => {
     let withdrawals = 0;
     
     txResult.recordset.forEach(tx => {
-      // Only approved transactions affect the ledger balances!
-      if (tx.status === 'approved' || tx.status === null) {
-        if (tx.type === 'deposit' && (tx.payment_method === 'cash' || !tx.payment_method)) cashDeposits += Number(tx.amount);
-        if (tx.type === 'deposit' && tx.payment_method === 'bank_transfer') bankTransferDeposits += Number(tx.amount);
-        if (tx.type === 'withdrawal') withdrawals += Number(tx.amount);
+      if (tx.type === 'deposit' && (tx.status === 'approved' || tx.status === 'disbursed' || tx.status === null)) {
+        if (tx.payment_method === 'bank_transfer') {
+          bankTransferDeposits += Number(tx.amount);
+        } else {
+          cashDeposits += Number(tx.amount);
+        }
+      } else if (tx.type === 'withdrawal' && (tx.status === 'disbursed' || tx.status === null)) {
+        withdrawals += Number(tx.amount);
       }
     });
     
@@ -444,7 +487,10 @@ app.get('/api/banks', async (req, res) => {
           WHEN t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) THEN -t.amount
           ELSE 0 END), 0) AS balance
       FROM banks b
-      LEFT JOIN transactions t ON b.id = t.bank_id AND (t.status = 'approved' OR t.status IS NULL)
+      LEFT JOIN transactions t ON b.id = t.bank_id AND (
+         (t.type = 'deposit' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
+         OR (t.type = 'withdrawal' AND (t.status = 'disbursed' OR t.status IS NULL))
+      )
       GROUP BY b.id, b.code, b.name, b.account_number, b.account_name, b.branch, b.initial_balance, b.created_at
       ORDER BY b.name
     `);
@@ -542,9 +588,12 @@ app.get('/api/banks/:id/transactions', async (req, res) => {
       .query(`
         SELECT t.id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.status,
                t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
-               r.name AS rep_name, r.code AS rep_code
+               r.name AS rep_name, r.code AS rep_code,
+               u.username AS creator_name, u2.username AS approver_name
         FROM transactions t
         LEFT JOIN representatives r ON t.rep_id = r.id
+        LEFT JOIN users u ON t.created_by = u.id
+        LEFT JOIN users u2 ON t.approved_by = u2.id
         WHERE t.bank_id = @bankId
         ORDER BY t.date DESC
       `);
@@ -554,10 +603,16 @@ app.get('/api/banks/:id/transactions', async (req, res) => {
     let totalWithdrawals = 0; // outflows from bank (cash deposits coming from bank)
     
     txResult.recordset.forEach(tx => {
-      if (tx.status === 'approved' || tx.status === 'disbursed' || tx.status === null) {
-        if (tx.type === 'withdrawal') totalDeposits += Number(tx.amount);
-        else if (tx.type === 'deposit' && tx.payment_method === 'bank_transfer') totalDeposits += Number(tx.amount);
-        else if (tx.type === 'deposit' && (tx.payment_method === 'cash' || !tx.payment_method)) totalWithdrawals += Number(tx.amount);
+      if (tx.type === 'withdrawal' && (tx.status === 'disbursed' || tx.status === null)) {
+        totalDeposits += Number(tx.amount);
+      } else if (tx.type === 'deposit') {
+        if (tx.status === 'approved' || tx.status === 'disbursed' || tx.status === null) {
+          if (tx.payment_method === 'bank_transfer') {
+            totalDeposits += Number(tx.amount);
+          } else if (tx.payment_method === 'cash' || !tx.payment_method) {
+            totalWithdrawals += Number(tx.amount);
+          }
+        }
       }
     });
     
@@ -687,9 +742,11 @@ app.get('/api/supervisors/:id/reps', async (req, res) => {
       SELECT r.id, r.code, r.name, r.phone, r.type,
              a.name AS agency_name, a.code AS agency_code,
              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.amount WHEN t.type = 'withdrawal' THEN -t.amount ELSE 0 END), 0) AS balance
-      FROM representatives r
       LEFT JOIN agencies a ON r.agency_id = a.id
-      LEFT JOIN transactions t ON r.id = t.rep_id AND (t.status = 'approved' OR t.status IS NULL)
+      LEFT JOIN transactions t ON r.id = t.rep_id AND (
+         (t.type = 'deposit' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
+         OR (t.type = 'withdrawal' AND (t.status = 'disbursed' OR t.status IS NULL))
+      )
       WHERE r.supervisor_id = @supervisorId ${agencyFilter}
       GROUP BY r.id, r.code, r.name, r.phone, r.type, a.name, a.code
       ORDER BY r.name
@@ -729,7 +786,10 @@ app.get('/api/reps', async (req, res) => {
       FROM representatives r
       LEFT JOIN agencies a ON r.agency_id = a.id
       LEFT JOIN supervisors s ON r.supervisor_id = s.id
-      LEFT JOIN transactions t ON r.id = t.rep_id AND (t.status = 'approved' OR t.status IS NULL)
+      LEFT JOIN transactions t ON r.id = t.rep_id AND (
+         (t.type = 'deposit' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
+         OR (t.type = 'withdrawal' AND (t.status = 'disbursed' OR t.status IS NULL))
+      )
       ${agencyFilter}
       GROUP BY r.id, r.code, r.name, r.phone, r.type, r.agency_id, r.supervisor_id, r.created_at, a.name, a.code, s.name, s.code
       ORDER BY r.name
@@ -874,9 +934,12 @@ app.get('/api/reps/:id/transactions', async (req, res) => {
       .input('repId', sql.Int, repId)
       .query(`
         SELECT t.id, t.type, t.amount, t.date, t.notes, t.payment_method, t.withdrawal_sub_type, t.status,
-               b.name AS bank_name
+               b.name AS bank_name,
+               u.username AS creator_name, u2.username AS approver_name
         FROM transactions t
         LEFT JOIN banks b ON t.bank_id = b.id
+        LEFT JOIN users u ON t.created_by = u.id
+        LEFT JOIN users u2 ON t.approved_by = u2.id
         WHERE t.rep_id = @repId
         ORDER BY t.date DESC
       `);
@@ -886,17 +949,14 @@ app.get('/api/reps/:id/transactions', async (req, res) => {
     let totalWithdrawals = 0;
     
     txResult.recordset.forEach(tx => {
-      // Only approved or disbursed transactions affect the ledger balances!
-      if (tx.status === 'approved' || tx.status === 'disbursed' || tx.status === null) {
-        if (tx.type === 'deposit') {
-          if (tx.payment_method === 'bank_transfer') {
-            bankTransferDeposits += Number(tx.amount);
-          } else {
-            cashDeposits += Number(tx.amount);
-          }
-        } else if (tx.type === 'withdrawal') {
-          totalWithdrawals += Number(tx.amount);
+      if (tx.type === 'deposit' && (tx.status === 'approved' || tx.status === 'disbursed' || tx.status === null)) {
+        if (tx.payment_method === 'bank_transfer') {
+          bankTransferDeposits += Number(tx.amount);
+        } else {
+          cashDeposits += Number(tx.amount);
         }
+      } else if (tx.type === 'withdrawal' && (tx.status === 'disbursed' || tx.status === null)) {
+        totalWithdrawals += Number(tx.amount);
       }
     });
     
@@ -936,12 +996,15 @@ app.get('/api/transactions', async (req, res) => {
              r.name AS rep_name, r.code AS rep_code,
              b.name AS bank_name, b.code AS bank_code,
              a.name AS agency_name, a.code AS agency_code,
-             s.name AS supervisor_name, s.code AS supervisor_code
+             s.name AS supervisor_name, s.code AS supervisor_code,
+             u.username AS creator_name, u2.username AS approver_name
       FROM transactions t
       LEFT JOIN representatives r ON t.rep_id = r.id
       LEFT JOIN banks b ON t.bank_id = b.id
       LEFT JOIN agencies a ON (r.agency_id = a.id OR t.agency_id = a.id)
       LEFT JOIN supervisors s ON r.supervisor_id = s.id
+      LEFT JOIN users u ON t.created_by = u.id
+      LEFT JOIN users u2 ON t.approved_by = u2.id
       WHERE 1=1
     `;
 
@@ -968,8 +1031,12 @@ app.get('/api/transactions', async (req, res) => {
     }
 
     if (withdrawal_sub_type) {
-      query += ` AND t.withdrawal_sub_type = @withdrawal_sub_type`;
-      request.input('withdrawal_sub_type', sql.VarChar, withdrawal_sub_type);
+      if (withdrawal_sub_type === 'car') {
+        query += ` AND (t.withdrawal_sub_type = 'car' OR t.withdrawal_sub_type LIKE 'car_%')`;
+      } else {
+        query += ` AND t.withdrawal_sub_type = @withdrawal_sub_type`;
+        request.input('withdrawal_sub_type', sql.VarChar, withdrawal_sub_type);
+      }
     }
 
     if (start_date) {
@@ -1159,12 +1226,15 @@ app.post('/api/transactions', async (req, res) => {
                  r.name AS rep_name, r.code AS rep_code,
                  b.name AS bank_name, b.code AS bank_code,
                  a.name AS agency_name, a.code AS agency_code,
-                 s.name AS supervisor_name, s.code AS supervisor_code
+                 s.name AS supervisor_name, s.code AS supervisor_code,
+                 u.username AS creator_name, u2.username AS approver_name
           FROM transactions t
           LEFT JOIN representatives r ON t.rep_id = r.id
           LEFT JOIN banks b ON t.bank_id = b.id
           LEFT JOIN agencies a ON (r.agency_id = a.id OR t.agency_id = a.id)
           LEFT JOIN supervisors s ON r.supervisor_id = s.id
+          LEFT JOIN users u ON t.created_by = u.id
+          LEFT JOIN users u2 ON t.approved_by = u2.id
           WHERE t.id = @id
         `;
 
@@ -1203,9 +1273,9 @@ app.post('/api/transactions', async (req, res) => {
     const transactionAmount = Number(amount);
     const txPaymentMethod = (type === 'deposit' && payment_method === 'bank_transfer') ? 'bank_transfer' : 'cash';
     let d200 = 0, d100 = 0, d50 = 0, d20 = 0, d10 = 0, d5 = 0, d1 = 0;
-    if (type === 'deposit' && txPaymentMethod === 'cash') {
+    if (txPaymentMethod === 'cash') {
       if (!denominations) {
-        return res.status(400).json({ error: 'يجب تحديد الفئات النقدية للتوريد النقدي' });
+        return res.status(400).json({ error: 'يجب تحديد الفئات النقدية لهذه المعاملة' });
       }
       d200 = Number(denominations.denom_200) || 0;
       d100 = Number(denominations.denom_100) || 0;
@@ -1258,7 +1328,7 @@ app.post('/api/transactions', async (req, res) => {
         const withdrawalsResult = await transaction.request().query(`
           SELECT ISNULL(SUM(amount), 0) AS total 
           FROM transactions 
-          WHERE type = 'withdrawal' AND (status IN ('approved', 'disbursed') OR status IS NULL)
+          WHERE type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL)
         `);
 
         const currentCashBalance = Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
@@ -1308,12 +1378,15 @@ app.post('/api/transactions', async (req, res) => {
                  r.name AS rep_name, r.code AS rep_code,
                  b.name AS bank_name, b.code AS bank_code,
                  a.name AS agency_name, a.code AS agency_code,
-                 s.name AS supervisor_name, s.code AS supervisor_code
+                 s.name AS supervisor_name, s.code AS supervisor_code,
+                 u.username AS creator_name, u2.username AS approver_name
           FROM transactions t
           LEFT JOIN representatives r ON t.rep_id = r.id
           LEFT JOIN banks b ON t.bank_id = b.id
           LEFT JOIN agencies a ON (r.agency_id = a.id OR t.agency_id = a.id)
           LEFT JOIN supervisors s ON r.supervisor_id = s.id
+          LEFT JOIN users u ON t.created_by = u.id
+          LEFT JOIN users u2 ON t.approved_by = u2.id
           WHERE t.id = @id
         `);
 
@@ -1340,11 +1413,14 @@ app.get('/api/transactions/pending', async (req, res) => {
       SELECT t.id, t.rep_id, t.bank_id, t.agency_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.withdrawal_sub_type, t.status,
              r.name AS rep_name, r.code AS rep_code,
              b.name AS bank_name, b.code AS bank_code,
-             a.name AS agency_name, a.code AS agency_code
+             a.name AS agency_name, a.code AS agency_code,
+             u.username AS creator_name, u2.username AS approver_name
       FROM transactions t
       LEFT JOIN representatives r ON t.rep_id = r.id
       LEFT JOIN banks b ON t.bank_id = b.id
       LEFT JOIN agencies a ON (r.agency_id = a.id OR t.agency_id = a.id)
+      LEFT JOIN users u ON t.created_by = u.id
+      LEFT JOIN users u2 ON t.approved_by = u2.id
       WHERE t.status = 'pending'
       ORDER BY t.date DESC
     `);
@@ -1392,7 +1468,7 @@ app.post('/api/transactions/:id/approve', async (req, res) => {
         const withdrawalsResult = await transaction.request().query(`
           SELECT ISNULL(SUM(amount), 0) AS total 
           FROM transactions 
-          WHERE type = 'withdrawal' AND (status IN ('approved', 'disbursed') OR status IS NULL)
+          WHERE type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL)
         `);
         
         const currentCashBalance = Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
@@ -1563,7 +1639,7 @@ app.put('/api/transactions/:id', async (req, res) => {
       
       // Validate denominations if it's a cash deposit
       let d200 = tx.denom_200, d100 = tx.denom_100, d50 = tx.denom_50, d20 = tx.denom_20, d10 = tx.denom_10, d5 = tx.denom_5, d1 = tx.denom_1;
-      if (tx.type === 'deposit' && (tx.payment_method === 'cash' || !tx.payment_method)) {
+      if ((tx.type === 'deposit' || tx.type === 'withdrawal') && (tx.payment_method === 'cash' || !tx.payment_method)) {
         if (denominations) {
           d200 = Number(denominations.denom_200) || 0;
           d100 = Number(denominations.denom_100) || 0;
@@ -1598,7 +1674,7 @@ app.put('/api/transactions/:id', async (req, res) => {
         const withdrawalsResult = await transaction.request().query(`
           SELECT ISNULL(SUM(amount), 0) AS total 
           FROM transactions 
-          WHERE type = 'withdrawal' AND (status IN ('approved', 'disbursed') OR status IS NULL) AND id <> @txId
+          WHERE type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL) AND id <> @txId
         `);
         
         const currentCashBalance = Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
@@ -1654,6 +1730,39 @@ app.put('/api/transactions/:id', async (req, res) => {
   } catch (error) {
     console.error('Error updating transaction:', error);
     res.status(500).json({ error: 'حدث خطأ أثناء تعديل العملية' });
+  }
+});
+
+// DELETE /api/transactions/:id - Delete transaction - Manager only
+app.delete('/api/transactions/:id', async (req, res) => {
+  const txId = req.params.id;
+  const userRole = req.headers['x-user-role'];
+  
+  if (userRole !== 'manager') {
+    return res.status(403).json({ error: 'غير مسموح لغير المدراء بحذف العمليات' });
+  }
+  
+  try {
+    const pool = getPool();
+    
+    // Check if transaction exists
+    const checkTx = await pool.request()
+      .input('txId', sql.Int, txId)
+      .query('SELECT id FROM transactions WHERE id = @txId');
+      
+    if (checkTx.recordset.length === 0) {
+      return res.status(404).json({ error: 'العملية غير موجودة' });
+    }
+    
+    // Delete transaction
+    await pool.request()
+      .input('txId', sql.Int, txId)
+      .query('DELETE FROM transactions WHERE id = @txId');
+      
+    res.json({ message: 'تم حذف العملية بنجاح' });
+  } catch (error) {
+    console.error('Error deleting transaction:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء حذف العملية' });
   }
 });
 
