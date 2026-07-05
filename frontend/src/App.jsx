@@ -908,8 +908,15 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
     setRepError('');
     setRepSuccess('');
     
-    if (!newRep.code || !newRep.name || !newRep.agency_id) {
-      setRepError('يرجى ملء جميع الحقول المطلوبة (الكود، الاسم، والتوكيل)');
+    const isRep = (newRep.classification === 'retail_rep' || newRep.classification === 'wholesale_rep');
+    
+    if (!newRep.code || !newRep.name) {
+      setRepError('يرجى ملء جميع الحقول المطلوبة (الكود والاسم)');
+      return;
+    }
+    
+    if (isRep && !newRep.agency_id) {
+      setRepError('يرجى اختيار التوكيل التابع له المندوب');
       return;
     }
     
