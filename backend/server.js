@@ -1274,7 +1274,7 @@ app.post('/api/transactions', async (req, res) => {
             .input('denom_10', sql.Int, d10)
             .input('denom_5', sql.Int, d5)
             .input('denom_1', sql.Int, d1)
-            .input('created_by', sql.Int, isNaN(userId) ? null : userId)
+            .input('created_by', sql.Int, (userRole === 'representative' || isNaN(userId)) ? null : userId)
             .input('status', sql.VarChar, statusVal)
             .query(`
               INSERT INTO transactions (rep_id, bank_id, agency_id, type, payment_method, amount, date, notes, status, created_by, denom_200, denom_100, denom_50, denom_20, denom_10, denom_5, denom_1)
@@ -1304,7 +1304,7 @@ app.post('/api/transactions', async (req, res) => {
             .input('denom_10', sql.Int, 0)
             .input('denom_5', sql.Int, 0)
             .input('denom_1', sql.Int, 0)
-            .input('created_by', sql.Int, isNaN(userId) ? null : userId)
+            .input('created_by', sql.Int, (userRole === 'representative' || isNaN(userId)) ? null : userId)
             .input('status', sql.VarChar, statusVal)
             .query(`
               INSERT INTO transactions (rep_id, bank_id, agency_id, type, payment_method, amount, date, notes, status, created_by, receipt_image, denom_200, denom_100, denom_50, denom_20, denom_10, denom_5, denom_1)
@@ -1371,26 +1371,30 @@ app.post('/api/transactions', async (req, res) => {
     const txPaymentMethod = (type === 'deposit' && payment_method === 'bank_transfer') ? 'bank_transfer' : 'cash';
     let d200 = 0, d100 = 0, d50 = 0, d20 = 0, d10 = 0, d5 = 0, d1 = 0;
     if (txPaymentMethod === 'cash') {
-      if (!denominations) {
-        return res.status(400).json({ error: 'يجب تحديد الفئات النقدية لهذه المعاملة' });
-      }
-      d200 = Number(denominations.denom_200) || 0;
-      d100 = Number(denominations.denom_100) || 0;
-      d50 = Number(denominations.denom_50) || 0;
-      d20 = Number(denominations.denom_20) || 0;
-      d10 = Number(denominations.denom_10) || 0;
-      d5 = Number(denominations.denom_5) || 0;
-      d1 = Number(denominations.denom_1) || 0;
+      const isPendingWithdrawal = (type === 'withdrawal' && statusVal === 'pending');
+      
+      if (!isPendingWithdrawal) {
+        if (!denominations) {
+          return res.status(400).json({ error: 'يجب تحديد الفئات النقدية لهذه المعاملة' });
+        }
+        d200 = Number(denominations.denom_200) || 0;
+        d100 = Number(denominations.denom_100) || 0;
+        d50 = Number(denominations.denom_50) || 0;
+        d20 = Number(denominations.denom_20) || 0;
+        d10 = Number(denominations.denom_10) || 0;
+        d5 = Number(denominations.denom_5) || 0;
+        d1 = Number(denominations.denom_1) || 0;
 
-      if (d200 < 0 || d100 < 0 || d50 < 0 || d20 < 0 || d10 < 0 || d5 < 0 || d1 < 0) {
-        return res.status(400).json({ error: 'لا يمكن إدخال قيم سالبة لفئات النقود' });
-      }
+        if (d200 < 0 || d100 < 0 || d50 < 0 || d20 < 0 || d10 < 0 || d5 < 0 || d1 < 0) {
+          return res.status(400).json({ error: 'لا يمكن إدخال قيم سالبة لفئات النقود' });
+        }
 
-      const calculatedTotal = (d200 * 200) + (d100 * 100) + (d50 * 50) + (d20 * 20) + (d10 * 10) + (d5 * 5) + (d1 * 1);
-      if (Math.abs(calculatedTotal - transactionAmount) > 0.01) {
-        return res.status(400).json({
-          error: `مجموع الفئات النقدية (${calculatedTotal.toLocaleString('ar-EG')} ج.م) لا يطابق قيمة المعاملة (${transactionAmount.toLocaleString('ar-EG')} ج.م).`
-        });
+        const calculatedTotal = (d200 * 200) + (d100 * 100) + (d50 * 50) + (d20 * 20) + (d10 * 10) + (d5 * 5) + (d1 * 1);
+        if (Math.abs(calculatedTotal - transactionAmount) > 0.01) {
+          return res.status(400).json({
+            error: `مجموع الفئات النقدية (${calculatedTotal.toLocaleString('ar-EG')} ج.م) لا يطابق قيمة المعاملة (${transactionAmount.toLocaleString('ar-EG')} ج.م).`
+          });
+        }
       }
     }
 
@@ -1452,7 +1456,7 @@ app.post('/api/transactions', async (req, res) => {
         .input('denom_5', sql.Int, d5)
         .input('denom_1', sql.Int, d1)
         .input('status', sql.VarChar, statusVal)
-        .input('created_by', sql.Int, isNaN(userId) ? null : userId)
+        .input('created_by', sql.Int, (userRole === 'representative' || isNaN(userId)) ? null : userId)
         .query(`
           INSERT INTO transactions (rep_id, bank_id, agency_id, type, payment_method, amount, date, notes, withdrawal_sub_type, denom_200, denom_100, denom_50, denom_20, denom_10, denom_5, denom_1, status, created_by)
           OUTPUT INSERTED.id
@@ -1681,9 +1685,10 @@ app.post('/api/transactions/:id/receive', async (req, res) => {
   }
 });
 
-// POST /api/transactions/:id/disburse - Finalize a withdrawal - Manager only
+// POST /api/transactions/:id/disburse - Finalize a withdrawal - Manager/Accountant
 app.post('/api/transactions/:id/disburse', async (req, res) => {
   const txId = req.params.id;
+  const { denominations } = req.body;
   try {
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
@@ -1708,6 +1713,24 @@ app.post('/api/transactions/:id/disburse', async (req, res) => {
         await transaction.rollback();
         return res.status(400).json({ error: 'يجب أن تكون العملية معتمدة من المدير أولاً لإتمام صرفها' });
       }
+
+      if (!denominations) {
+        await transaction.rollback();
+        return res.status(400).json({ error: 'يجب تحديد الفئات النقدية لإتمام عملية الصرف' });
+      }
+
+      const d200 = Number(denominations.denom_200) || 0;
+      const d100 = Number(denominations.denom_100) || 0;
+      const d50 = Number(denominations.denom_50) || 0;
+      const d20 = Number(denominations.denom_20) || 0;
+      const d10 = Number(denominations.denom_10) || 0;
+      const d5 = Number(denominations.denom_5) || 0;
+      const d1 = Number(denominations.denom_1) || 0;
+
+      if (d200 < 0 || d100 < 0 || d50 < 0 || d20 < 0 || d10 < 0 || d5 < 0 || d1 < 0) {
+        await transaction.rollback();
+        return res.status(400).json({ error: 'لا يمكن إدخال قيم سالبة لفئات النقود' });
+      }
       
       // Perform balance check at the time of final disbursement (only disbursed withdrawals reduce balance)
       const cashDepositsResult = await transaction.request().query(`
@@ -1723,6 +1746,14 @@ app.post('/api/transactions/:id/disburse', async (req, res) => {
       
       const currentCashBalance = Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
       const txAmount = Number(tx.amount);
+
+      const calculatedTotal = (d200 * 200) + (d100 * 100) + (d50 * 50) + (d20 * 20) + (d10 * 10) + (d5 * 5) + (d1 * 1);
+      if (Math.abs(calculatedTotal - txAmount) > 0.01) {
+        await transaction.rollback();
+        return res.status(400).json({
+          error: `مجموع الفئات النقدية (${calculatedTotal.toLocaleString('ar-EG')} ج.م) لا يطابق قيمة المبلغ المراد صرفه (${txAmount.toLocaleString('ar-EG')} ج.م).`
+        });
+      }
       
       if (currentCashBalance < txAmount) {
         await transaction.rollback();
@@ -1731,10 +1762,28 @@ app.post('/api/transactions/:id/disburse', async (req, res) => {
         });
       }
       
-      // Update status to disbursed
+      // Update status to disbursed and save the denominations
       await transaction.request()
         .input('txId', sql.Int, txId)
-        .query("UPDATE transactions SET status = 'disbursed' WHERE id = @txId");
+        .input('denom_200', sql.Int, d200)
+        .input('denom_100', sql.Int, d100)
+        .input('denom_50', sql.Int, d50)
+        .input('denom_20', sql.Int, d20)
+        .input('denom_10', sql.Int, d10)
+        .input('denom_5', sql.Int, d5)
+        .input('denom_1', sql.Int, d1)
+        .query(`
+          UPDATE transactions 
+          SET status = 'disbursed',
+              denom_200 = @denom_200,
+              denom_100 = @denom_100,
+              denom_50 = @denom_50,
+              denom_20 = @denom_20,
+              denom_10 = @denom_10,
+              denom_5 = @denom_5,
+              denom_1 = @denom_1
+          WHERE id = @txId
+        `);
         
       await transaction.commit();
       res.json({ message: 'تم إتمام عملية الصرف الفعلي وتسليم المبالغ بنجاح' });
