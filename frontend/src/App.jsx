@@ -1839,7 +1839,14 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
 
           {/* Section for Unconfirmed Transactions */}
           {(() => {
-            const unconfirmedTx = transactions.filter(tx => tx.status === 'pending' || tx.status === 'pending_receipt' || tx.status === 'approved');
+            const unconfirmedTx = transactions.filter(tx => {
+              if (tx.type === 'deposit') {
+                return tx.status === 'pending_receipt';
+              } else if (tx.type === 'withdrawal') {
+                return tx.status === 'pending' || tx.status === 'approved';
+              }
+              return false;
+            });
             if (unconfirmedTx.length === 0) return null;
             
             return (
