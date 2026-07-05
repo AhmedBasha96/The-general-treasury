@@ -1837,6 +1837,154 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
             <h2 className="panel-title">📃 كشف المعاملات العام</h2>
           </div>
 
+          {/* Section for Unconfirmed Transactions */}
+          {(() => {
+            const unconfirmedTx = transactions.filter(tx => tx.status === 'pending' || tx.status === 'pending_receipt' || tx.status === 'approved');
+            if (unconfirmedTx.length === 0) return null;
+            
+            return (
+              <div className="panel" style={{ background: 'rgba(245, 158, 11, 0.04)', border: '1px solid rgba(245, 158, 11, 0.25)', marginBottom: '2rem', marginTop: '1rem', boxShadow: 'none' }}>
+                <div className="panel-header" style={{ borderBottom: '1px solid rgba(245, 158, 11, 0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '1rem' }}>
+                  <h3 className="panel-title" style={{ color: 'var(--warning)', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0, fontSize: '1.15rem' }}>
+                    ⚠️ معاملات قيد المراجعة وبانتظار التأكيد ({unconfirmedTx.length})
+                  </h3>
+                  <span style={{ fontSize: '0.8rem', background: 'rgba(245,158,11,0.15)', color: 'var(--warning)', padding: '0.2rem 0.6rem', borderRadius: '20px', fontWeight: 'bold' }}>
+                    تتطلب إجراءً
+                  </span>
+                </div>
+                
+                <div className="table-container" style={{ margin: 0, borderRadius: 0, border: 'none', background: 'transparent' }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>التاريخ والوقت</th>
+                        <th>الجهة المعنية</th>
+                        <th>النوع</th>
+                        <th>المبلغ</th>
+                        <th>الملاحظات</th>
+                        <th>الحالة / الإجراء المطلوب</th>
+                        <th>الإجراءات السريعة</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {unconfirmedTx.map((tx) => (
+                        <tr key={tx.id} style={{ background: 'rgba(245, 158, 11, 0.02)' }}>
+                          <td>{new Date(tx.date).toLocaleString('ar-EG')}</td>
+                          <td>
+                            {tx.bank_name ? (
+                              <span>🏦 {tx.bank_name}</span>
+                            ) : (
+                              tx.rep_name || 'خزينة مباشرة'
+                            )}
+                            {tx.rep_code && <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginRight: '0.4rem' }}>({tx.rep_code})</span>}
+                          </td>
+                          <td>
+                            <span className={`badge badge-${tx.type}`}>
+                              {tx.type === 'deposit' ? '📥 توريد' : '📤 صرف'}
+                            </span>
+                          </td>
+                          <td style={{ fontWeight: 'bold', color: tx.type === 'deposit' ? 'var(--success)' : 'var(--danger)' }}>
+                            {tx.amount.toLocaleString()} ج.م
+                          </td>
+                          <td style={{ fontSize: '0.85rem', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={tx.notes}>
+                            {tx.notes || '—'}
+                          </td>
+                          <td>
+                            {tx.status === 'pending' && (
+                              <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', background: 'var(--warning-bg)', color: 'var(--warning)', fontWeight: 'bold' }}>
+                                ⏳ بانتظار موافقة المدير
+                              </span>
+                            )}
+                            {tx.status === 'pending_receipt' && (
+                              <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', background: 'rgba(14, 165, 233, 0.15)', color: '#38bdf8', fontWeight: 'bold' }}>
+                                📥 بانتظار تأكيد استلام الخزينة
+                              </span>
+                            )}
+                            {tx.status === 'approved' && (
+                              <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', background: 'rgba(139, 92, 246, 0.15)', color: '#a78bfa', fontWeight: 'bold' }}>
+                                💵 معتمد - بانتظار الصرف الفعلي
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                              {tx.status === 'pending_receipt' && tx.type === 'deposit' && (
+                                <button
+                                  className="btn btn-primary"
+                                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', background: 'linear-gradient(135deg, var(--success), var(--success-hover))', border: 'none' }}
+                                  onClick={async () => {
+                                    if (window.confirm('هل تؤكد استلام هذا المبلغ نقداً وإضافته للخزينة ورصيد المندوب؟')) {
+                                      try {
+                                        const res = await fetch(`/api/transactions/${tx.id}/receive`, { method: 'POST' });
+                                        if (res.ok) {
+                                          loadDashboard();
+                                          loadTransactions();
+                                          loadCarExpenses();
+                                        } else {
+                                          const err = await res.json();
+                                          alert(err.error || 'حدث خطأ أثناء تأكيد الاستلام');
+                                        }
+                                      } catch (e) {
+                                        alert('تعذر الاتصال بالسيرفر');
+                                      }
+                                    }
+                                  }}
+                                >
+                                  📥 تأكيد الاستلام
+                                </button>
+                              )}
+                              {tx.status === 'approved' && tx.type === 'withdrawal' && (
+                                <button
+                                  className="btn btn-primary"
+                                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', background: 'linear-gradient(135deg, var(--success), var(--success-hover))', border: 'none' }}
+                                  onClick={() => {
+                                    setDisbursingTx(tx);
+                                    setDisburseError('');
+                                    setDisburseDenominations({ denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0 });
+                                  }}
+                                >
+                                  💵 إتمام الصرف
+                                </button>
+                              )}
+                              {tx.status === 'pending' && currentUser.role === 'manager' && (
+                                <>
+                                  <button
+                                    className="btn btn-primary"
+                                    style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', background: 'linear-gradient(135deg, var(--success), var(--success-hover))', border: 'none' }}
+                                    onClick={() => handleApproveTx(tx.id)}
+                                  >
+                                    ✔️ موافقة
+                                  </button>
+                                  <button
+                                    className="btn btn-secondary"
+                                    style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
+                                    onClick={() => handleRejectTx(tx.id)}
+                                  >
+                                    ❌ رفض
+                                  </button>
+                                </>
+                              )}
+                              {tx.status === 'pending' && currentUser.role !== 'manager' && (
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>طلب معلق</span>
+                              )}
+                              <button
+                                className="btn btn-secondary"
+                                style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}
+                                onClick={() => handlePrintReceipt(tx)}
+                              >
+                                🖨️ طباعة
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Filters Form */}
           <form className="filter-bar" onSubmit={handleApplyFilters}>
             <div className="form-group">
