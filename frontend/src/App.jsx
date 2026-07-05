@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(() => {
@@ -495,22 +495,47 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   const [repSuccess, setRepSuccess] = useState('');
 
   // Helper to compute next sequential numeric code
-  const getNextCode = (list, defaultCode = '1001') => {
-    if (!list || list.length === 0) return defaultCode;
-    const numericCodes = list
+  const getNextCode = (list, defaultCode = '1001', checkUniqueList = null) => {
+    const numericCodes = (list || [])
       .map(item => parseInt(item.code))
       .filter(num => !isNaN(num));
-    if (numericCodes.length === 0) return defaultCode;
-    const maxCode = Math.max(...numericCodes);
-    return (maxCode + 1).toString();
+    
+    let proposedNum = numericCodes.length === 0 ? parseInt(defaultCode) : Math.max(...numericCodes) + 1;
+    
+    // Resolve any global code collisions if checkUniqueList is provided
+    if (checkUniqueList && checkUniqueList.length > 0) {
+      const allUsedCodes = new Set(checkUniqueList.map(item => item.code ? item.code.toString().trim() : ''));
+      while (allUsedCodes.has(proposedNum.toString())) {
+        proposedNum++;
+      }
+    }
+    
+    return proposedNum.toString();
   };
 
   // Auto-generate codes for forms
   useEffect(() => {
-    if (repsLoaded && !newRep.code) {
-      setNewRep(prev => ({ ...prev, code: getNextCode(reps, '5001') }));
+    if (repsLoaded) {
+      const cls = newRep.classification || 'retail_rep';
+      const defaults = {
+        retail_rep: '5001',
+        wholesale_rep: '6001',
+        supervisor_staff: '7001',
+        accountant_staff: '8001',
+        admin_staff: '9001',
+        warehouse_staff: '4001',
+        driver: '3001',
+        worker: '2001'
+      };
+      const defaultCode = defaults[cls] || '5001';
+      const filteredReps = reps.filter(r => r.classification === cls);
+      const nextCode = getNextCode(filteredReps, defaultCode, reps);
+      
+      if (newRep.code !== nextCode) {
+        setNewRep(prev => ({ ...prev, code: nextCode }));
+      }
     }
-  }, [reps, repsLoaded, newRep.code]);
+  }, [reps, repsLoaded, newRep.classification, newRep.code]);
 
   useEffect(() => {
     if (agenciesLoaded && !newAgency.code) {
