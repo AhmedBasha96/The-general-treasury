@@ -583,6 +583,11 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   const [bankError, setBankError] = useState('');
   const [bankSuccess, setBankSuccess] = useState('');
 
+  // Bank Initial Balance Config States
+  const [bankInitBalances, setBankInitBalances] = useState({});
+  const [bankInitError, setBankInitError] = useState('');
+  const [bankInitSuccess, setBankInitSuccess] = useState('');
+
   // New Supervisor Form State
   const [newSupervisor, setNewSupervisor] = useState({ code: '', name: '' });
   const [supervisorError, setSupervisorError] = useState('');
@@ -706,6 +711,17 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
       setActiveTab('rep-dashboard');
     }
   }, [currentUser]);
+
+  // Populate bank initial balance inputs when banks list loads
+  useEffect(() => {
+    if (banks.length > 0) {
+      const initialMap = {};
+      banks.filter(b => Number(b.initial_balance) === 0).forEach(bank => {
+        initialMap[bank.id] = '';
+      });
+      setBankInitBalances(initialMap);
+    }
+  }, [banks]);
 
   const loadCarExpenses = async () => {
     try {
@@ -4419,9 +4435,79 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
 
       {/* BANKS TAB */}
       {activeTab === 'banks' && currentUser.role === 'manager' && (
-        <div className="grid-2col">
-          {/* Banks list */}
-          <div className="panel">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', width: '100%' }}>
+          {/* Bank Initial Balance Setup Banner (only if there are banks with 0 initial balance) */}
+          {banks.filter(b => Number(b.initial_balance) === 0).length > 0 && (
+            <div className="panel" style={{
+              background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.15) 0%, rgba(29, 78, 216, 0.05) 100%)',
+              border: '1px solid rgba(37, 99, 235, 0.3)',
+              borderRadius: '16px',
+              padding: '1.5rem',
+              position: 'relative',
+              overflow: 'hidden'
+            }}>
+              <div style={{ position: 'absolute', top: '-10px', right: '-10px', fontSize: '5rem', opacity: 0.05, pointerEvents: 'none' }}>🏦</div>
+              <h3 style={{ fontSize: '1.25rem', color: 'var(--primary)', fontWeight: 700, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                ⚙️ ضبط الأرصدة الافتتاحية للحسابات البنكية (رصيد أول المدة)
+              </h3>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
+                يرجى إدخال الرصيد الافتتاحي للحسابات البنكية التالية لتأسيس رصيد بداية المدة لها. ستختفي هذه اللوحة بمجرد تعيين الأرصدة.
+              </p>
+              
+              {bankInitError && <div className="alert alert-error" style={{ marginBottom: '1rem' }}>⚠️ {bankInitError}</div>}
+              {bankInitSuccess && <div className="alert alert-success" style={{ marginBottom: '1rem' }}>✔️ {bankInitSuccess}</div>}
+
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                setBankInitError('');
+                setBankInitSuccess('');
+                
+                try {
+                  const res = await fetch('/api/banks/initial-balances', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ balances: bankInitBalances })
+                  });
+                  
+                  const data = await res.json();
+                  if (res.ok) {
+                    setBankInitSuccess('تم حفظ الأرصدة الافتتاحية بنجاح!');
+                    loadBanks();
+                  } else {
+                    setBankInitError(data.error || 'حدث خطأ أثناء حفظ الأرصدة');
+                  }
+                } catch (err) {
+                  setBankInitError('تعذر الاتصال بالسيرفر');
+                }
+              }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '1.25rem', marginBottom: '1.5rem' }}>
+                  {banks.filter(b => Number(b.initial_balance) === 0).map(bank => (
+                    <div key={bank.id} className="form-group" style={{ background: 'rgba(255,255,255,0.02)', padding: '0.85rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)', marginBottom: 0 }}>
+                      <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 600, fontSize: '0.85rem' }}>
+                        🏦 {bank.name} ({bank.code})
+                      </label>
+                      <input 
+                        type="number" 
+                        step="0.01"
+                        placeholder="0.00 ج.م"
+                        value={bankInitBalances[bank.id] || ''}
+                        onChange={(e) => setBankInitBalances({ ...bankInitBalances, [bank.id]: e.target.value })}
+                        required
+                        style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', width: '100%', padding: '0.5rem', borderRadius: '8px', color: 'var(--text-primary)' }}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <button type="submit" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.5rem' }}>
+                  💾 حفظ الأرصدة الافتتاحية
+                </button>
+              </form>
+            </div>
+          )}
+
+          <div className="grid-2col">
+            {/* Banks list */}
+            <div className="panel">
             <div className="panel-header">
               <h2 className="panel-title">🏦 دليل الحسابات البنكية</h2>
             </div>
@@ -4701,6 +4787,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>حفظ الحساب الجديد</button>
             </form>
           </div>
+        </div>
         </div>
       )}
 

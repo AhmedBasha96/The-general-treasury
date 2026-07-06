@@ -631,6 +631,49 @@ app.delete('/api/banks/:id', async (req, res) => {
   }
 });
 
+// POST /api/banks/initial-balances (Update initial balance for multiple banks in bulk)
+app.post('/api/banks/initial-balances', async (req, res) => {
+  const { balances } = req.body; // Map of { bankId: initial_balance }
+  const userRole = req.headers['x-user-role'];
+  
+  if (userRole !== 'manager') {
+    return res.status(403).json({ error: 'غير مصرح لك بتعديل الأرصدة الافتتاحية' });
+  }
+
+  if (!balances || typeof balances !== 'object') {
+    return res.status(400).json({ error: 'البيانات المرسلة غير صالحة' });
+  }
+
+  try {
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      for (const [bankIdStr, balanceVal] of Object.entries(balances)) {
+        const bankId = parseInt(bankIdStr);
+        const initBal = parseFloat(balanceVal) || 0;
+        
+        if (isNaN(bankId) || initBal < 0) continue;
+
+        await transaction.request()
+          .input('id', sql.Int, bankId)
+          .input('initial_balance', sql.Decimal(18, 2), initBal)
+          .query('UPDATE banks SET initial_balance = @initial_balance WHERE id = @id');
+      }
+
+      await transaction.commit();
+      res.json({ message: 'تم حفظ الأرصدة الافتتاحية للبنوك بنجاح' });
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+  } catch (error) {
+    console.error('Error saving bank initial balances:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء حفظ الأرصدة الافتتاحية للبنوك' });
+  }
+});
+
 // 1.93 GET /api/banks/:id/transactions (Ledger for a specific bank)
 app.get('/api/banks/:id/transactions', async (req, res) => {
   const bankId = req.params.id;
