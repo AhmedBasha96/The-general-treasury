@@ -320,6 +320,19 @@ async function createTables() {
         END
       END
     `);
+
+    // 4. Create settings table if not exists
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'settings')
+      BEGIN
+        CREATE TABLE settings (
+          key_name VARCHAR(100) PRIMARY KEY,
+          val NVARCHAR(MAX) NOT NULL,
+          created_at DATETIME DEFAULT GETDATE(),
+          updated_at DATETIME DEFAULT GETDATE()
+        );
+      END
+    `);
     
     console.log('Database tables verified/created.');
   } catch (error) {

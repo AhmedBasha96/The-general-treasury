@@ -460,9 +460,43 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   }, [activeTab]);
 
   const [dashboardData, setDashboardData] = useState({
-    summary: { totalDeposits: 0, totalWithdrawals: 0, safeBalance: 0, repsCount: 0 },
+    summary: { totalDeposits: 0, totalWithdrawals: 0, safeBalance: 0, repsCount: 0, safeInitialBalance: 0, safeInitialBalanceSet: true },
     recentTransactions: []
   });
+
+  const [initialBalanceInput, setInitialBalanceInput] = useState('');
+  const [initialBalanceLoading, setInitialBalanceLoading] = useState(false);
+  const [initialBalanceError, setInitialBalanceError] = useState('');
+
+  const handleSaveInitialBalance = async (e) => {
+    e.preventDefault();
+    setInitialBalanceError('');
+    setInitialBalanceLoading(true);
+    const amountNum = parseFloat(initialBalanceInput);
+    if (isNaN(amountNum) || amountNum < 0) {
+      setInitialBalanceError('يرجى إدخال مبلغ صحيح أكبر من أو يساوي الصفر');
+      setInitialBalanceLoading(false);
+      return;
+    }
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'safe_initial_balance', value: amountNum })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert('تم حفظ رصيد أول المدة بنجاح!');
+        loadDashboard();
+      } else {
+        setInitialBalanceError(data.error || 'حدث خطأ أثناء حفظ رصيد أول المدة');
+      }
+    } catch (err) {
+      setInitialBalanceError('تعذر الاتصال بالسيرفر');
+    } finally {
+      setInitialBalanceLoading(false);
+    }
+  };
   const [reps, setReps] = useState([]);
   const [agencies, setAgencies] = useState([]);
   const [banks, setBanks] = useState([]);
@@ -1650,6 +1684,75 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
       {/* DASHBOARD TAB */}
       {activeTab === 'dashboard' && (
         <>
+          {/* INITIAL BALANCE BANNER */}
+          {currentUser.role === 'manager' && !dashboardData.summary.safeInitialBalanceSet && (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.08) 100%)',
+              border: '2px solid rgba(245, 158, 11, 0.35)',
+              borderRadius: '20px',
+              padding: '1.5rem 2rem',
+              marginBottom: '1.5rem',
+              position: 'relative',
+              overflow: 'hidden'
+            }}>
+              <div style={{ display: 'flex', zIndex: 1, justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', position: 'relative' }}>
+                <div style={{ flex: '1 1 500px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '1.8rem' }}>💰</span>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#f59e0b', margin: 0 }}>تحديد رصيد أول المدة للخزنة العامة</h3>
+                  </div>
+                  <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
+                    يرجى إدخال الرصيد الافتتاحي (رصيد أول المدة) للبدء في حساب العمليات بدقة. سيظهر هذا الإجراء مرة واحدة فقط ولن تتمكن من تعديله لاحقاً إلا من خلال الإدارة.
+                  </p>
+                </div>
+                <form onSubmit={handleSaveInitialBalance} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="number"
+                      placeholder="رصيد أول المدة (ج.م)"
+                      value={initialBalanceInput}
+                      onChange={(e) => setInitialBalanceInput(e.target.value)}
+                      required
+                      style={{
+                        background: 'rgba(255,255,255,0.05)',
+                        border: '1px solid rgba(245, 158, 11, 0.3)',
+                        borderRadius: '10px',
+                        padding: '0.6rem 1rem',
+                        color: '#fff',
+                        fontSize: '0.9rem',
+                        outline: 'none',
+                        width: '200px'
+                      }}
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={initialBalanceLoading}
+                    className="btn btn-primary"
+                    style={{
+                      background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                      border: 'none',
+                      borderRadius: '10px',
+                      padding: '0.6rem 1.25rem',
+                      color: '#fff',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                      transition: 'all 0.2s ease',
+                      opacity: initialBalanceLoading ? 0.7 : 1
+                    }}
+                  >
+                    {initialBalanceLoading ? 'جاري الحفظ...' : 'حفظ الرصيد الافتتاحي'}
+                  </button>
+                </form>
+              </div>
+              {initialBalanceError && (
+                <div style={{ marginTop: '0.75rem', color: '#ef4444', fontSize: '0.85rem', fontWeight: 600 }}>
+                  ⚠️ {initialBalanceError}
+                </div>
+              )}
+            </div>
+          )}
           {/* ===== TWO MAIN BALANCE HEROES ===== */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
             {/* CASH SAFE BALANCE */}

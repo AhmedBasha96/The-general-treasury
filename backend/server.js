@@ -236,11 +236,18 @@ app.get('/api/dashboard', async (req, res) => {
         ${agencyFilter}
     `);
     
+    const initialBalanceResult = await pool.request()
+      .input('key', sql.VarChar, 'safe_initial_balance')
+      .query('SELECT val FROM settings WHERE key_name = @key');
+
+    const safeInitialBalanceSet = initialBalanceResult.recordset.length > 0;
+    const safeInitialBalance = safeInitialBalanceSet ? parseFloat(initialBalanceResult.recordset[0].val) || 0 : 0;
+    
     const cashDeposits = Number(cashDepositsResult.recordset[0].total);
     const bankTransferTotal = Number(bankTransferResult.recordset[0].total);
     const totalWithdrawals = Number(withdrawalsResult.recordset[0].total);
     const totalDeposits = cashDeposits + bankTransferTotal;
-    const cashSafeBalance = cashDeposits - totalWithdrawals;
+    const cashSafeBalance = safeInitialBalance + cashDeposits - totalWithdrawals;
     
     // Reps count
     let repsQuery = 'SELECT COUNT(*) AS count FROM representatives';
@@ -305,7 +312,9 @@ app.get('/api/dashboard', async (req, res) => {
         cashSafeBalance,
         safeBalance: cashSafeBalance, // backward compat
         repsCount: repsCountResult.recordset[0].count,
-        safeDenominations
+        safeDenominations,
+        safeInitialBalance,
+        safeInitialBalanceSet
       },
       recentTransactions: recentTxResult.recordset
     });
@@ -1928,6 +1937,45 @@ app.put('/api/transactions/:id', async (req, res) => {
   } catch (error) {
     console.error('Error updating transaction:', error);
     res.status(500).json({ error: 'حدث خطأ أثناء تعديل العملية' });
+  }
+});
+
+// POST /api/settings - Save or update setting - Manager only
+app.post('/api/settings', async (req, res) => {
+  const { key, value } = req.body;
+  const userRole = req.headers['x-user-role'];
+  
+  if (userRole !== 'manager') {
+    return res.status(403).json({ error: 'غير مسموح لغير المدراء بتعديل الإعدادات العامة' });
+  }
+  
+  if (!key || value === undefined) {
+    return res.status(400).json({ error: 'المفتاح والقيمة مطلوبان' });
+  }
+  
+  try {
+    const pool = getPool();
+    // Check if key exists
+    const checkKey = await pool.request()
+      .input('key', sql.VarChar, key)
+      .query('SELECT key_name FROM settings WHERE key_name = @key');
+      
+    if (checkKey.recordset.length > 0) {
+      await pool.request()
+        .input('key', sql.VarChar, key)
+        .input('val', sql.NVarChar, String(value))
+        .query('UPDATE settings SET val = @val, updated_at = GETDATE() WHERE key_name = @key');
+    } else {
+      await pool.request()
+        .input('key', sql.VarChar, key)
+        .input('val', sql.NVarChar, String(value))
+        .query('INSERT INTO settings (key_name, val) VALUES (@key, @val)');
+    }
+    
+    res.json({ message: 'تم حفظ الإعداد بنجاح' });
+  } catch (error) {
+    console.error('Error saving setting:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء حفظ الإعداد' });
   }
 });
 
