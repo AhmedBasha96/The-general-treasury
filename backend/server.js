@@ -1255,10 +1255,10 @@ app.post('/api/transactions', async (req, res) => {
       }
     }
 
-    // Determine status (withdrawal by accountant/representative requires approval, manager withdrawals auto-finalized to disbursed)
+    // Determine status (all withdrawals start as 'pending' and require manager approval)
     let statusVal = 'approved';
     if (type === 'withdrawal') {
-      statusVal = (userRole === 'manager' ? 'disbursed' : 'pending');
+      statusVal = 'pending';
     } else if (type === 'deposit') {
       statusVal = (userRole === 'representative' ? 'pending_receipt' : 'approved');
     }
