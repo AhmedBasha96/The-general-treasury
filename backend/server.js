@@ -237,11 +237,42 @@ app.get('/api/dashboard', async (req, res) => {
     `);
     
     const initialBalanceResult = await pool.request()
-      .input('key', sql.VarChar, 'safe_initial_balance')
-      .query('SELECT val FROM settings WHERE key_name = @key');
+      .query("SELECT key_name, val FROM settings WHERE key_name LIKE 'safe_initial_%'");
 
-    const safeInitialBalanceSet = initialBalanceResult.recordset.length > 0;
-    const safeInitialBalance = safeInitialBalanceSet ? parseFloat(initialBalanceResult.recordset[0].val) || 0 : 0;
+    const initialDenoms = {
+      denom_200: 0,
+      denom_100: 0,
+      denom_50: 0,
+      denom_20: 0,
+      denom_10: 0,
+      denom_5: 0,
+      denom_1: 0
+    };
+    let safeInitialBalance = 0;
+    let safeInitialBalanceSet = false;
+
+    initialBalanceResult.recordset.forEach(row => {
+      if (row.key_name === 'safe_initial_balance') {
+        safeInitialBalanceSet = true;
+      }
+      const match = row.key_name.match(/^safe_initial_denom_(\d+)$/);
+      if (match) {
+        const denom = parseInt(match[1]);
+        const val = parseInt(row.val) || 0;
+        initialDenoms[`denom_${denom}`] = val;
+      }
+    });
+
+    if (safeInitialBalanceSet) {
+      safeInitialBalance = 
+        (initialDenoms.denom_200 * 200) +
+        (initialDenoms.denom_100 * 100) +
+        (initialDenoms.denom_50 * 50) +
+        (initialDenoms.denom_20 * 20) +
+        (initialDenoms.denom_10 * 10) +
+        (initialDenoms.denom_5 * 5) +
+        (initialDenoms.denom_1 * 1);
+    }
     
     const cashDeposits = Number(cashDepositsResult.recordset[0].total);
     const bankTransferTotal = Number(bankTransferResult.recordset[0].total);
@@ -294,13 +325,13 @@ app.get('/api/dashboard', async (req, res) => {
     `);
 
     const safeDenominations = {
-      denom_200: Number(denomsResult.recordset[0].denom_200) || 0,
-      denom_100: Number(denomsResult.recordset[0].denom_100) || 0,
-      denom_50: Number(denomsResult.recordset[0].denom_50) || 0,
-      denom_20: Number(denomsResult.recordset[0].denom_20) || 0,
-      denom_10: Number(denomsResult.recordset[0].denom_10) || 0,
-      denom_5: Number(denomsResult.recordset[0].denom_5) || 0,
-      denom_1: Number(denomsResult.recordset[0].denom_1) || 0,
+      denom_200: (Number(denomsResult.recordset[0].denom_200) || 0) + (initialDenoms?.denom_200 || 0),
+      denom_100: (Number(denomsResult.recordset[0].denom_100) || 0) + (initialDenoms?.denom_100 || 0),
+      denom_50: (Number(denomsResult.recordset[0].denom_50) || 0) + (initialDenoms?.denom_50 || 0),
+      denom_20: (Number(denomsResult.recordset[0].denom_20) || 0) + (initialDenoms?.denom_20 || 0),
+      denom_10: (Number(denomsResult.recordset[0].denom_10) || 0) + (initialDenoms?.denom_10 || 0),
+      denom_5: (Number(denomsResult.recordset[0].denom_5) || 0) + (initialDenoms?.denom_5 || 0),
+      denom_1: (Number(denomsResult.recordset[0].denom_1) || 0) + (initialDenoms?.denom_1 || 0),
     };
     
     res.json({
@@ -1940,42 +1971,58 @@ app.put('/api/transactions/:id', async (req, res) => {
   }
 });
 
-// POST /api/settings - Save or update setting - Manager only
+// POST /api/settings - Save or update settings - Manager only
 app.post('/api/settings', async (req, res) => {
-  const { key, value } = req.body;
+  const { settings } = req.body;
   const userRole = req.headers['x-user-role'];
   
   if (userRole !== 'manager') {
     return res.status(403).json({ error: 'غير مسموح لغير المدراء بتعديل الإعدادات العامة' });
   }
   
-  if (!key || value === undefined) {
-    return res.status(400).json({ error: 'المفتاح والقيمة مطلوبان' });
+  if (!settings || !Array.isArray(settings)) {
+    return res.status(400).json({ error: 'بيانات الإعدادات غير صالحة' });
   }
   
   try {
     const pool = getPool();
-    // Check if key exists
-    const checkKey = await pool.request()
-      .input('key', sql.VarChar, key)
-      .query('SELECT key_name FROM settings WHERE key_name = @key');
-      
-    if (checkKey.recordset.length > 0) {
-      await pool.request()
-        .input('key', sql.VarChar, key)
-        .input('val', sql.NVarChar, String(value))
-        .query('UPDATE settings SET val = @val, updated_at = GETDATE() WHERE key_name = @key');
-    } else {
-      await pool.request()
-        .input('key', sql.VarChar, key)
-        .input('val', sql.NVarChar, String(value))
-        .query('INSERT INTO settings (key_name, val) VALUES (@key, @val)');
-    }
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
     
-    res.json({ message: 'تم حفظ الإعداد بنجاح' });
+    try {
+      for (const s of settings) {
+        const { key, value } = s;
+        if (!key || value === undefined) {
+          throw new Error('مفتاح الإعداد أو القيمة مفقودة');
+        }
+        
+        // Check if key exists
+        const checkKey = await transaction.request()
+          .input('key', sql.VarChar, key)
+          .query('SELECT key_name FROM settings WHERE key_name = @key');
+          
+        if (checkKey.recordset.length > 0) {
+          await transaction.request()
+            .input('key', sql.VarChar, key)
+            .input('val', sql.NVarChar, String(value))
+            .query('UPDATE settings SET val = @val, updated_at = GETDATE() WHERE key_name = @key');
+        } else {
+          await transaction.request()
+            .input('key', sql.VarChar, key)
+            .input('val', sql.NVarChar, String(value))
+            .query('INSERT INTO settings (key_name, val) VALUES (@key, @val)');
+        }
+      }
+      
+      await transaction.commit();
+      res.json({ message: 'تم حفظ الإعدادات بنجاح' });
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
   } catch (error) {
-    console.error('Error saving setting:', error);
-    res.status(500).json({ error: 'حدث خطأ أثناء حفظ الإعداد' });
+    console.error('Error saving settings:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء حفظ الإعدادات' });
   }
 });
 
