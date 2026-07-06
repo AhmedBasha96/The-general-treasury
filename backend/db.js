@@ -421,6 +421,30 @@ async function seedData() {
       `);
       console.log(`Driver codes migration completed. Rows affected: ${migrateResult.rowsAffected[0]}`);
     }
+
+    // 7. Ensure every supervisor has a financial representative account if classification column exists
+    if (checkColumns.recordset.length > 0) {
+      console.log('Ensuring all supervisors have financial representative accounts...');
+      const allSupervisors = await pool.request().query("SELECT id, code, name FROM supervisors");
+      for (const sup of allSupervisors.recordset) {
+        const checkRep = await pool.request()
+          .input('code', sql.VarChar, sup.code)
+          .query("SELECT id FROM representatives WHERE code = @code");
+        
+        if (checkRep.recordset.length === 0) {
+          console.log(`Auto-creating financial representative account for supervisor: ${sup.name} (${sup.code})`);
+          await pool.request()
+            .input('code', sql.VarChar, sup.code)
+            .input('name', sql.NVarChar, sup.name)
+            .input('supervisor_id', sql.Int, sup.id)
+            .query(`
+              INSERT INTO representatives (code, name, type, classification, supervisor_id)
+              VALUES (@code, @name, 'retail', 'supervisor_staff', @supervisor_id)
+            `);
+        }
+      }
+      console.log('Supervisor financial accounts check completed.');
+    }
   } catch (error) {
     console.error('Failed to seed data:', error);
   }

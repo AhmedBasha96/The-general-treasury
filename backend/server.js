@@ -737,12 +737,39 @@ app.post('/api/supervisors', async (req, res) => {
       return res.status(400).json({ error: 'كود المشرف مسجل مسبقاً لمشرف آخر' });
     }
     
-    await pool.request()
-      .input('code', sql.VarChar, code)
-      .input('name', sql.NVarChar, name)
-      .query('INSERT INTO supervisors (code, name) VALUES (@code, @name)');
+    // Use a transaction to ensure atomic insert in both supervisors and representatives tables
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      const result = await transaction.request()
+        .input('code', sql.VarChar, code)
+        .input('name', sql.NVarChar, name)
+        .query('INSERT INTO supervisors (code, name) VALUES (@code, @name); SELECT SCOPE_IDENTITY() as id;');
+        
+      const supervisorId = result.recordset[0].id;
       
-    res.status(201).json({ message: 'تم إضافة المشرف بنجاح' });
+      // Auto-create a financial representative account if code doesn't exist in representatives
+      const checkRepCode = await transaction.request()
+        .input('code', sql.VarChar, code)
+        .query('SELECT id FROM representatives WHERE code = @code');
+        
+      if (checkRepCode.recordset.length === 0) {
+        await transaction.request()
+          .input('code', sql.VarChar, code)
+          .input('name', sql.NVarChar, name)
+          .input('supervisor_id', sql.Int, supervisorId)
+          .query(`
+            INSERT INTO representatives (code, name, type, classification, supervisor_id) 
+            VALUES (@code, @name, 'retail', 'supervisor_staff', @supervisor_id)
+          `);
+      }
+      
+      await transaction.commit();
+      res.status(201).json({ message: 'تم إضافة المشرف وحسابه المالي بنجاح' });
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
   } catch (error) {
     console.error('Error creating supervisor:', error);
     res.status(500).json({ error: 'حدث خطأ أثناء حفظ المشرف' });
