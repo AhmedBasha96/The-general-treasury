@@ -402,6 +402,25 @@ async function seedData() {
         `);
       console.log('Users seeding completed.');
     }
+
+    // 6. Migrate existing driver codes from 3xxx range to 1xxx range if classification column exists
+    const checkColumns = await pool.request()
+      .query("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'representatives' AND COLUMN_NAME = 'classification'");
+    
+    if (checkColumns.recordset.length > 0) {
+      console.log('Migrating driver codes starting with 3 to start with 1...');
+      const migrateResult = await pool.request().query(`
+        UPDATE representatives
+        SET code = '1' + SUBSTRING(code, 2, LEN(code))
+        WHERE classification = 'driver' 
+          AND code LIKE '3%'
+          AND NOT EXISTS (
+            SELECT 1 FROM representatives r2 
+            WHERE r2.code = '1' + SUBSTRING(representatives.code, 2, LEN(representatives.code))
+          )
+      `);
+      console.log(`Driver codes migration completed. Rows affected: ${migrateResult.rowsAffected[0]}`);
+    }
   } catch (error) {
     console.error('Failed to seed data:', error);
   }

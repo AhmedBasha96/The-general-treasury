@@ -8,7 +8,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ limit: '5mb', extended: true }));
 
 // API Status endpoint
 app.get('/api/status', (req, res) => {
@@ -290,7 +291,7 @@ app.get('/api/dashboard', async (req, res) => {
     // Recent transactions (top 10)
     const recentTxResult = await createFilteredRequest().query(`
       SELECT TOP 10 
-        t.id, t.rep_id, t.bank_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.withdrawal_sub_type, t.status,
+        t.id, t.rep_id, t.bank_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
         t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
         r.name AS rep_name, r.code AS rep_code,
         b.name AS bank_name, b.code AS bank_code,
@@ -483,7 +484,7 @@ app.get('/api/agencies/:id/transactions', async (req, res) => {
     const txResult = await pool.request()
       .input('agencyId', sql.Int, agencyId)
       .query(`
-        SELECT t.id, t.type, t.payment_method, t.amount, t.date, t.notes, t.withdrawal_sub_type, t.status,
+        SELECT t.id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
                t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
                r.name AS rep_name, r.code AS rep_code,
                b.name AS bank_name, b.code AS bank_code,
@@ -1055,7 +1056,7 @@ app.get('/api/reps/:id/transactions', async (req, res) => {
     const txResult = await pool.request()
       .input('repId', sql.Int, repId)
       .query(`
-        SELECT t.id, t.type, t.amount, t.date, t.notes, t.payment_method, t.withdrawal_sub_type, t.status,
+        SELECT t.id, t.type, t.amount, t.date, t.notes, t.receipt_image, t.payment_method, t.withdrawal_sub_type, t.status,
                b.name AS bank_name,
                u.username AS creator_name, u2.username AS approver_name
         FROM transactions t
@@ -1112,7 +1113,7 @@ app.get('/api/transactions', async (req, res) => {
   try {
     const pool = getPool();
     let query = `
-      SELECT t.id, t.rep_id, t.bank_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.withdrawal_sub_type, t.status,
+      SELECT t.id, t.rep_id, t.bank_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
              t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
              r.name AS rep_name, r.code AS rep_code,
              b.name AS bank_name, b.code AS bank_code,
@@ -1509,7 +1510,7 @@ app.post('/api/transactions', async (req, res) => {
       const txResult = await pool.request()
         .input('id', sql.Int, singleId)
         .query(`
-          SELECT t.id, t.rep_id, t.bank_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.withdrawal_sub_type, t.status,
+          SELECT t.id, t.rep_id, t.bank_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
                  t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
                  r.name AS rep_name, r.code AS rep_code,
                  b.name AS bank_name, b.code AS bank_code,
@@ -1546,7 +1547,7 @@ app.get('/api/transactions/pending', async (req, res) => {
   try {
     const pool = getPool();
     const result = await pool.request().query(`
-      SELECT t.id, t.rep_id, t.bank_id, t.agency_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.withdrawal_sub_type, t.status,
+      SELECT t.id, t.rep_id, t.bank_id, t.agency_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
              r.name AS rep_name, r.code AS rep_code,
              b.name AS bank_name, b.code AS bank_code,
              a.name AS agency_name, a.code AS agency_code,

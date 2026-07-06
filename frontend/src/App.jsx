@@ -1,5 +1,44 @@
 import React, { useState, useEffect } from 'react';
 
+const compressImage = (file, maxWidth = 1000, maxHeight = 1000, quality = 0.6) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
+  });
+};
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState(() => {
     const saved = localStorage.getItem('currentUser');
@@ -584,7 +623,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
         accountant_staff: '8001',
         admin_staff: '9001',
         warehouse_staff: '4001',
-        driver: '3001',
+        driver: '1001',
         worker: '2001'
       };
       const defaultCode = defaults[cls] || '5001';
@@ -3431,12 +3470,18 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                           accept="image/*"
                           id="receipt-upload"
                           style={{ display: 'none' }}
-                          onChange={(e) => {
+                          onChange={async (e) => {
                             const file = e.target.files[0];
                             if (!file) return;
-                            const reader = new FileReader();
-                            reader.onloadend = () => setReceiptImageBank(reader.result);
-                            reader.readAsDataURL(file);
+                            try {
+                              const compressed = await compressImage(file);
+                              setReceiptImageBank(compressed);
+                            } catch (err) {
+                              console.error('Image compression failed, using fallback reader:', err);
+                              const reader = new FileReader();
+                              reader.onloadend = () => setReceiptImageBank(reader.result);
+                              reader.readAsDataURL(file);
+                            }
                           }}
                         />
                         <label
@@ -4024,12 +4069,18 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                         accept="image/*"
                         id="rep-receipt-upload"
                         style={{ display: 'none' }}
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const file = e.target.files[0];
                           if (!file) return;
-                          const reader = new FileReader();
-                          reader.onloadend = () => setReceiptImageBank(reader.result);
-                          reader.readAsDataURL(file);
+                          try {
+                            const compressed = await compressImage(file);
+                            setReceiptImageBank(compressed);
+                          } catch (err) {
+                            console.error('Image compression failed, using fallback reader:', err);
+                            const reader = new FileReader();
+                            reader.onloadend = () => setReceiptImageBank(reader.result);
+                            reader.readAsDataURL(file);
+                          }
                         }}
                       />
                       <label
