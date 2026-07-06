@@ -3391,12 +3391,12 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
 
                   {/* Agency selection */}
                   <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                    <label>التوكيل التابع له (اختياري)</label>
+                    <label>التوكيل التابع له</label>
                     <select 
                       value={newTx.agencyId || ''}
                       onChange={(e) => setNewTx(prev => ({ ...prev, agencyId: e.target.value }))}
                     >
-                      <option value="">اختر التوكيل...</option>
+                      <option value="">🏛️ الخزنة العامة (بدون توكيل)</option>
                       {agencies.map(a => (
                         <option key={a.id} value={a.id}>{a.name} ({a.code})</option>
                       ))}
@@ -3551,13 +3551,12 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                   {txSourceType === 'bank' && (
                     <>
                       <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                        <label>التوكيل المنصرف منه <span style={{ color: 'var(--danger)' }}>*</span></label>
+                        <label>التوكيل المنصرف منه</label>
                         <select 
                           value={newTx.agencyId || ''}
                           onChange={(e) => setNewTx(prev => ({ ...prev, agencyId: e.target.value }))}
-                          required
                         >
-                          <option value="">اختر التوكيل...</option>
+                          <option value="">🏛️ الخزنة العامة (بدون توكيل)</option>
                           {agencies.map(a => (
                             <option key={a.id} value={a.id}>{a.name} ({a.code})</option>
                           ))}
