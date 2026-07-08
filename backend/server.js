@@ -1891,49 +1891,47 @@ app.post('/api/transactions', async (req, res) => {
           return res.status(404).json({ error: 'الشركة المحددة غير موجودة' });
         }
 
-        if (statusVal === 'approved') {
-          // Calculate source bank account balance inside transaction with lock
-          const depRes = await transaction.request()
-            .input('bankId', sql.Int, bank_id)
-            .query(`
-              SELECT ISNULL(SUM(CASE
-                WHEN type = 'withdrawal' THEN amount
-                WHEN type = 'deposit' AND payment_method = 'bank_transfer' THEN amount
-                ELSE 0 END), 0) AS total
-              FROM transactions WITH (UPDLOCK, TABLOCKX)
-              WHERE bank_id = @bankId AND (
-                (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
-                OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
-              )
-            `);
-          const wdRes = await transaction.request()
-            .input('bankId', sql.Int, bank_id)
-            .query(`
-              SELECT ISNULL(SUM(CASE 
-                WHEN type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount 
-                WHEN type = 'company_transfer' THEN amount
-                ELSE 0 END), 0) AS total
-              FROM transactions
-              WHERE bank_id = @bankId AND (
-                (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
-                OR (type = 'company_transfer' AND (status = 'approved' OR status IS NULL))
-              )
-            `);
-          const bankRes = await transaction.request()
-            .input('bankId', sql.Int, bank_id)
-            .query('SELECT initial_balance FROM banks WHERE id = @bankId');
-          
-          const initialBal = Number(bankRes.recordset[0].initial_balance) || 0;
-          const totalDeposits = Number(depRes.recordset[0].total) || 0;
-          const totalWithdrawals = Number(wdRes.recordset[0].total) || 0;
-          const currentBankBalance = initialBal + totalDeposits - totalWithdrawals;
+        // Calculate source bank account balance inside transaction with lock
+        const depRes = await transaction.request()
+          .input('bankId', sql.Int, bank_id)
+          .query(`
+            SELECT ISNULL(SUM(CASE
+              WHEN type = 'withdrawal' THEN amount
+              WHEN type = 'deposit' AND payment_method = 'bank_transfer' THEN amount
+              ELSE 0 END), 0) AS total
+            FROM transactions WITH (UPDLOCK, TABLOCKX)
+            WHERE bank_id = @bankId AND (
+              (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+              OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+            )
+          `);
+        const wdRes = await transaction.request()
+          .input('bankId', sql.Int, bank_id)
+          .query(`
+            SELECT ISNULL(SUM(CASE 
+              WHEN type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount 
+              WHEN type = 'company_transfer' THEN amount
+              ELSE 0 END), 0) AS total
+            FROM transactions
+            WHERE bank_id = @bankId AND (
+              (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+              OR (type = 'company_transfer' AND (status = 'approved' OR status IS NULL))
+            )
+          `);
+        const bankRes = await transaction.request()
+          .input('bankId', sql.Int, bank_id)
+          .query('SELECT initial_balance FROM banks WHERE id = @bankId');
+        
+        const initialBal = Number(bankRes.recordset[0].initial_balance) || 0;
+        const totalDeposits = Number(depRes.recordset[0].total) || 0;
+        const totalWithdrawals = Number(wdRes.recordset[0].total) || 0;
+        const currentBankBalance = initialBal + totalDeposits - totalWithdrawals;
 
-          if (currentBankBalance < transactionAmount) {
-            await transaction.rollback();
-            return res.status(400).json({
-              error: `رصيد الحساب البنكي المتاح هو ${currentBankBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} جنيه مصري، وهو غير كافٍ لإتمام عملية التحويل للشركة بقيمة ${transactionAmount.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} جنيه مصري.`
-            });
-          }
+        if (currentBankBalance < transactionAmount) {
+          await transaction.rollback();
+          return res.status(400).json({
+            error: `رصيد الحساب البنكي المتاح هو ${currentBankBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} جنيه مصري، وهو غير كافٍ لإتمام عملية التحويل للشركة بقيمة ${transactionAmount.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} جنيه مصري.`
+          });
         }
       }
 
