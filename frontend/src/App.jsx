@@ -86,6 +86,32 @@ export default function App() {
   const [companyLedgerLoading, setCompanyLedgerLoading] = useState(false);
   const [selectedCompanyForLedger, setSelectedCompanyForLedger] = useState(null);
 
+  // Daily Report States
+  const [dailyReportDate, setDailyReportDate] = useState(new Date().toISOString().split('T')[0]);
+  const [dailyReportData, setDailyReportData] = useState(null);
+  const [dailyReportLoading, setDailyReportLoading] = useState(false);
+  const [dailyReportError, setDailyReportError] = useState('');
+
+  const handleFetchDailyReport = async (targetDate = dailyReportDate) => {
+    if (!targetDate) return;
+    setDailyReportLoading(true);
+    setDailyReportError('');
+    try {
+      const res = await fetch(`/api/reports/daily?date=${targetDate}`);
+      const data = await res.json();
+      if (res.ok) {
+        setDailyReportData(data);
+      } else {
+        setDailyReportError(data.error || 'حدث خطأ أثناء تحميل التقرير اليومي');
+      }
+    } catch (err) {
+      console.error('Failed to load daily report:', err);
+      setDailyReportError('فشل الاتصال بالخادم');
+    } finally {
+      setDailyReportLoading(false);
+    }
+  };
+
   const loadRepLedger = async () => {
     const saved = localStorage.getItem('currentUser');
     const user = saved ? JSON.parse(saved) : null;
@@ -2057,6 +2083,15 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                 onClick={() => { setActiveTab('users'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
               >
                 👥 المستخدمين
+              </button>
+            )}
+
+            {currentUser.role === 'manager' && (
+              <button 
+                className={`tab-btn ${activeTab === 'daily-report' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('daily-report'); handleFetchDailyReport(); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+              >
+                📋 التقرير اليومي
               </button>
             )}
 
@@ -6349,6 +6384,212 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
         </div>
       )}
 
+      {/* DAILY REPORT TAB */}
+      {activeTab === 'daily-report' && currentUser.role === 'manager' && (
+        <div className="panel" style={{ width: '100%' }}>
+          <div className="panel-header no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
+            <h2 className="panel-title">📋 تقرير حركة الخزينة والمصارف اليومي</h2>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div className="form-group" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <label style={{ whiteSpace: 'nowrap' }}>اختر التاريخ:</label>
+                <input 
+                  type="date" 
+                  value={dailyReportDate} 
+                  onChange={(e) => {
+                    setDailyReportDate(e.target.value);
+                    handleFetchDailyReport(e.target.value);
+                  }}
+                  style={{ padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontFamily: 'var(--font-cairo)' }}
+                />
+              </div>
+              <button className="btn btn-secondary" onClick={() => handleFetchDailyReport()} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>🔄 تحديث</button>
+              <button 
+                className="btn btn-primary" 
+                onClick={() => {
+                  document.body.classList.add('print-report-mode');
+                  document.body.classList.remove('print-receipt-mode');
+                  setTimeout(() => {
+                    window.print();
+                  }, 100);
+                }} 
+                style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', background: 'linear-gradient(135deg, var(--primary), var(--primary-hover))' }}
+              >
+                🖨️ طباعة التقرير (A4)
+              </button>
+            </div>
+          </div>
+
+          {dailyReportLoading && (
+            <div style={{ textAlign: 'center', padding: '3rem' }}>
+              <div className="spinner" style={{ display: 'inline-block', width: '40px', height: '40px', border: '4px solid rgba(255,255,255,0.1)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+              <p style={{ marginTop: '1rem', color: 'var(--text-secondary)' }}>جاري جلب البيانات وتوليد التقرير المالي...</p>
+            </div>
+          )}
+
+          {dailyReportError && (
+            <div className="alert alert-error" style={{ margin: '1.5rem 0' }}>⚠️ {dailyReportError}</div>
+          )}
+
+          {!dailyReportLoading && !dailyReportError && dailyReportData && (
+            <div className="report-preview-container" style={{ marginTop: '1.5rem', direction: 'rtl' }}>
+              <div style={{ textAlign: 'center', marginBottom: '2rem', borderBottom: '2px double var(--border-color)', paddingBottom: '1.5rem' }}>
+                <h1 style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-primary)', margin: '0.5rem 0' }}>تقرير حركة الخزينة والمصارف اليومي التفصيلي</h1>
+                <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', margin: 0 }}>تاريخ التقرير: <strong>{new Date(dailyReportData.date).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong></p>
+              </div>
+
+              <div className="report-section" style={{ marginBottom: '2rem' }}>
+                <h3 style={{ borderRight: '4px solid var(--primary)', paddingRight: '0.5rem', marginBottom: '1rem', color: 'var(--text-primary)' }}>💵 ملخص الخزينة النقدية (الخزنة الفعلية)</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                  <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>الرصيد الافتتاحي (بداية اليوم):</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, marginTop: '0.25rem' }}>{dailyReportData.safeSummary.openingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</div>
+                  </div>
+                  <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>إجمالي الوارد (الإيداعات النقدية):</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--success)', marginTop: '0.25rem' }}>+{dailyReportData.safeSummary.deposits.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</div>
+                  </div>
+                  <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>إجمالي المنصرف (الصرفيات النقدية):</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--danger)', marginTop: '0.25rem' }}>-{dailyReportData.safeSummary.withdrawals.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</div>
+                  </div>
+                  <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>الرصيد الختامي (نهاية اليوم):</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--primary)', marginTop: '0.25rem' }}>{dailyReportData.safeSummary.closingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="report-section" style={{ marginBottom: '2rem' }}>
+                <h3 style={{ borderRight: '4px solid var(--info)', paddingRight: '0.5rem', marginBottom: '1rem', color: 'var(--text-primary)' }}>🏦 ملخص الحسابات البنكية والمصارف</h3>
+                <div className="table-container">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>كود البنك</th>
+                        <th>اسم الحساب البنكي</th>
+                        <th>رقم الحساب</th>
+                        <th>الرصيد الافتتاحي</th>
+                        <th>إجمالي الوارد</th>
+                        <th>إجمالي المنصرف</th>
+                        <th>الرصيد الختامي</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dailyReportData.banksSummary.map(bank => (
+                        <tr key={bank.id}>
+                          <td><strong>{bank.code}</strong></td>
+                          <td>{bank.name}</td>
+                          <td>{bank.account_number}</td>
+                          <td>{bank.openingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                          <td style={{ color: 'var(--success)' }}>+{bank.deposits.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                          <td style={{ color: 'var(--danger)' }}>-{bank.withdrawals.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                          <td><strong style={{ color: 'var(--info)' }}>{bank.closingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</strong></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="report-section" style={{ marginBottom: '2rem' }}>
+                <h3 style={{ borderRight: '4px solid var(--warning)', paddingRight: '0.5rem', marginBottom: '1rem', color: 'var(--text-primary)' }}>📝 كشف العمليات التفصيلي خلال اليوم</h3>
+                <div className="table-container">
+                  {dailyReportData.transactions.length === 0 ? (
+                    <div className="no-data-msg">لا توجد عمليات مسجلة في هذا اليوم.</div>
+                  ) : (
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>رقم الحركة</th>
+                          <th>الوقت</th>
+                          <th>نوع العملية</th>
+                          <th>التفاصيل والمستفيد</th>
+                          <th>طريقة الدفع / الحساب</th>
+                          <th>المبلغ</th>
+                          <th>المحاسب</th>
+                          <th>الحالة</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dailyReportData.transactions.map(tx => (
+                          <tr key={tx.id}>
+                            <td><code>TX-{String(tx.id).padStart(6, '0')}</code></td>
+                            <td>{new Date(tx.date).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</td>
+                            <td>
+                              <span className={`badge ${
+                                tx.type === 'deposit' ? 'badge-success' : tx.type === 'company_transfer' ? 'badge-company-transfer' : 'badge-danger'
+                              }`}>
+                                {tx.type === 'deposit' ? 'وارد' : tx.type === 'company_transfer' ? 'حوالة شركة' : 'منصرف'}
+                              </span>
+                            </td>
+                            <td>
+                              {tx.type === 'company_transfer' && (
+                                <div>تحويل لشركة: <strong>{tx.company_name}</strong></div>
+                              )}
+                              {tx.rep_name && (
+                                <div>المندوب: <strong>{tx.rep_name}</strong></div>
+                              )}
+                              {tx.withdrawal_sub_type && (
+                                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                  بند: {tx.withdrawal_sub_type === 'car' ? 'مصاريف سيارات'
+                                    : tx.withdrawal_sub_type === 'car_gas' ? 'مصاريف سيارات (جاز)'
+                                    : tx.withdrawal_sub_type === 'salary' ? 'رواتب وأجور'
+                                    : tx.withdrawal_sub_type === 'commission' ? 'عمولات'
+                                    : tx.withdrawal_sub_type === 'loan' ? 'سلفة'
+                                    : 'أخرى'}
+                                </div>
+                              )}
+                              {tx.notes && <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>({tx.notes})</div>}
+                            </td>
+                            <td>
+                              {tx.bank_name ? `🏦 ${tx.bank_name}` : '💵 نقدي بالخزينة'}
+                            </td>
+                            <td>
+                              <strong className={tx.type === 'deposit' ? 'amount-deposit' : tx.type === 'company_transfer' ? 'amount-company-transfer' : 'amount-withdrawal'}>
+                                {tx.amount.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.m
+                              </strong>
+                            </td>
+                            <td>{tx.creator_name || 'أمين الخزينة'}</td>
+                            <td>
+                              <span style={{
+                                display: 'inline-block',
+                                padding: '0.2rem 0.5rem',
+                                borderRadius: '4px',
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                background: tx.status === 'disbursed' || tx.status === 'approved' || tx.status === null ? 'rgba(34, 197, 94, 0.2)' : 'rgba(234, 179, 8, 0.2)',
+                                color: tx.status === 'disbursed' || tx.status === 'approved' || tx.status === null ? '#22c55e' : '#eab308'
+                              }}>
+                                {tx.status === 'disbursed' || tx.status === 'approved' || tx.status === null ? 'مكتمل' : 'قيد الانتظار'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '2rem', marginTop: '4rem', borderTop: '1px solid var(--border-color)', paddingTop: '2rem' }} className="no-print">
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <p style={{ margin: 0, fontWeight: 700 }}>توقيع المحاسب المستلم:</p>
+                  <p style={{ marginTop: '3rem', borderBottom: '1px dashed var(--text-secondary)', width: '70%', marginInline: 'auto' }}></p>
+                </div>
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <p style={{ margin: 0, fontWeight: 700 }}>توقيع المراجع المالي:</p>
+                  <p style={{ marginTop: '3rem', borderBottom: '1px dashed var(--text-secondary)', width: '70%', marginInline: 'auto' }}></p>
+                </div>
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <p style={{ margin: 0, fontWeight: 700 }}>توقيع المدير العام:</p>
+                  <p style={{ marginTop: '3rem', borderBottom: '1px dashed var(--text-secondary)', width: '70%', marginInline: 'auto' }}></p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* PRINTABLE RECEIPT TEMPLATE */}
       {printingTx && (
         <div className="receipt-print-wrapper">
@@ -6551,6 +6792,132 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
           <div className="receipt-footer">
             <p>شكراً لتعاملكم معنا</p>
             <p style={{ marginTop: '0.5mm' }}>نظام إدارة الخزينة الذكي — Cash Safe</p>
+          </div>
+        </div>
+      )}
+
+      {/* A4 DAILY REPORT PRINTABLE */}
+      {dailyReportData && (
+        <div className="daily-report-print-wrapper">
+          <div style={{ textAlign: 'center', marginBottom: '15mm', borderBottom: '3px double #000', paddingBottom: '5mm' }}>
+            <h1 style={{ fontSize: '20pt', fontWeight: 900, margin: '2mm 0' }}>تقرير حركة الخزينة والمصارف اليومي التفصيلي</h1>
+            <p style={{ fontSize: '11pt', margin: 0 }}>تاريخ التقرير: <strong>{new Date(dailyReportData.date).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong></p>
+          </div>
+
+          <div style={{ marginBottom: '10mm' }}>
+            <h3 style={{ borderRight: '4px solid #000', paddingRight: '2mm', marginBottom: '3mm', fontSize: '12pt', fontWeight: 800 }}>💵 أولاً: ملخص حركة الخزينة النقدية (الخزنة الفعلية)</h3>
+            <table className="report-print-table">
+              <thead>
+                <tr>
+                  <th>الرصيد الافتتاحي (بداية اليوم)</th>
+                  <th>إجمالي الإيداعات (الوارد)</th>
+                  <th>إجمالي الصرفيات (المنصرف)</th>
+                  <th>الرصيد الختامي (نهاية اليوم)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ textAlign: 'center' }}>
+                  <td>{dailyReportData.safeSummary.openingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                  <td style={{ fontWeight: 'bold' }}>+{dailyReportData.safeSummary.deposits.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                  <td style={{ fontWeight: 'bold' }}>-{dailyReportData.safeSummary.withdrawals.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                  <td style={{ fontWeight: 'bold' }}>{dailyReportData.safeSummary.closingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ marginBottom: '10mm' }}>
+            <h3 style={{ borderRight: '4px solid #000', paddingRight: '2mm', marginBottom: '3mm', fontSize: '12pt', fontWeight: 800 }}>🏦 ثانياً: ملخص حركة الحسابات البنكية والمصارف</h3>
+            <table className="report-print-table">
+              <thead>
+                <tr>
+                  <th>كود البنك</th>
+                  <th>اسم البنك</th>
+                  <th>رقم الحساب</th>
+                  <th>الرصيد الافتتاحي</th>
+                  <th>إجمالي الوارد</th>
+                  <th>إجمالي المنصرف</th>
+                  <th>الرصيد الختامي</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dailyReportData.banksSummary.map(bank => (
+                  <tr key={bank.id} style={{ textAlign: 'center' }}>
+                    <td style={{ fontWeight: 'bold' }}>{bank.code}</td>
+                    <td>{bank.name}</td>
+                    <td>{bank.account_number}</td>
+                    <td>{bank.openingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                    <td>+{bank.deposits.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                    <td>-{bank.withdrawals.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                    <td style={{ fontWeight: 'bold' }}>{bank.closingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ marginBottom: '10mm' }}>
+            <h3 style={{ borderRight: '4px solid #000', paddingRight: '2mm', marginBottom: '3mm', fontSize: '12pt', fontWeight: 800 }}>📝 ثالثاً: كشف العمليات اليومي المفصل</h3>
+            <table className="report-print-table">
+              <thead>
+                <tr>
+                  <th>رقم الحركة</th>
+                  <th>الوقت</th>
+                  <th>النوع</th>
+                  <th>التفاصيل والمستفيد</th>
+                  <th>طريقة الدفع / الحساب</th>
+                  <th>المبلغ</th>
+                  <th>المحاسب</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dailyReportData.transactions.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" style={{ padding: '4mm', textAlign: 'center' }}>لا توجد عمليات مسجلة في هذا اليوم.</td>
+                  </tr>
+                ) : (
+                  dailyReportData.transactions.map(tx => (
+                    <tr key={tx.id} style={{ textAlign: 'center' }}>
+                      <td>TX-{String(tx.id).padStart(6, '0')}</td>
+                      <td>{new Date(tx.date).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</td>
+                      <td style={{ fontWeight: 'bold' }}>
+                        {tx.type === 'deposit' ? 'وارد' : tx.type === 'company_transfer' ? 'حوالة لشركة' : 'منصرف'}
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        {tx.type === 'company_transfer' && `تحويل لشركة: ${tx.company_name}`}
+                        {tx.rep_name && `المندوب: ${tx.rep_name}`}
+                        {tx.withdrawal_sub_type && ` (بند: ${
+                          tx.withdrawal_sub_type === 'car' ? 'مصاريف سيارات' : tx.withdrawal_sub_type === 'car_gas' ? 'جاز سيارات' : tx.withdrawal_sub_type === 'salary' ? 'رواتب' : tx.withdrawal_sub_type === 'commission' ? 'عمولات' : tx.withdrawal_sub_type === 'loan' ? 'سلفة' : 'أخرى'
+                        })`}
+                        {tx.notes && ` - ${tx.notes}`}
+                      </td>
+                      <td>
+                        {tx.bank_name ? `🏦 ${tx.bank_name}` : '💵 نقدي بالخزينة'}
+                      </td>
+                      <td style={{ fontWeight: 'bold' }}>
+                        {tx.amount.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                      </td>
+                      <td>{tx.creator_name || 'أمين الخزينة'}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20mm', marginTop: '20mm' }}>
+            <div style={{ textAlign: 'center', flex: 1 }}>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: '10pt' }}>توقيع المحاسب المستلم</p>
+              <p style={{ marginTop: '15mm', borderBottom: '1px solid #000', width: '80%', marginInline: 'auto' }}></p>
+            </div>
+            <div style={{ textAlign: 'center', flex: 1 }}>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: '10pt' }}>توقيع المراجع المالي</p>
+              <p style={{ marginTop: '15mm', borderBottom: '1px solid #000', width: '80%', marginInline: 'auto' }}></p>
+            </div>
+            <div style={{ textAlign: 'center', flex: 1 }}>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: '10pt' }}>توقيع المدير العام</p>
+              <p style={{ marginTop: '15mm', borderBottom: '1px solid #000', width: '80%', marginInline: 'auto' }}></p>
+            </div>
           </div>
         </div>
       )}

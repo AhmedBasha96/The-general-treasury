@@ -1350,6 +1350,178 @@ app.get('/api/reps/:id/transactions', async (req, res) => {
     res.status(500).json({ error: 'حدث خطأ أثناء جلب كشف حساب المندوب' });
   }
 });
+// GET /api/reports/daily (Detailed daily report for manager)
+app.get('/api/reports/daily', async (req, res) => {
+  const { date } = req.query; // YYYY-MM-DD
+  if (!date) {
+    return res.status(400).json({ error: 'التاريخ مطلوب لتوليد التقرير اليومي' });
+  }
+
+  try {
+    const pool = getPool();
+    
+    // 1. Fetch safe initial settings
+    const initialSettings = await pool.request()
+      .query("SELECT key_name, val FROM settings WHERE key_name LIKE 'safe_initial_%'");
+    
+    const initialDenoms = {
+      denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0
+    };
+    let safeInitialBalance = 0;
+    let safeInitialBalanceSet = false;
+
+    initialSettings.recordset.forEach(row => {
+      if (row.key_name === 'safe_initial_balance') {
+        safeInitialBalanceSet = true;
+      }
+      const match = row.key_name.match(/^safe_initial_denom_(\d+)$/);
+      if (match) {
+        const denom = parseInt(match[1]);
+        initialDenoms[`denom_${denom}`] = parseInt(row.val) || 0;
+      }
+    });
+
+    if (safeInitialBalanceSet) {
+      safeInitialBalance = 
+        (initialDenoms.denom_200 * 200) +
+        (initialDenoms.denom_100 * 100) +
+        (initialDenoms.denom_50 * 50) +
+        (initialDenoms.denom_20 * 20) +
+        (initialDenoms.denom_10 * 10) +
+        (initialDenoms.denom_5 * 5) +
+        (initialDenoms.denom_1 * 1);
+    }
+
+    // 2. Calculate safe balance BEFORE this date (Opening Safe Cash Balance)
+    const safeBefore = await pool.request()
+      .input('date', sql.VarChar, date)
+      .query(`
+        SELECT 
+          ISNULL(SUM(CASE WHEN type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount ELSE 0 END), 0) AS total_deposits,
+          ISNULL(SUM(CASE WHEN type = 'withdrawal' THEN amount ELSE 0 END), 0) AS total_withdrawals
+        FROM transactions
+        WHERE CAST(date AS DATE) < CAST(@date AS DATE) AND (
+          (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+          OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+        )
+      `);
+    const openingSafeBalance = safeInitialBalance + Number(safeBefore.recordset[0].total_deposits) - Number(safeBefore.recordset[0].total_withdrawals);
+
+    // 3. Fetch all transaction operations of the selected day
+    const dayTransactions = await pool.request()
+      .input('date', sql.VarChar, date)
+      .query(`
+        SELECT 
+          t.id, t.rep_id, t.bank_id, t.company_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
+          r.name AS rep_name, r.code AS rep_code,
+          b.name AS bank_name, b.code AS bank_code,
+          c.name AS company_name, c.code AS company_code,
+          u.username AS creator_name, u2.username AS approver_name
+        FROM transactions t
+        LEFT JOIN representatives r ON t.rep_id = r.id
+        LEFT JOIN banks b ON t.bank_id = b.id
+        LEFT JOIN companies c ON t.company_id = c.id
+        LEFT JOIN users u ON t.created_by = u.id
+        LEFT JOIN users u2 ON t.approved_by = u2.id
+        WHERE CAST(t.date AS DATE) = CAST(@date AS DATE)
+        ORDER BY t.date ASC
+      `);
+
+    // 4. Fetch list of banks and compute their opening and closing balances for this day
+    const banksList = await pool.request().query('SELECT id, name, code, initial_balance, account_number FROM banks ORDER BY name');
+    
+    const banksSummary = [];
+    for (const bank of banksList.recordset) {
+      // Calculate bank balance BEFORE this date (Opening Bank Balance)
+      const bankBeforeDep = await pool.request()
+        .input('bankId', sql.Int, bank.id)
+        .input('date', sql.VarChar, date)
+        .query(`
+          SELECT ISNULL(SUM(CASE
+            WHEN type = 'withdrawal' THEN amount
+            WHEN type = 'deposit' AND payment_method = 'bank_transfer' THEN amount
+            ELSE 0 END), 0) AS total
+          FROM transactions
+          WHERE bank_id = @bankId AND CAST(date AS DATE) < CAST(@date AS DATE) AND (
+            (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+            OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+          )
+        `);
+      const bankBeforeWd = await pool.request()
+        .input('bankId', sql.Int, bank.id)
+        .input('date', sql.VarChar, date)
+        .query(`
+          SELECT ISNULL(SUM(CASE
+            WHEN type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount
+            WHEN type = 'company_transfer' THEN amount
+            ELSE 0 END), 0) AS total
+          FROM transactions
+          WHERE bank_id = @bankId AND CAST(date AS DATE) < CAST(@date AS DATE) AND (
+            (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+            OR (type = 'company_transfer' AND (status = 'approved' OR status IS NULL))
+          )
+        `);
+      const openingBankBalance = Number(bank.initial_balance) + Number(bankBeforeDep.recordset[0].total) - Number(bankBeforeWd.recordset[0].total);
+
+      // Fetch transfers of this bank on this day
+      const dayBankDep = dayTransactions.recordset
+        .filter(t => t.bank_id === bank.id && t.type === 'deposit' && t.payment_method === 'bank_transfer' && (t.status === 'approved' || t.status === 'disbursed' || t.status === null))
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+      
+      const dayBankWithdrawalFromSafe = dayTransactions.recordset
+        .filter(t => t.bank_id === bank.id && t.type === 'withdrawal' && (t.status === 'disbursed' || t.status === null))
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+
+      const dayBankCashedOut = dayTransactions.recordset
+        .filter(t => t.bank_id === bank.id && t.type === 'deposit' && (t.payment_method === 'cash' || t.payment_method === null) && (t.status === 'approved' || t.status === 'disbursed' || t.status === null))
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+
+      const dayBankCompanyTransfer = dayTransactions.recordset
+        .filter(t => t.bank_id === bank.id && t.type === 'company_transfer' && (t.status === 'approved' || t.status === null))
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+
+      const totalDepositsThisDay = dayBankDep + dayBankWithdrawalFromSafe;
+      const totalWithdrawalsThisDay = dayBankCashedOut + dayBankCompanyTransfer;
+      const closingBankBalance = openingBankBalance + totalDepositsThisDay - totalWithdrawalsThisDay;
+
+      banksSummary.push({
+        id: bank.id,
+        name: bank.name,
+        code: bank.code,
+        account_number: bank.account_number,
+        openingBalance: openingBankBalance,
+        deposits: totalDepositsThisDay,
+        withdrawals: totalWithdrawalsThisDay,
+        closingBalance: closingBankBalance
+      });
+    }
+
+    // 5. Calculate safe metrics during this day
+    const dayCashDeposits = dayTransactions.recordset
+      .filter(t => t.type === 'deposit' && (t.payment_method === 'cash' || t.payment_method === null) && (t.status === 'approved' || t.status === 'disbursed' || t.status === null))
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+    const dayCashWithdrawals = dayTransactions.recordset
+      .filter(t => t.type === 'withdrawal' && (t.status === 'disbursed' || t.status === null))
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+    const closingSafeBalance = openingSafeBalance + dayCashDeposits - dayCashWithdrawals;
+
+    res.json({
+      date,
+      safeSummary: {
+        openingBalance: openingSafeBalance,
+        deposits: dayCashDeposits,
+        withdrawals: dayCashWithdrawals,
+        closingBalance: closingSafeBalance
+      },
+      banksSummary,
+      transactions: dayTransactions.recordset
+    });
+  } catch (error) {
+    console.error('Error generating daily report:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء إعداد التقرير اليومي' });
+  }
+});
+
 // 5. GET /api/transactions (All transactions with filters)
 app.get('/api/transactions', async (req, res) => {
   const { type, rep_id, bank_id, start_date, end_date, withdrawal_sub_type, status } = req.query;
