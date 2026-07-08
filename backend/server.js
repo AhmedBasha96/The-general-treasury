@@ -308,19 +308,21 @@ app.get('/api/dashboard', async (req, res) => {
     // Safe Denominations Breakdown
     const denomsResult = await createFilteredRequest().query(`
       SELECT 
-        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_200 ELSE -t.denom_200 END), 0) AS denom_200,
-        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_100 ELSE -t.denom_100 END), 0) AS denom_100,
-        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_50 ELSE -t.denom_50 END), 0) AS denom_50,
-        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_20 ELSE -t.denom_20 END), 0) AS denom_20,
-        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_10 ELSE -t.denom_10 END), 0) AS denom_10,
-        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_5 ELSE -t.denom_5 END), 0) AS denom_5,
-        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_1 ELSE -t.denom_1 END), 0) AS denom_1
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_200 WHEN t.type = 'withdrawal' THEN -t.denom_200 ELSE t.denom_200 END), 0) AS denom_200,
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_100 WHEN t.type = 'withdrawal' THEN -t.denom_100 ELSE t.denom_100 END), 0) AS denom_100,
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_50 WHEN t.type = 'withdrawal' THEN -t.denom_50 ELSE t.denom_50 END), 0) AS denom_50,
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_20 WHEN t.type = 'withdrawal' THEN -t.denom_20 ELSE t.denom_20 END), 0) AS denom_20,
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_10 WHEN t.type = 'withdrawal' THEN -t.denom_10 ELSE t.denom_10 END), 0) AS denom_10,
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_5 WHEN t.type = 'withdrawal' THEN -t.denom_5 ELSE t.denom_5 END), 0) AS denom_5,
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_1 WHEN t.type = 'withdrawal' THEN -t.denom_1 ELSE t.denom_1 END), 0) AS denom_1
       FROM transactions t
       ${agencyJoin}
       WHERE (
         (t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
         OR 
         (t.type = 'withdrawal' AND (t.status = 'disbursed' OR t.status IS NULL))
+        OR
+        (t.type = 'exchange' AND (t.status = 'approved' OR t.status IS NULL))
       )
       ${agencyFilter}
     `);
@@ -1257,7 +1259,7 @@ app.get('/api/transactions', async (req, res) => {
 });
 // 6. POST /api/transactions (Add deposit with denominations check or withdrawal)
 app.post('/api/transactions', async (req, res) => {
-  const { rep_id, bank_id, agency_id, type, amount, notes, denominations, payment_method, cash_amount, bank_transfer_amount, receipt_image_bank, withdrawal_sub_type } = req.body;
+  const { rep_id, bank_id, agency_id, type, amount, notes, denominations, payment_method, cash_amount, bank_transfer_amount, receipt_image_bank, withdrawal_sub_type, incomingDenominations, outgoingDenominations } = req.body;
   const userRole = req.headers['x-user-role'];
   const userId = parseInt(req.headers['x-user-id']);
   const userAgencyId = parseInt(req.headers['x-user-agency-id']);
@@ -1266,8 +1268,8 @@ app.post('/api/transactions', async (req, res) => {
     return res.status(400).json({ error: 'نوع العملية مطلوب' });
   }
 
-  if (type !== 'deposit' && type !== 'withdrawal') {
-    return res.status(400).json({ error: 'نوع العملية غير صالح. يجب أن يكون توريد أو صرف' });
+  if (type !== 'deposit' && type !== 'withdrawal' && type !== 'exchange') {
+    return res.status(400).json({ error: 'نوع العملية غير صالح. يجب أن يكون توريد، صرف، أو تسوية' });
   }
 
   try {
@@ -1304,6 +1306,174 @@ app.post('/api/transactions', async (req, res) => {
       statusVal = 'pending';
     } else if (type === 'deposit') {
       statusVal = (userRole === 'representative' ? 'pending_receipt' : 'approved');
+    } else if (type === 'exchange') {
+      statusVal = (userRole === 'manager' ? 'approved' : 'pending');
+    }
+
+    // CHECK FOR EXCHANGE MODE
+    if (type === 'exchange') {
+      if (!incomingDenominations || !outgoingDenominations) {
+        return res.status(400).json({ error: 'الفئات النقدية المستلمة والمسلمة مطلوبة لعملية التسوية' });
+      }
+
+      const i200 = Number(incomingDenominations.denom_200) || 0;
+      const i100 = Number(incomingDenominations.denom_100) || 0;
+      const i50  = Number(incomingDenominations.denom_50)  || 0;
+      const i20  = Number(incomingDenominations.denom_20)  || 0;
+      const i10  = Number(incomingDenominations.denom_10)  || 0;
+      const i5   = Number(incomingDenominations.denom_5)   || 0;
+      const i1   = Number(incomingDenominations.denom_1)   || 0;
+
+      const o200 = Number(outgoingDenominations.denom_200) || 0;
+      const o100 = Number(outgoingDenominations.denom_100) || 0;
+      const o50  = Number(outgoingDenominations.denom_50)  || 0;
+      const o20  = Number(outgoingDenominations.denom_20)  || 0;
+      const o10  = Number(outgoingDenominations.denom_10)  || 0;
+      const o5   = Number(outgoingDenominations.denom_5)   || 0;
+      const o1   = Number(outgoingDenominations.denom_1)   || 0;
+
+      if (i200 < 0 || i100 < 0 || i50 < 0 || i20 < 0 || i10 < 0 || i5 < 0 || i1 < 0 ||
+          o200 < 0 || o100 < 0 || o50 < 0 || o20 < 0 || o10 < 0 || o5 < 0 || o1 < 0) {
+        return res.status(400).json({ error: 'لا يمكن إدخال قيم سالبة لفئات العملات' });
+      }
+
+      const incomingTotal = (i200 * 200) + (i100 * 100) + (i50 * 50) + (i20 * 20) + (i10 * 10) + (i5 * 5) + (i1 * 1);
+      const outgoingTotal = (o200 * 200) + (o100 * 100) + (o50 * 50) + (o20 * 20) + (o10 * 10) + (o5 * 5) + (o1 * 1);
+
+      if (incomingTotal === 0) {
+        return res.status(400).json({ error: 'يجب تحديد فئات نقدية صحيحة للتسوية' });
+      }
+
+      if (incomingTotal !== outgoingTotal) {
+        return res.status(400).json({
+          error: `قيمة الفئات المستلمة (${incomingTotal.toLocaleString('ar-EG')} ج.م) لا تطابق قيمة الفئات المسلمة (${outgoingTotal.toLocaleString('ar-EG')} ج.م).`
+        });
+      }
+
+      // Calculate net change for denominations
+      const net200 = i200 - o200;
+      const net100 = i100 - o100;
+      const net50  = i50  - o50;
+      const net20  = i20  - o20;
+      const net10  = i10  - o10;
+      const net5   = i5   - o5;
+      const net1   = i1   - o1;
+
+      // Start transaction block to insert and check denominations
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      try {
+        // If status is 'approved' (i.e. manager created it directly), we must check available denominations in safe
+        if (statusVal === 'approved') {
+          // Fetch safe initial balance settings
+          const initialBalanceResult = await transaction.request()
+            .query("SELECT key_name, val FROM settings WHERE key_name LIKE 'safe_initial_%'");
+
+          const initialDenoms = {
+            denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0
+          };
+
+          initialBalanceResult.recordset.forEach(row => {
+            const match = row.key_name.match(/^safe_initial_denom_(\d+)$/);
+            if (match) {
+              const denom = parseInt(match[1]);
+              initialDenoms[`denom_${denom}`] = parseInt(row.val) || 0;
+            }
+          });
+
+          // Fetch sum of all approved denominations
+          const denomsResult = await transaction.request().query(`
+            SELECT 
+              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_200 WHEN t.type = 'withdrawal' THEN -t.denom_200 ELSE t.denom_200 END), 0) AS denom_200,
+              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_100 WHEN t.type = 'withdrawal' THEN -t.denom_100 ELSE t.denom_100 END), 0) AS denom_100,
+              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_50 WHEN t.type = 'withdrawal' THEN -t.denom_50 ELSE t.denom_50 END), 0) AS denom_50,
+              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_20 WHEN t.type = 'withdrawal' THEN -t.denom_20 ELSE t.denom_20 END), 0) AS denom_20,
+              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_10 WHEN t.type = 'withdrawal' THEN -t.denom_10 ELSE t.denom_10 END), 0) AS denom_10,
+              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_5 WHEN t.type = 'withdrawal' THEN -t.denom_5 ELSE t.denom_5 END), 0) AS denom_5,
+              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_1 WHEN t.type = 'withdrawal' THEN -t.denom_1 ELSE t.denom_1 END), 0) AS denom_1
+            FROM transactions t WITH (UPDLOCK, TABLOCKX)
+            WHERE (
+              (t.type = 'deposit' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
+              OR 
+              (t.type = 'withdrawal' AND (t.status = 'disbursed' OR t.status IS NULL))
+              OR
+              (t.type = 'exchange' AND (t.status = 'approved' OR t.status IS NULL))
+            )
+          `);
+
+          const denoms = [200, 100, 50, 20, 10, 5, 1];
+          for (const denom of denoms) {
+            const reqCount = outgoingDenominations[`denom_${denom}`] || 0;
+            if (reqCount > 0) {
+              const currentInDb = Number(denomsResult.recordset[0][`denom_${denom}`]) || 0;
+              const currentInitial = initialDenoms[`denom_${denom}`] || 0;
+              const totalAvailable = currentInDb + currentInitial;
+              if (totalAvailable < reqCount) {
+                await transaction.rollback();
+                return res.status(400).json({
+                  error: `رصيد فئة ${denom} ج.م بالخزينة الحالي هو ${totalAvailable} ورقة، وهو غير كافٍ لتسليم ${reqCount} ورقة المطلوب صرفها.`
+                });
+              }
+            }
+          }
+        }
+
+        // Insert exchange transaction
+        const insertEx = await transaction.request()
+          .input('rep_id', sql.Int, targetRepId)
+          .input('bank_id', sql.Int, null)
+          .input('agency_id', sql.Int, resolvedAgencyId)
+          .input('type', sql.VarChar, 'exchange')
+          .input('payment_method', sql.VarChar, 'cash')
+          .input('amount', sql.Decimal(18, 2), incomingTotal)
+          .input('date', sql.DateTime, date)
+          .input('notes', sql.NVarChar, notes || 'تسوية فئات الخزينة')
+          .input('denom_200', sql.Int, net200)
+          .input('denom_100', sql.Int, net100)
+          .input('denom_50', sql.Int, net50)
+          .input('denom_20', sql.Int, net20)
+          .input('denom_10', sql.Int, net10)
+          .input('denom_5', sql.Int, net5)
+          .input('denom_1', sql.Int, net1)
+          .input('created_by', sql.Int, isNaN(userId) ? null : userId)
+          .input('status', sql.VarChar, statusVal)
+          .query(`
+            INSERT INTO transactions (rep_id, bank_id, agency_id, type, payment_method, amount, date, notes, status, created_by, denom_200, denom_100, denom_50, denom_20, denom_10, denom_5, denom_1)
+            OUTPUT INSERTED.id
+            VALUES (@rep_id, @bank_id, @agency_id, @type, @payment_method, @amount, @date, @notes, @status, @created_by, @denom_200, @denom_100, @denom_50, @denom_20, @denom_10, @denom_5, @denom_1)
+          `);
+
+        const exchangeId = insertEx.recordset[0].id;
+        await transaction.commit();
+
+        const txDetailsResult = await pool.request()
+          .input('id', sql.Int, exchangeId)
+          .query(`
+            SELECT t.id, t.rep_id, t.bank_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
+                   t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
+                   r.name AS rep_name, r.code AS rep_code,
+                   b.name AS bank_name, b.code AS bank_code,
+                   a.name AS agency_name, a.code AS agency_code,
+                   s.name AS supervisor_name, s.code AS supervisor_code,
+                   u.username AS creator_name, u2.username AS approver_name
+            FROM transactions t
+            LEFT JOIN representatives r ON t.rep_id = r.id
+            LEFT JOIN banks b ON t.bank_id = b.id
+            LEFT JOIN agencies a ON (r.agency_id = a.id OR t.agency_id = a.id)
+            LEFT JOIN supervisors s ON r.supervisor_id = s.id
+            LEFT JOIN users u ON t.created_by = u.id
+            LEFT JOIN users u2 ON t.approved_by = u2.id
+            WHERE t.id = @id
+          `);
+
+        return res.status(201).json({
+          message: statusVal === 'approved' ? 'تم تسجيل التسوية بنجاح' : 'تم تقديم طلب التسوية بنجاح وبانتظار موافقة المدير',
+          transaction: txDetailsResult.recordset[0]
+        });
+      } catch (err) {
+        await transaction.rollback();
+        throw err;
+      }
     }
 
     // CHECK FOR SPLIT DEPOSIT MODE
@@ -1687,6 +1857,72 @@ app.post('/api/transactions/:id/approve', async (req, res) => {
           });
         }
       }
+
+      // Balance check for cash safe exchanges
+      if (tx.type === 'exchange') {
+        // Fetch safe initial balance settings
+        const initialBalanceResult = await transaction.request()
+          .query("SELECT key_name, val FROM settings WHERE key_name LIKE 'safe_initial_%'");
+
+        const initialDenoms = {
+          denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0
+        };
+
+        initialBalanceResult.recordset.forEach(row => {
+          const match = row.key_name.match(/^safe_initial_denom_(\d+)$/);
+          if (match) {
+            const denom = parseInt(match[1]);
+            initialDenoms[`denom_${denom}`] = parseInt(row.val) || 0;
+          }
+        });
+
+        // Fetch sum of all approved denominations
+        const denomsResult = await transaction.request().query(`
+          SELECT 
+            ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_200 WHEN t.type = 'withdrawal' THEN -t.denom_200 ELSE t.denom_200 END), 0) AS denom_200,
+            ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_100 WHEN t.type = 'withdrawal' THEN -t.denom_100 ELSE t.denom_100 END), 0) AS denom_100,
+            ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_50 WHEN t.type = 'withdrawal' THEN -t.denom_50 ELSE t.denom_50 END), 0) AS denom_50,
+            ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_20 WHEN t.type = 'withdrawal' THEN -t.denom_20 ELSE t.denom_20 END), 0) AS denom_20,
+            ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_10 WHEN t.type = 'withdrawal' THEN -t.denom_10 ELSE t.denom_10 END), 0) AS denom_10,
+            ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_5 WHEN t.type = 'withdrawal' THEN -t.denom_5 ELSE t.denom_5 END), 0) AS denom_5,
+            ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_1 WHEN t.type = 'withdrawal' THEN -t.denom_1 ELSE t.denom_1 END), 0) AS denom_1
+          FROM transactions t WITH (UPDLOCK, TABLOCKX)
+          WHERE (
+            (t.type = 'deposit' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
+            OR 
+            (t.type = 'withdrawal' AND (t.status = 'disbursed' OR t.status IS NULL))
+            OR
+            (t.type = 'exchange' AND (t.status = 'approved' OR t.status IS NULL))
+          )
+        `);
+
+        // Outgoing denominations are negative values in tx
+        const outgoingDenoms = {
+          200: tx.denom_200 < 0 ? Math.abs(tx.denom_200) : 0,
+          100: tx.denom_100 < 0 ? Math.abs(tx.denom_100) : 0,
+          50:  tx.denom_50  < 0 ? Math.abs(tx.denom_50)  : 0,
+          20:  tx.denom_20  < 0 ? Math.abs(tx.denom_20)  : 0,
+          10:  tx.denom_10  < 0 ? Math.abs(tx.denom_10)  : 0,
+          5:   tx.denom_5   < 0 ? Math.abs(tx.denom_5)   : 0,
+          1:   tx.denom_1   < 0 ? Math.abs(tx.denom_1)   : 0,
+        };
+
+        const denoms = [200, 100, 50, 20, 10, 5, 1];
+        for (const denom of denoms) {
+          const reqCount = outgoingDenoms[denom];
+          if (reqCount > 0) {
+            const currentInDb = Number(denomsResult.recordset[0][`denom_${denom}`]) || 0;
+            const currentInitial = initialDenoms[`denom_${denom}`] || 0;
+            const totalAvailable = currentInDb + currentInitial;
+            if (totalAvailable < reqCount) {
+              await transaction.rollback();
+              return res.status(400).json({
+                error: `لا يمكن الموافقة على طلب الفك. رصيد فئة ${denom} ج.م بالخزينة الحالي هو ${totalAvailable} ورقة، وهو غير كافٍ لتسليم ${reqCount} ورقة المطلوب صرفها.`
+              });
+            }
+          }
+        }
+      }
       
       // Update status to approved
       await transaction.request()
@@ -1934,6 +2170,13 @@ app.put('/api/transactions/:id', async (req, res) => {
       }
       
       const tx = txResult.recordset[0];
+      
+      if (tx.type === 'exchange') {
+        if (Number(amount) !== Number(tx.amount)) {
+          await transaction.rollback();
+          return res.status(400).json({ error: 'لا يمكن تعديل قيمة مبلغ عملية تسوية الخزينة' });
+        }
+      }
       
       // Resolve agency
       let resolvedAgencyId = agency_id || tx.agency_id;

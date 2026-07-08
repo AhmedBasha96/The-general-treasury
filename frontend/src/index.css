@@ -396,6 +396,12 @@ tr:hover td {
   border: 1px solid rgba(244, 63, 94, 0.2);
 }
 
+.badge-exchange {
+  background: rgba(139, 92, 246, 0.1);
+  color: #c084fc;
+  border: 1px solid rgba(139, 92, 246, 0.25);
+}
+
 .badge-retail {
   background: var(--primary-glow);
   color: var(--primary);
@@ -415,6 +421,11 @@ tr:hover td {
 
 .amount-withdrawal {
   color: var(--danger);
+  font-weight: 700;
+}
+
+.amount-exchange {
+  color: #a78bfa;
   font-weight: 700;
 }
 

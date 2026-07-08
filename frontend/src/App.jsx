@@ -102,16 +102,20 @@ export default function App() {
     const piasters = Math.round((Number(tx.amount) - pounds) * 100);
     const amountText = `${pounds.toLocaleString('ar-EG')} جنيه مصري${piasters > 0 ? ` و${piasters.toLocaleString('ar-EG')} قرشاً` : ''} لا غير`;
 
-    const typeLabel = tx.type === 'deposit'
-      ? (tx.payment_method === 'bank_transfer' ? 'إيصال إيداع تحويل بنكي' : 'إيصال توريد نقدية (وارد)')
-      : 'إيصال صرف نقدية (منصرف)';
+    const typeLabel = tx.type === 'exchange'
+      ? 'إيصال تسوية فئات الخزينة (فك عملة)'
+      : tx.type === 'deposit'
+        ? (tx.payment_method === 'bank_transfer' ? 'إيصال إيداع تحويل بنكي' : 'إيصال توريد نقدية (وارد)')
+        : 'إيصال صرف نقدية (منصرف)';
 
-    const statusLabel = tx.type === 'deposit'
-      ? 'مكتمل'
-      : (tx.status === 'disbursed' ? 'مكتمل - تم الصرف الفعلي'
-         : tx.status === 'approved' ? 'معتمد - بانتظار التسليم'
-         : tx.status === 'pending' ? 'قيد المراجعة'
-         : 'مكتمل');
+    const statusLabel = tx.type === 'exchange'
+      ? (tx.status === 'pending' ? 'قيد المراجعة والموافقة' : 'مكتمل - تم التبديل')
+      : tx.type === 'deposit'
+        ? 'مكتمل'
+        : (tx.status === 'disbursed' ? 'مكتمل - تم الصرف الفعلي'
+           : tx.status === 'approved' ? 'معتمد - بانتظار التسليم'
+           : tx.status === 'pending' ? 'قيد المراجعة'
+           : 'مكتمل');
 
     const withdrawalSubType = tx.withdrawal_sub_type === 'car' ? 'مصاريف سيارات'
       : tx.withdrawal_sub_type === 'car_gas' ? 'مصاريف سيارات (جاز)'
@@ -123,7 +127,37 @@ export default function App() {
 
     // Build denominations table
     const denoms = [200, 100, 50, 20, 10, 5, 1];
-    const hasDenoms = tx.payment_method !== 'bank_transfer'
+    
+    let isExchange = tx.type === 'exchange';
+    let denomRowsExchangeIncoming = '';
+    let denomRowsExchangeOutgoing = '';
+    let hasExchangeDenoms = false;
+    let totalCountExchangeIncoming = 0;
+    let totalCountExchangeOutgoing = 0;
+    let totalValueExchangeIncoming = 0;
+    let totalValueExchangeOutgoing = 0;
+
+    if (isExchange) {
+      denoms.forEach(d => {
+        const val = tx[`denom_${d}`] || 0;
+        if (val > 0) {
+          totalCountExchangeIncoming += val;
+          totalValueExchangeIncoming += (d * val);
+          denomRowsExchangeIncoming += `<tr><td>${d} ج.م</td><td>${val}</td><td>${(d * val).toLocaleString('ar-EG')} ج.م</td></tr>`;
+          hasExchangeDenoms = true;
+        } else if (val < 0) {
+          const absVal = Math.abs(val);
+          totalCountExchangeOutgoing += absVal;
+          totalValueExchangeOutgoing += (d * absVal);
+          denomRowsExchangeOutgoing += `<tr><td>${d} ج.م</td><td>${absVal}</td><td>${(d * absVal).toLocaleString('ar-EG')} ج.م</td></tr>`;
+          hasExchangeDenoms = true;
+        }
+      });
+      denomRowsExchangeIncoming += `<tr style="border-top:2px solid #000;font-weight:900"><td>المجموع الوارد</td><td>${totalCountExchangeIncoming}</td><td>${totalValueExchangeIncoming.toLocaleString('ar-EG')} ج.م</td></tr>`;
+      denomRowsExchangeOutgoing += `<tr style="border-top:2px solid #000;font-weight:900"><td>المجموع المنصرف</td><td>${totalCountExchangeOutgoing}</td><td>${totalValueExchangeOutgoing.toLocaleString('ar-EG')} ج.م</td></tr>`;
+    }
+
+    const hasDenoms = !isExchange && tx.payment_method !== 'bank_transfer'
       && denoms.some(d => (tx[`denom_${d}`] || 0) > 0);
 
     let denomRows = '';
@@ -195,8 +229,8 @@ export default function App() {
 <table class="meta-table">
   <tr><td>رقم الإيصال:</td><td>TX-${id}</td></tr>
   <tr><td>التاريخ والوقت:</td><td>${date}</td></tr>
-  <tr><td>نوع العملية:</td><td>${tx.type === 'deposit' ? 'توريد (دخول أموال)' : 'صرف (خروج أموال)'}</td></tr>
-  <tr><td>طريقة الدفع:</td><td>${tx.payment_method === 'bank_transfer' ? 'تحويل بنكي' : 'نقدي بالخزينة'}</td></tr>
+  <tr><td>نوع العملية:</td><td>${tx.type === 'exchange' ? 'تسوية فئات الخزينة (فك)' : tx.type === 'deposit' ? 'توريد (دخول أموال)' : 'صرف (خروج أموال)'}</td></tr>
+  <tr><td>طريقة الدفع:</td><td>${tx.type === 'exchange' ? 'تبديل فئات نقدية' : tx.payment_method === 'bank_transfer' ? 'تحويل بنكي' : 'نقدي بالخزينة'}</td></tr>
   ${tx.rep_name ? `<tr><td>المندوب:</td><td>${tx.rep_name}${tx.rep_code ? ` (${tx.rep_code})` : ''}</td></tr>` : ''}
   ${tx.agency_name ? `<tr><td>التوكيل:</td><td>${tx.agency_name}${tx.agency_code ? ` (${tx.agency_code})` : ''}</td></tr>` : ''}
   ${tx.supervisor_name ? `<tr><td>المشرف:</td><td>${tx.supervisor_name}${tx.supervisor_code ? ` (${tx.supervisor_code})` : ''}</td></tr>` : ''}
@@ -205,10 +239,24 @@ export default function App() {
 </table>
 
 <div class="amount-box">
-  <div class="amount-title">إجمالي المبلغ</div>
+  <div class="amount-title">${isExchange ? 'القيمة الإجمالية للتبديل' : 'إجمالي المبلغ'}</div>
   <div class="amount-value">${amount} ج.م</div>
   <div class="amount-text">فقط وقدره: ${amountText}</div>
 </div>
+
+${isExchange && hasExchangeDenoms ? `
+<div class="denom-header" style="color: #10b981; font-weight: 800;">📥 الفئات المستلمة (وارد للجرار/الخزنة):</div>
+<table class="denom-table">
+  <thead><tr><th>الفئة</th><th>العدد</th><th>القيمة الإجمالية</th></tr></thead>
+  <tbody>${denomRowsExchangeIncoming}</tbody>
+</table>
+
+<div class="denom-header" style="color: #f43f5e; font-weight: 800;">📤 الفئات المسلمة (منصرف من الخزنة):</div>
+<table class="denom-table">
+  <thead><tr><th>الفئة</th><th>العدد</th><th>القيمة الإجمالية</th></tr></thead>
+  <tbody>${denomRowsExchangeOutgoing}</tbody>
+</table>
+` : ''}
 
 ${hasDenoms ? `
 <div class="denom-header">تفاصيل فئات الأوراق النقدية المودعة:</div>
@@ -671,6 +719,24 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
     denom_5: 0,
     denom_1: 0
   });
+  const [incomingDenominations, setIncomingDenominations] = useState({
+    denom_200: 0,
+    denom_100: 0,
+    denom_50: 0,
+    denom_20: 0,
+    denom_10: 0,
+    denom_5: 0,
+    denom_1: 0
+  });
+  const [outgoingDenominations, setOutgoingDenominations] = useState({
+    denom_200: 0,
+    denom_100: 0,
+    denom_50: 0,
+    denom_20: 0,
+    denom_10: 0,
+    denom_5: 0,
+    denom_1: 0
+  });
   const [searchRepQuery, setSearchRepQuery] = useState('');
   const [showRepSuggestions, setShowRepSuggestions] = useState(false);
   const [txError, setTxError] = useState('');
@@ -1117,6 +1183,93 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
       return;
     }
     
+    // Check if we are doing an exchange
+    if (newTx.type === 'exchange') {
+      const i200 = Number(incomingDenominations.denom_200) || 0;
+      const i100 = Number(incomingDenominations.denom_100) || 0;
+      const i50  = Number(incomingDenominations.denom_50)  || 0;
+      const i20  = Number(incomingDenominations.denom_20)  || 0;
+      const i10  = Number(incomingDenominations.denom_10)  || 0;
+      const i5   = Number(incomingDenominations.denom_5)   || 0;
+      const i1   = Number(incomingDenominations.denom_1)   || 0;
+
+      const o200 = Number(outgoingDenominations.denom_200) || 0;
+      const o100 = Number(outgoingDenominations.denom_100) || 0;
+      const o50  = Number(outgoingDenominations.denom_50)  || 0;
+      const o20  = Number(outgoingDenominations.denom_20)  || 0;
+      const o10  = Number(outgoingDenominations.denom_10)  || 0;
+      const o5   = Number(outgoingDenominations.denom_5)   || 0;
+      const o1   = Number(outgoingDenominations.denom_1)   || 0;
+
+      const incomingTotal = (i200 * 200) + (i100 * 100) + (i50 * 50) + (i20 * 20) + (i10 * 10) + (i5 * 5) + (i1 * 1);
+      const outgoingTotal = (o200 * 200) + (o100 * 100) + (o50 * 50) + (o20 * 20) + (o10 * 10) + (o5 * 5) + (o1 * 1);
+
+      if (incomingTotal <= 0) {
+        const msg = 'يرجى إدخال فئات صحيحة للتسوية والتبديل';
+        setTxError(msg);
+        alert(msg);
+        return;
+      }
+
+      if (incomingTotal !== outgoingTotal) {
+        const msg = `قيمة الفئات المستلمة (${incomingTotal.toLocaleString()} ج.م) لا تطابق قيمة الفئات المسلمة (${outgoingTotal.toLocaleString()} ج.م)!`;
+        setTxError(msg);
+        alert(msg);
+        return;
+      }
+
+      try {
+        const requestBody = {
+          type: 'exchange',
+          amount: incomingTotal,
+          notes: newTx.notes || 'تسوية فئات الخزينة',
+          rep_id: newTx.repId || null,
+          incomingDenominations,
+          outgoingDenominations
+        };
+
+        const res = await fetch('/api/transactions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          setTxSuccess({
+            type: 'exchange',
+            amount: incomingTotal,
+            repName: newTx.repId ? (searchRepQuery || 'مندوب') : 'خزينة مباشرة',
+            notes: newTx.notes || 'تسوية فئات الخزينة'
+          });
+
+          if (data.transaction) {
+            handlePrintReceipt(data.transaction);
+          }
+          
+          // Reset Form
+          setNewTx({ type: 'deposit', repId: '', bankId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash' });
+          setIncomingDenominations({ denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0 });
+          setOutgoingDenominations({ denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0 });
+          setSearchRepQuery('');
+          setTxSourceType('rep');
+          
+          // Refresh Lists
+          loadDashboard();
+          loadReps();
+          loadAgencies();
+          loadBanks();
+          loadTransactions();
+          loadCarExpenses();
+        } else {
+          setTxError(data.error || 'حدث خطأ أثناء إتمام عملية التسوية');
+        }
+      } catch (err) {
+        setTxError('تعذر الاتصال بالسيرفر');
+      }
+      return;
+    }
+
     // Check if we are doing a deposit or withdrawal
     if (newTx.type === 'withdrawal' || txSourceType === 'bank') {
       const amountNum = parseFloat(newTx.amount);
@@ -2006,7 +2159,18 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                           </span>
                         </td>
                         <td style={{ maxWidth: '200px', fontSize: '0.82rem' }}>
-                          {tx.notes || 'لا يوجد'}
+                          <div>{tx.notes || 'لا يوجد'}</div>
+                          {tx.receipt_image && (
+                            <div style={{ marginTop: '0.3rem' }}>
+                              <a 
+                                href="#" 
+                                onClick={(e) => { e.preventDefault(); window.open(tx.receipt_image, '_blank'); }} 
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.78rem', color: '#a78bfa', textDecoration: 'underline', fontWeight: 600 }}
+                              >
+                                📎 عرض الإيصال
+                              </a>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -2082,7 +2246,18 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                             {tx.amount.toLocaleString()} ج.م
                           </td>
                           <td style={{ fontSize: '0.85rem', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={tx.notes}>
-                            {tx.notes || '—'}
+                            <div>{tx.notes || '—'}</div>
+                            {tx.receipt_image && (
+                              <div style={{ marginTop: '0.3rem' }}>
+                                <a 
+                                  href="#" 
+                                  onClick={(e) => { e.preventDefault(); window.open(tx.receipt_image, '_blank'); }} 
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.78rem', color: '#a78bfa', textDecoration: 'underline', fontWeight: 600 }}
+                                >
+                                  📎 عرض الإيصال
+                                </a>
+                              </div>
+                            )}
                           </td>
                           <td>
                             {tx.status === 'pending' && (
@@ -2286,6 +2461,8 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                           <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', background: 'var(--warning-bg)', color: 'var(--warning)', fontWeight: 'bold' }}>⏳ قيد المراجعة</span>
                         ) : tx.status === 'rejected' ? (
                           <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', background: 'var(--danger-bg)', color: 'var(--danger)', fontWeight: 'bold' }}>❌ مرفوض</span>
+                        ) : tx.type === 'exchange' ? (
+                          <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', background: 'rgba(139, 92, 246, 0.15)', color: '#c084fc', border: '1px solid rgba(139, 92, 246, 0.25)', fontWeight: 'bold' }}>🔄 تسوية فئات</span>
                         ) : tx.type === 'deposit' ? (
                           <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', background: 'var(--success-bg)', color: 'var(--success)', fontWeight: 'bold' }}>✔️ مكتمل - تم التوريد</span>
                         ) : tx.status === 'approved' ? (
@@ -2310,18 +2487,41 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                       </td>
                       <td>
                         {tx.notes || 'لا يوجد'}
-                        {(tx.denom_200 > 0 || tx.denom_100 > 0 || tx.denom_50 > 0 || tx.denom_20 > 0 || tx.denom_10 > 0 || tx.denom_5 > 0 || tx.denom_1 > 0) && (
-                          <div className="denoms-list-tag" title="تفاصيل فئات المبلغ النقدية">
-                            💵 الفئات: {[
-                              tx.denom_200 > 0 && <span key="200" className="denom-pill">200×<span>{tx.denom_200}</span></span>,
-                              tx.denom_100 > 0 && <span key="100" className="denom-pill">100×<span>{tx.denom_100}</span></span>,
-                              tx.denom_50 > 0 && <span key="50" className="denom-pill">50×<span>{tx.denom_50}</span></span>,
-                              tx.denom_20 > 0 && <span key="20" className="denom-pill">20×<span>{tx.denom_20}</span></span>,
-                              tx.denom_10 > 0 && <span key="10" className="denom-pill">10×<span>{tx.denom_10}</span></span>,
-                              tx.denom_5 > 0 && <span key="5" className="denom-pill">5×<span>{tx.denom_5}</span></span>,
-                              tx.denom_1 > 0 && <span key="1" className="denom-pill">1×<span>{tx.denom_1}</span></span>
+                        {tx.type === 'exchange' ? (
+                          <div className="denoms-list-tag" title="تفاصيل فئات التبديل والتسوية">
+                            <span style={{ color: 'var(--success)', fontWeight: 'bold' }}>📥 استلام:</span> {[
+                              tx.denom_200 > 0 && <span key="inc-200" className="denom-pill">200×<span>{tx.denom_200}</span></span>,
+                              tx.denom_100 > 0 && <span key="inc-100" className="denom-pill">100×<span>{tx.denom_100}</span></span>,
+                              tx.denom_50 > 0 && <span key="inc-50" className="denom-pill">50×<span>{tx.denom_50}</span></span>,
+                              tx.denom_20 > 0 && <span key="inc-20" className="denom-pill">20×<span>{tx.denom_20}</span></span>,
+                              tx.denom_10 > 0 && <span key="inc-10" className="denom-pill">10×<span>{tx.denom_10}</span></span>,
+                              tx.denom_5 > 0 && <span key="inc-5" className="denom-pill">5×<span>{tx.denom_5}</span></span>,
+                              tx.denom_1 > 0 && <span key="inc-1" className="denom-pill">1×<span>{tx.denom_1}</span></span>
+                            ].filter(Boolean)}
+                            <span style={{ color: 'var(--danger)', fontWeight: 'bold', marginRight: '0.5rem' }}>📤 تسليم:</span> {[
+                              tx.denom_200 < 0 && <span key="out-200" className="denom-pill">200×<span>{Math.abs(tx.denom_200)}</span></span>,
+                              tx.denom_100 < 0 && <span key="out-100" className="denom-pill">100×<span>{Math.abs(tx.denom_100)}</span></span>,
+                              tx.denom_50 < 0 && <span key="out-50" className="denom-pill">50×<span>{Math.abs(tx.denom_50)}</span></span>,
+                              tx.denom_20 < 0 && <span key="out-20" className="denom-pill">20×<span>{Math.abs(tx.denom_20)}</span></span>,
+                              tx.denom_10 < 0 && <span key="out-10" className="denom-pill">10×<span>{Math.abs(tx.denom_10)}</span></span>,
+                              tx.denom_5 < 0 && <span key="out-5" className="denom-pill">5×<span>{Math.abs(tx.denom_5)}</span></span>,
+                              tx.denom_1 < 0 && <span key="out-1" className="denom-pill">1×<span>{Math.abs(tx.denom_1)}</span></span>
                             ].filter(Boolean)}
                           </div>
+                        ) : (
+                          (tx.denom_200 > 0 || tx.denom_100 > 0 || tx.denom_50 > 0 || tx.denom_20 > 0 || tx.denom_10 > 0 || tx.denom_5 > 0 || tx.denom_1 > 0) && (
+                            <div className="denoms-list-tag" title="تفاصيل فئات المبلغ النقدية">
+                              💵 الفئات: {[
+                                tx.denom_200 > 0 && <span key="200" className="denom-pill">200×<span>{tx.denom_200}</span></span>,
+                                tx.denom_100 > 0 && <span key="100" className="denom-pill">100×<span>{tx.denom_100}</span></span>,
+                                tx.denom_50 > 0 && <span key="50" className="denom-pill">50×<span>{tx.denom_50}</span></span>,
+                                tx.denom_20 > 0 && <span key="20" className="denom-pill">20×<span>{tx.denom_20}</span></span>,
+                                tx.denom_10 > 0 && <span key="10" className="denom-pill">10×<span>{tx.denom_10}</span></span>,
+                                tx.denom_5 > 0 && <span key="5" className="denom-pill">5×<span>{tx.denom_5}</span></span>,
+                                tx.denom_1 > 0 && <span key="1" className="denom-pill">1×<span>{tx.denom_1}</span></span>
+                              ].filter(Boolean)}
+                            </div>
+                          )
                         )}
                       </td>
                       <td>
@@ -2530,13 +2730,15 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                             <td>{new Date(tx.date).toLocaleString('ar-EG')}</td>
                             <td>
                               <span className={`badge badge-${tx.type}`}>
-                                {tx.type === 'deposit' ? '📥 توريد' : '📤 صرف'}
-                                {tx.withdrawal_sub_type === 'car' ? ' - سيارة' : 
-                                 tx.withdrawal_sub_type === 'car_gas' ? ' - سيارة (جاز)' : 
-                                 tx.withdrawal_sub_type === 'car_oil' ? ' - سيارة (زيت)' : 
-                                 tx.withdrawal_sub_type === 'car_other' ? ' - سيارة (مصاريف أخرى)' : 
-                                 tx.withdrawal_sub_type === 'salary' ? ' - راتب' : 
-                                 tx.withdrawal_sub_type === 'commission' ? ' - عمولة' : ''}
+                                {tx.type === 'exchange' ? '🔄 تسوية فئات' : tx.type === 'deposit' ? '📥 توريد' : '📤 صرف'}
+                                {tx.type !== 'exchange' && (
+                                  tx.withdrawal_sub_type === 'car' ? ' - سيارة' : 
+                                  tx.withdrawal_sub_type === 'car_gas' ? ' - سيارة (جاز)' : 
+                                  tx.withdrawal_sub_type === 'car_oil' ? ' - سيارة (زيت)' : 
+                                  tx.withdrawal_sub_type === 'car_other' ? ' - سيارة (مصاريف أخرى)' : 
+                                  tx.withdrawal_sub_type === 'salary' ? ' - راتب' : 
+                                  tx.withdrawal_sub_type === 'commission' ? ' - عمولة' : ''
+                                )}
                               </span>
                             </td>
                             <td>
@@ -2547,18 +2749,41 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                             </td>
                             <td>
                               {tx.notes || '—'}
-                              {(tx.denom_200 > 0 || tx.denom_100 > 0 || tx.denom_50 > 0 || tx.denom_20 > 0 || tx.denom_10 > 0 || tx.denom_5 > 0 || tx.denom_1 > 0) && (
-                                <div className="denoms-list-tag" title="تفاصيل فئات المبلغ النقدية">
-                                  💵 الفئات: {[
-                                    tx.denom_200 > 0 && <span key="200" className="denom-pill">200×<span>{tx.denom_200}</span></span>,
-                                    tx.denom_100 > 0 && <span key="100" className="denom-pill">100×<span>{tx.denom_100}</span></span>,
-                                    tx.denom_50 > 0 && <span key="50" className="denom-pill">50×<span>{tx.denom_50}</span></span>,
-                                    tx.denom_20 > 0 && <span key="20" className="denom-pill">20×<span>{tx.denom_20}</span></span>,
-                                    tx.denom_10 > 0 && <span key="10" className="denom-pill">10×<span>{tx.denom_10}</span></span>,
-                                    tx.denom_5 > 0 && <span key="5" className="denom-pill">5×<span>{tx.denom_5}</span></span>,
-                                    tx.denom_1 > 0 && <span key="1" className="denom-pill">1×<span>{tx.denom_1}</span></span>
+                              {tx.type === 'exchange' ? (
+                                <div className="denoms-list-tag" title="تفاصيل فئات التبديل والتسوية">
+                                  <span style={{ color: 'var(--success)', fontWeight: 'bold' }}>📥 استلام:</span> {[
+                                    tx.denom_200 > 0 && <span key="inc-200" className="denom-pill">200×<span>{tx.denom_200}</span></span>,
+                                    tx.denom_100 > 0 && <span key="inc-100" className="denom-pill">100×<span>{tx.denom_100}</span></span>,
+                                    tx.denom_50 > 0 && <span key="inc-50" className="denom-pill">50×<span>{tx.denom_50}</span></span>,
+                                    tx.denom_20 > 0 && <span key="inc-20" className="denom-pill">20×<span>{tx.denom_20}</span></span>,
+                                    tx.denom_10 > 0 && <span key="inc-10" className="denom-pill">10×<span>{tx.denom_10}</span></span>,
+                                    tx.denom_5 > 0 && <span key="inc-5" className="denom-pill">5×<span>{tx.denom_5}</span></span>,
+                                    tx.denom_1 > 0 && <span key="inc-1" className="denom-pill">1×<span>{tx.denom_1}</span></span>
+                                  ].filter(Boolean)}
+                                  <span style={{ color: 'var(--danger)', fontWeight: 'bold', marginRight: '0.5rem' }}>📤 تسليم:</span> {[
+                                    tx.denom_200 < 0 && <span key="out-200" className="denom-pill">200×<span>{Math.abs(tx.denom_200)}</span></span>,
+                                    tx.denom_100 < 0 && <span key="out-100" className="denom-pill">100×<span>{Math.abs(tx.denom_100)}</span></span>,
+                                    tx.denom_50 < 0 && <span key="out-50" className="denom-pill">50×<span>{Math.abs(tx.denom_50)}</span></span>,
+                                    tx.denom_20 < 0 && <span key="out-20" className="denom-pill">20×<span>{Math.abs(tx.denom_20)}</span></span>,
+                                    tx.denom_10 < 0 && <span key="out-10" className="denom-pill">10×<span>{Math.abs(tx.denom_10)}</span></span>,
+                                    tx.denom_5 < 0 && <span key="out-5" className="denom-pill">5×<span>{Math.abs(tx.denom_5)}</span></span>,
+                                    tx.denom_1 < 0 && <span key="out-1" className="denom-pill">1×<span>{Math.abs(tx.denom_1)}</span></span>
                                   ].filter(Boolean)}
                                 </div>
+                              ) : (
+                                (tx.denom_200 > 0 || tx.denom_100 > 0 || tx.denom_50 > 0 || tx.denom_20 > 0 || tx.denom_10 > 0 || tx.denom_5 > 0 || tx.denom_1 > 0) && (
+                                  <div className="denoms-list-tag" title="تفاصيل فئات المبلغ النقدية">
+                                    💵 الفئات: {[
+                                      tx.denom_200 > 0 && <span key="200" className="denom-pill">200×<span>{tx.denom_200}</span></span>,
+                                      tx.denom_100 > 0 && <span key="100" className="denom-pill">100×<span>{tx.denom_100}</span></span>,
+                                      tx.denom_50 > 0 && <span key="50" className="denom-pill">50×<span>{tx.denom_50}</span></span>,
+                                      tx.denom_20 > 0 && <span key="20" className="denom-pill">20×<span>{tx.denom_20}</span></span>,
+                                      tx.denom_10 > 0 && <span key="10" className="denom-pill">10×<span>{tx.denom_10}</span></span>,
+                                      tx.denom_5 > 0 && <span key="5" className="denom-pill">5×<span>{tx.denom_5}</span></span>,
+                                      tx.denom_1 > 0 && <span key="1" className="denom-pill">1×<span>{tx.denom_1}</span></span>
+                                    ].filter(Boolean)}
+                                  </div>
+                                )
                               )}
                             </td>
                             <td>
@@ -3245,66 +3470,76 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                   >
                     📤 صرف (خروج أموال)
                   </button>
+                  <button 
+                    type="button" 
+                    className={`btn ${newTx.type === 'exchange' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ flex: 1, background: newTx.type === 'exchange' ? '#7c3aed' : '', boxShadow: newTx.type === 'exchange' ? '0 4px 12px rgba(124, 58, 237, 0.2)' : '' }}
+                    onClick={() => { setNewTx(prev => ({ ...prev, type: 'exchange', repId: '', bankId: '', amount: '', cashAmount: '', bankTransferAmount: '' })); setTxSourceType('rep'); setSearchRepQuery(''); }}
+                  >
+                    🔄 فك / تسوية
+                  </button>
                 </div>
               </div>
 
               {/* Party Type Switcher */}
-              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                <label>{newTx.type === 'withdrawal' ? 'جهة الصرف' : 'الجهة المعنية بالعملية'}</label>
-                <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                  <button 
-                    type="button" 
-                    className={`btn ${txSourceType === 'rep' ? 'btn-primary' : 'btn-secondary'}`}
-                    style={{ flex: 1 }}
-                    onClick={() => { setTxSourceType('rep'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
-                  >
-                    {newTx.type === 'withdrawal' ? '👥 صرف لموظف/مندوب' : '👥 مندوب توريد'}
-                  </button>
-                  {newTx.type === 'withdrawal' && (
-                    <>
-                      <button 
-                        type="button" 
-                        className={`btn ${txSourceType === 'bank' ? 'btn-primary' : 'btn-secondary'}`}
-                        style={{ flex: 1 }}
-                        onClick={() => { setTxSourceType('bank'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
-                      >
-                        🏦 صرف لبنك
-                      </button>
-                      <button 
-                        type="button" 
-                        className={`btn ${txSourceType === 'direct' ? 'btn-primary' : 'btn-secondary'}`}
-                        style={{ flex: 1 }}
-                        onClick={() => { setTxSourceType('direct'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
-                      >
-                        💸 صرف مباشر (نثريات)
-                      </button>
-                    </>
-                  )}
-                  {newTx.type === 'deposit' && (
-                    <>
-                      <button 
-                        type="button" 
-                        className={`btn ${txSourceType === 'bank' ? 'btn-primary' : 'btn-secondary'}`}
-                        style={{ flex: 1 }}
-                        onClick={() => { setTxSourceType('bank'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
-                      >
-                        🏦 توريد من بنك
-                      </button>
-                      <button 
-                        type="button" 
-                        className={`btn ${txSourceType === 'direct' ? 'btn-primary' : 'btn-secondary'}`}
-                        style={{ flex: 1 }}
-                        onClick={() => { setTxSourceType('direct'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
-                      >
-                        💼 خزينة مباشرة
-                      </button>
-                    </>
-                  )}
+              {newTx.type !== 'exchange' && (
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label>{newTx.type === 'withdrawal' ? 'جهة الصرف' : 'الجهة المعنية بالعملية'}</label>
+                  <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                    <button 
+                      type="button" 
+                      className={`btn ${txSourceType === 'rep' ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ flex: 1 }}
+                      onClick={() => { setTxSourceType('rep'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
+                    >
+                      {newTx.type === 'withdrawal' ? '👥 صرف لموظف/مندوب' : '👥 مندوب توريد'}
+                    </button>
+                    {newTx.type === 'withdrawal' && (
+                      <>
+                        <button 
+                          type="button" 
+                          className={`btn ${txSourceType === 'bank' ? 'btn-primary' : 'btn-secondary'}`}
+                          style={{ flex: 1 }}
+                          onClick={() => { setTxSourceType('bank'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
+                        >
+                          🏦 صرف لبنك
+                        </button>
+                        <button 
+                          type="button" 
+                          className={`btn ${txSourceType === 'direct' ? 'btn-primary' : 'btn-secondary'}`}
+                          style={{ flex: 1 }}
+                          onClick={() => { setTxSourceType('direct'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
+                        >
+                          💸 صرف مباشر (نثريات)
+                        </button>
+                      </>
+                    )}
+                    {newTx.type === 'deposit' && (
+                      <>
+                        <button 
+                          type="button" 
+                          className={`btn ${txSourceType === 'bank' ? 'btn-primary' : 'btn-secondary'}`}
+                          style={{ flex: 1 }}
+                          onClick={() => { setTxSourceType('bank'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
+                        >
+                          🏦 توريد من بنك
+                        </button>
+                        <button 
+                          type="button" 
+                          className={`btn ${txSourceType === 'direct' ? 'btn-primary' : 'btn-secondary'}`}
+                          style={{ flex: 1 }}
+                          onClick={() => { setTxSourceType('direct'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
+                        >
+                          💼 خزينة مباشرة
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Representative search input with suggestions */}
-              {txSourceType === 'rep' && (
+              {newTx.type !== 'exchange' && txSourceType === 'rep' && (
                 <div className="form-group" style={{ marginBottom: '1.5rem', position: 'relative' }}>
                   <label>المندوب المعني بالعملية <span style={{ color: 'var(--danger)' }}>*</span></label>
                   <input 
@@ -3638,8 +3873,159 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                 </>
               )}
 
+              {/* Exchange Representative and Denomination Fields */}
+              {newTx.type === 'exchange' && (
+                <>
+                  <div className="form-group" style={{ marginBottom: '1.5rem', position: 'relative' }}>
+                    <label>المندوب طالب الفك (اختياري)</label>
+                    <input 
+                      type="text"
+                      placeholder="ابحث باسم المندوب أو كوده (اتركه فارغاً لخزينة مباشرة)..."
+                      value={searchRepQuery}
+                      onChange={(e) => {
+                        setSearchRepQuery(e.target.value);
+                        setShowRepSuggestions(true);
+                        if (!e.target.value) {
+                          setNewTx(prev => ({ ...prev, repId: '' }));
+                        }
+                      }}
+                      onFocus={() => setShowRepSuggestions(true)}
+                    />
+                    {showRepSuggestions && searchRepQuery && (
+                      <div className="suggestions-box">
+                        {reps
+                          .filter(r => 
+                            r.name.toLowerCase().includes(searchRepQuery.toLowerCase()) || 
+                            r.code.toLowerCase().includes(searchRepQuery.toLowerCase())
+                          )
+                          .map(rep => (
+                            <div 
+                              key={rep.id} 
+                              className="suggestion-item"
+                              onClick={() => {
+                                setNewTx(prev => ({ ...prev, repId: rep.id }));
+                                setSearchRepQuery(`${rep.name} (${rep.code})`);
+                                setShowRepSuggestions(false);
+                              }}
+                            >
+                              <strong>{rep.code}</strong> — {rep.name}
+                            </div>
+                          ))}
+                        {reps.filter(r => 
+                          r.name.toLowerCase().includes(searchRepQuery.toLowerCase()) || 
+                          r.code.toLowerCase().includes(searchRepQuery.toLowerCase())
+                        ).length === 0 && (
+                          <div style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>لا توجد نتائج مطابقة</div>
+                        )}
+                      </div>
+                    )}
+                    {newTx.repId && (
+                      <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--primary)', fontWeight: 'bold' }}>
+                        ✓ تم اختيار المندوب: {selectedRepName}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="denom-section" style={{ background: 'rgba(255, 255, 255, 0.01)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '1.25rem', marginBottom: '1.5rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                      {/* Incoming Column */}
+                      <div>
+                        <h4 style={{ fontSize: '0.9rem', color: 'var(--success)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 800 }}>
+                          <span>📥 فئات مستلمة (واردة)</span>
+                        </h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          {[200, 100, 50, 20, 10, 5, 1].map((denom) => (
+                            <div className="denom-input-group" key={`inc-${denom}`} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: '0.2rem 0.5rem' }}>
+                              <span style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>{denom} ج.م</span>
+                              <input 
+                                type="number" 
+                                min="0"
+                                placeholder="0"
+                                value={incomingDenominations[`denom_${denom}`] || ''}
+                                onChange={(e) => {
+                                  const val = Math.max(0, parseInt(e.target.value) || 0);
+                                  setIncomingDenominations(prev => ({ ...prev, [`denom_${denom}`]: val }));
+                                }}
+                                style={{ width: '60px', border: 'none', background: 'transparent', textAlign: 'center', padding: '0.2rem', fontWeight: 'bold', color: '#fff' }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        {/* Incoming Total */}
+                        {(() => {
+                          const total = [200, 100, 50, 20, 10, 5, 1].reduce((sum, d) => sum + (Number(incomingDenominations[`denom_${d}`] || 0) * d), 0);
+                          return (
+                            <div style={{ marginTop: '1rem', textAlign: 'center', fontWeight: 'bold', color: 'var(--success)', fontSize: '0.95rem' }}>
+                              المجموع: {total.toLocaleString()} ج.م
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Outgoing Column */}
+                      <div>
+                        <h4 style={{ fontSize: '0.9rem', color: 'var(--danger)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 800 }}>
+                          <span>📤 فئات مسلمة (صادرة)</span>
+                        </h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          {[200, 100, 50, 20, 10, 5, 1].map((denom) => (
+                            <div className="denom-input-group" key={`out-${denom}`} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: '0.2rem 0.5rem' }}>
+                              <span style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>{denom} ج.م</span>
+                              <input 
+                                type="number" 
+                                min="0"
+                                placeholder="0"
+                                value={outgoingDenominations[`denom_${denom}`] || ''}
+                                onChange={(e) => {
+                                  const val = Math.max(0, parseInt(e.target.value) || 0);
+                                  setOutgoingDenominations(prev => ({ ...prev, [`denom_${denom}`]: val }));
+                                }}
+                                style={{ width: '60px', border: 'none', background: 'transparent', textAlign: 'center', padding: '0.2rem', fontWeight: 'bold', color: '#fff' }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        {/* Outgoing Total */}
+                        {(() => {
+                          const total = [200, 100, 50, 20, 10, 5, 1].reduce((sum, d) => sum + (Number(outgoingDenominations[`denom_${d}`] || 0) * d), 0);
+                          return (
+                            <div style={{ marginTop: '1rem', textAlign: 'center', fontWeight: 'bold', color: 'var(--danger)', fontSize: '0.95rem' }}>
+                              المجموع: {total.toLocaleString()} ج.م
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+
+                    {/* Summary & Match Validation */}
+                    {(() => {
+                      const incTotal = [200, 100, 50, 20, 10, 5, 1].reduce((sum, d) => sum + (Number(incomingDenominations[`denom_${d}`] || 0) * d), 0);
+                      const outTotal = [200, 100, 50, 20, 10, 5, 1].reduce((sum, d) => sum + (Number(outgoingDenominations[`denom_${d}`] || 0) * d), 0);
+                      const diff = incTotal - outTotal;
+                      const isMatch = incTotal > 0 && Math.abs(diff) < 0.01;
+
+                      return (
+                        <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px dashed var(--border-color)', display: 'flex', justifyContent: 'center' }}>
+                          {incTotal === 0 && outTotal === 0 ? (
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>قم بإدخال الفئات للتبديل والتسوية</span>
+                          ) : isMatch ? (
+                            <span style={{ color: 'var(--success)', fontWeight: 'bold', fontSize: '1rem' }}>
+                              ✓ متطابق ({incTotal.toLocaleString()} ج.م)
+                            </span>
+                          ) : (
+                            <span style={{ color: 'var(--danger)', fontWeight: 'bold', fontSize: '0.9rem' }}>
+                              ⚠️ غير متطابق! الفارق: {diff.toLocaleString()} ج.م
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </>
+              )}
+
               {/* Cash Denominations Calculator - FOR DEPOSITS WITH CASH & FOR ALL WITHDRAWALS */}
-              {((newTx.type === 'deposit' && (txSourceType === 'bank' ? (parseFloat(newTx.amount) || 0) > 0 : (parseFloat(newTx.cashAmount) || 0) > 0)) ||
+              {newTx.type !== 'exchange' && ((newTx.type === 'deposit' && (txSourceType === 'bank' ? (parseFloat(newTx.amount) || 0) > 0 : (parseFloat(newTx.cashAmount) || 0) > 0)) ||
                 (newTx.type === 'withdrawal' && (parseFloat(newTx.amount) || 0) > 0)) && (
                 <div className="denom-section">
                   <div className="denom-section-title">
@@ -3738,9 +4124,27 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               <button 
                 type="submit" 
                 className="btn btn-primary" 
-                style={{ width: '100%', background: newTx.type === 'deposit' ? 'var(--success)' : 'var(--danger)', fontSize: '1.1rem', padding: '0.9rem' }}
+                style={{ 
+                  width: '100%', 
+                  background: newTx.type === 'deposit' ? 'var(--success)' : newTx.type === 'withdrawal' ? 'var(--danger)' : '#7c3aed', 
+                  fontSize: '1.1rem', 
+                  padding: '0.9rem',
+                  boxShadow: newTx.type === 'exchange' ? '0 4px 12px rgba(124, 58, 237, 0.2)' : ''
+                }}
+                disabled={(() => {
+                  if (newTx.type !== 'exchange') return false;
+                  const incTotal = [200, 100, 50, 20, 10, 5, 1].reduce((sum, d) => sum + (Number(incomingDenominations[`denom_${d}`] || 0) * d), 0);
+                  const outTotal = [200, 100, 50, 20, 10, 5, 1].reduce((sum, d) => sum + (Number(outgoingDenominations[`denom_${d}`] || 0) * d), 0);
+                  return incTotal === 0 || Math.abs(incTotal - outTotal) > 0.01;
+                })()}
               >
-                {newTx.type === 'deposit' ? '📥 تأكيد عملية التوريد' : '📤 تأكيد عملية الصرف'}
+                {newTx.type === 'deposit' 
+                  ? '📥 تأكيد عملية التوريد' 
+                  : newTx.type === 'withdrawal' 
+                    ? '📤 تأكيد عملية الصرف' 
+                    : currentUser.role === 'manager' 
+                      ? '🔄 تنفيذ عملية التسوية والفك' 
+                      : '🔄 طلب إذن تسوية وفك فئات'}
               </button>
             </form>
           )}
@@ -4817,24 +5221,28 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                   {pendingTx.map((tx) => (
                     <tr key={tx.id}>
                       <td>{new Date(tx.date).toLocaleString('ar-EG')}</td>
-                      <td>👤 {tx.rep_name} <small style={{ color: 'var(--text-muted)' }}>({tx.rep_code})</small></td>
-                      <td>🏢 {tx.agency_name} <small style={{ color: 'var(--text-muted)' }}>({tx.agency_code})</small></td>
+                      <td>{tx.rep_name ? (<span>👤 {tx.rep_name} <small style={{ color: 'var(--text-muted)' }}>({tx.rep_code})</small></span>) : <span style={{ color: 'var(--text-muted)' }}>خزينة مباشرة</span>}</td>
+                      <td>{tx.agency_name ? (<span>🏢 {tx.agency_name} <small style={{ color: 'var(--text-muted)' }}>({tx.agency_code})</small></span>) : '—'}</td>
                       <td>
-                        <span className="badge badge-withdrawal">
-                          {tx.withdrawal_sub_type === 'car' ? '🚗 سيارة' : 
-                           tx.withdrawal_sub_type === 'car_gas' ? '⛽ سيارة (جاز)' : 
-                           tx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)' : 
-                           tx.withdrawal_sub_type === 'car_other' ? '🔧 سيارة (أخرى)' : 
-                           tx.withdrawal_sub_type === 'salary' ? '💼 راتب' : 
-                           tx.withdrawal_sub_type === 'commission' ? '💰 عمولة' : 
-                           tx.withdrawal_sub_type === 'loan' ? '💸 سلفة' : 
-                           tx.withdrawal_sub_type === 'direct_rent' ? '🏢 إيجار' : 
-                           tx.withdrawal_sub_type === 'direct_operational' ? '🔧 تشغيل عامة' : 
-                           tx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى' : 
-                           tx.withdrawal_sub_type === 'other' ? 'صرف عام' : 'صرف'}
-                        </span>
+                        {tx.type === 'exchange' ? (
+                          <span className="badge badge-exchange">🔄 تسوية / فك فئات</span>
+                        ) : (
+                          <span className="badge badge-withdrawal">
+                            {tx.withdrawal_sub_type === 'car' ? '🚗 سيارة' : 
+                             tx.withdrawal_sub_type === 'car_gas' ? '⛽ سيارة (جاز)' : 
+                             tx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)' : 
+                             tx.withdrawal_sub_type === 'car_other' ? '🔧 سيارة (أخرى)' : 
+                             tx.withdrawal_sub_type === 'salary' ? '💼 راتب' : 
+                             tx.withdrawal_sub_type === 'commission' ? '💰 عمولة' : 
+                             tx.withdrawal_sub_type === 'loan' ? '💸 سلفة' : 
+                             tx.withdrawal_sub_type === 'direct_rent' ? '🏢 إيجار' : 
+                             tx.withdrawal_sub_type === 'direct_operational' ? '🔧 تشغيل عامة' : 
+                             tx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى' : 
+                             tx.withdrawal_sub_type === 'other' ? 'صرف عام' : 'صرف'}
+                          </span>
+                        )}
                       </td>
-                      <td style={{ color: 'var(--danger)', fontWeight: 'bold' }}>
+                      <td className={tx.type === 'exchange' ? 'amount-exchange' : 'amount-withdrawal'}>
                         {Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
                       </td>
                       <td>{tx.notes || '—'}</td>

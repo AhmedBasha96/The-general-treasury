@@ -216,7 +216,7 @@ async function createTables() {
           rep_id INT,
           bank_id INT,
           agency_id INT,
-          type VARCHAR(20) NOT NULL CHECK(type IN ('deposit', 'withdrawal')),
+          type VARCHAR(20) NOT NULL CHECK(type IN ('deposit', 'withdrawal', 'exchange')),
           payment_method VARCHAR(20) DEFAULT 'cash',
           withdrawal_sub_type NVARCHAR(50),
           amount DECIMAL(18, 2) NOT NULL,
@@ -317,6 +317,32 @@ async function createTables() {
         IF NOT EXISTS (SELECT * FROM sys.foreign_keys WHERE name = 'FK_transactions_approved_by')
         BEGIN
           ALTER TABLE transactions ADD CONSTRAINT FK_transactions_approved_by FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE NO ACTION;
+        END
+
+        -- Update type constraint to allow 'exchange'
+        DECLARE @ConstraintName NVARCHAR(200)
+        SELECT @ConstraintName = dc.name
+        FROM sys.check_constraints dc
+        JOIN sys.columns c ON dc.parent_object_id = c.object_id AND dc.parent_column_id = c.column_id
+        WHERE dc.parent_object_id = OBJECT_ID('transactions') AND c.name = 'type'
+
+        IF @ConstraintName IS NOT NULL
+        BEGIN
+            DECLARE @Definition NVARCHAR(MAX)
+            SELECT @Definition = definition FROM sys.check_constraints WHERE name = @ConstraintName
+            
+            IF CHARINDEX('exchange', @Definition) = 0
+            BEGIN
+                EXEC('ALTER TABLE transactions DROP CONSTRAINT ' + @ConstraintName)
+                ALTER TABLE transactions ADD CONSTRAINT CK_transactions_type CHECK (type IN ('deposit', 'withdrawal', 'exchange'))
+            END
+        END
+        ELSE
+        BEGIN
+            IF NOT EXISTS (SELECT * FROM sys.check_constraints WHERE parent_object_id = OBJECT_ID('transactions') AND name = 'CK_transactions_type')
+            BEGIN
+                ALTER TABLE transactions ADD CONSTRAINT CK_transactions_type CHECK (type IN ('deposit', 'withdrawal', 'exchange'))
+            END
         END
       END
     `);
