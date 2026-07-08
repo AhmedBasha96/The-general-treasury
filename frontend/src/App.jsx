@@ -3779,7 +3779,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                     </div>
                   )}
                 </>
-              ) : (
+              ) : newTx.type === 'withdrawal' ? (
                 /* WITHDRAWAL SINGLE AMOUNT FIELD */
                 <>
                   {/* Bank/Agency Selection - only for bank source type withdrawals */}
@@ -3871,7 +3871,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                     </div>
                   </div>
                 </>
-              )}
+              ) : null}
 
               {/* Exchange Representative and Denomination Fields */}
               {newTx.type === 'exchange' && (
