@@ -6398,6 +6398,18 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                 {printingTx.type === 'company_transfer' || printingTx.payment_method === 'bank_transfer' ? 'تحويل بنكي' : 'نقدي بالخزينة'}
               </span>
             </div>
+            {printingTx.creator_name && (
+              <div className="receipt-meta-row">
+                <span className="receipt-meta-label">بواسطة (المُنشئ):</span>
+                <span className="receipt-meta-value">{printingTx.creator_name}</span>
+              </div>
+            )}
+            {printingTx.approver_name && (
+              <div className="receipt-meta-row">
+                <span className="receipt-meta-label">اعتماد (المدير):</span>
+                <span className="receipt-meta-value">{printingTx.approver_name}</span>
+              </div>
+            )}
             {printingTx.rep_name && (
               <div className="receipt-meta-row">
                 <span className="receipt-meta-label">المندوب:</span>
