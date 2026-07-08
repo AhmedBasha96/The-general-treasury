@@ -778,23 +778,49 @@ app.get('/api/companies', async (req, res) => {
 // POST /api/companies (Add new company)
 app.post('/api/companies', async (req, res) => {
   const { code, name, bank_account_number, bank_name } = req.body;
-  if (!code || !name) {
-    return res.status(400).json({ error: 'كود الشركة واسم الشركة مطلوبان' });
+  if (!name) {
+    return res.status(400).json({ error: 'اسم الشركة مطلوب' });
   }
+
+  let companyCode = code ? code.trim() : '';
+
   try {
     const pool = getPool();
     
-    // Check if code exists
-    const checkCode = await pool.request()
-      .input('code', sql.VarChar, code)
-      .query('SELECT id FROM companies WHERE code = @code');
+    // Auto-generate code if not provided
+    if (!companyCode) {
+      const countResult = await pool.request().query('SELECT COUNT(*) AS total FROM companies');
+      const total = countResult.recordset[0].total;
+      let nextNum = total + 1;
+      let generatedCode = `COM-${String(nextNum).padStart(4, '0')}`;
       
-    if (checkCode.recordset.length > 0) {
-      return res.status(400).json({ error: 'كود الشركة مسجل مسبقاً لشركة أخرى' });
+      // Ensure uniqueness
+      let codeExists = true;
+      while (codeExists) {
+        const checkCode = await pool.request()
+          .input('code', sql.VarChar, generatedCode)
+          .query('SELECT id FROM companies WHERE code = @code');
+        if (checkCode.recordset.length === 0) {
+          codeExists = false;
+        } else {
+          nextNum++;
+          generatedCode = `COM-${String(nextNum).padStart(4, '0')}`;
+        }
+      }
+      companyCode = generatedCode;
+    } else {
+      // Check if manually provided code exists
+      const checkCode = await pool.request()
+        .input('code', sql.VarChar, companyCode)
+        .query('SELECT id FROM companies WHERE code = @code');
+        
+      if (checkCode.recordset.length > 0) {
+        return res.status(400).json({ error: 'كود الشركة مسجل مسبقاً لشركة أخرى' });
+      }
     }
     
     await pool.request()
-      .input('code', sql.VarChar, code)
+      .input('code', sql.VarChar, companyCode)
       .input('name', sql.NVarChar, name)
       .input('bank_account_number', sql.VarChar, bank_account_number || null)
       .input('bank_name', sql.NVarChar, bank_name || null)
@@ -803,7 +829,7 @@ app.post('/api/companies', async (req, res) => {
         VALUES (@code, @name, @bank_account_number, @bank_name)
       `);
       
-    res.status(201).json({ message: 'تم إضافة الشركة بنجاح' });
+    res.status(201).json({ message: 'تم إضافة الشركة بنجاح', code: companyCode });
   } catch (error) {
     console.error('Error creating company:', error);
     res.status(500).json({ error: 'حدث خطأ أثناء حفظ الشركة' });

@@ -5232,13 +5232,12 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                 </div>
                 <form onSubmit={handleCreateCompany}>
                   <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-                    <label>كود الشركة <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <label>كود الشركة (سيتم توليده تلقائياً إذا ترك فارغاً)</label>
                     <input 
                       type="text" 
-                      placeholder="مثال: COCA, PEPSI..." 
+                      placeholder="مثال: COCA, PEPSI (أو اتركه فارغاً للتوليد التلقائي)..." 
                       value={newCompany.code}
                       onChange={(e) => setNewCompany({ ...newCompany, code: e.target.value.toUpperCase() })}
-                      required
                       style={{ marginTop: '0.25rem' }}
                     />
                   </div>
