@@ -291,14 +291,16 @@ app.get('/api/dashboard', async (req, res) => {
     // Recent transactions (top 10)
     const recentTxResult = await createFilteredRequest().query(`
       SELECT TOP 10 
-        t.id, t.rep_id, t.bank_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
+        t.id, t.rep_id, t.bank_id, t.company_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
         t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
         r.name AS rep_name, r.code AS rep_code,
         b.name AS bank_name, b.code AS bank_code,
+        c.name AS company_name, c.code AS company_code,
         u.username AS creator_name, u2.username AS approver_name
       FROM transactions t
       LEFT JOIN representatives r ON t.rep_id = r.id
       LEFT JOIN banks b ON t.bank_id = b.id
+      LEFT JOIN companies c ON t.company_id = c.id
       LEFT JOIN users u ON t.created_by = u.id
       LEFT JOIN users u2 ON t.approved_by = u2.id
       WHERE 1=1 ${agencyFilter}
@@ -547,17 +549,22 @@ app.get('/api/banks', async (req, res) => {
           WHEN t.type = 'withdrawal' THEN t.amount
           WHEN t.type = 'deposit' AND t.payment_method = 'bank_transfer' THEN t.amount
           ELSE 0 END), 0) AS total_deposits,
-        ISNULL(SUM(CASE WHEN t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) THEN t.amount ELSE 0 END), 0) AS total_withdrawals,
+        ISNULL(SUM(CASE 
+          WHEN t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) THEN t.amount 
+          WHEN t.type = 'company_transfer' THEN t.amount
+          ELSE 0 END), 0) AS total_withdrawals,
         b.initial_balance + 
         ISNULL(SUM(CASE
           WHEN t.type = 'withdrawal' THEN t.amount
           WHEN t.type = 'deposit' AND t.payment_method = 'bank_transfer' THEN t.amount
           WHEN t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) THEN -t.amount
+          WHEN t.type = 'company_transfer' THEN -t.amount
           ELSE 0 END), 0) AS balance
       FROM banks b
       LEFT JOIN transactions t ON b.id = t.bank_id AND (
          (t.type = 'deposit' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
          OR (t.type = 'withdrawal' AND (t.status = 'disbursed' OR t.status IS NULL))
+         OR (t.type = 'company_transfer' AND (t.status = 'approved' OR t.status IS NULL))
       )
       GROUP BY b.id, b.code, b.name, b.account_number, b.account_name, b.branch, b.initial_balance, b.created_at
       ORDER BY b.name
@@ -700,9 +707,11 @@ app.get('/api/banks/:id/transactions', async (req, res) => {
         SELECT t.id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.status,
                t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
                r.name AS rep_name, r.code AS rep_code,
+               c.name AS company_name, c.code AS company_code,
                u.username AS creator_name, u2.username AS approver_name
         FROM transactions t
         LEFT JOIN representatives r ON t.rep_id = r.id
+        LEFT JOIN companies c ON t.company_id = c.id
         LEFT JOIN users u ON t.created_by = u.id
         LEFT JOIN users u2 ON t.approved_by = u2.id
         WHERE t.bank_id = @bankId
@@ -711,7 +720,7 @@ app.get('/api/banks/:id/transactions', async (req, res) => {
       
     // Calculate total bank deposits and withdrawals with correct logic
     let totalDeposits = 0; // inflows to bank (withdrawals from safe + bank_transfer deposits)
-    let totalWithdrawals = 0; // outflows from bank (cash deposits coming from bank)
+    let totalWithdrawals = 0; // outflows from bank (cash deposits coming from bank + transfers to companies)
     
     txResult.recordset.forEach(tx => {
       if (tx.type === 'withdrawal' && (tx.status === 'disbursed' || tx.status === null)) {
@@ -724,6 +733,8 @@ app.get('/api/banks/:id/transactions', async (req, res) => {
             totalWithdrawals += Number(tx.amount);
           }
         }
+      } else if (tx.type === 'company_transfer' && (tx.status === 'approved' || tx.status === null)) {
+        totalWithdrawals += Number(tx.amount);
       }
     });
     
@@ -739,6 +750,143 @@ app.get('/api/banks/:id/transactions', async (req, res) => {
   } catch (error) {
     console.error('Error fetching bank ledger:', error);
     res.status(500).json({ error: 'حدث خطأ أثناء جلب كشف حساب البنك' });
+  }
+});
+
+// ================= COMPANY ENDPOINTS =================
+
+// GET /api/companies (List all companies with total transfers)
+app.get('/api/companies', async (req, res) => {
+  try {
+    const pool = getPool();
+    const result = await pool.request().query(`
+      SELECT 
+        c.id, c.code, c.name, c.bank_account_number, c.bank_name, c.created_at,
+        ISNULL(SUM(CASE WHEN t.type = 'company_transfer' AND (t.status = 'approved' OR t.status = 'disbursed' OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS total_transfers
+      FROM companies c
+      LEFT JOIN transactions t ON c.id = t.company_id
+      GROUP BY c.id, c.code, c.name, c.bank_account_number, c.bank_name, c.created_at
+      ORDER BY c.name
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error('Error fetching companies:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء جلب بيانات الشركات' });
+  }
+});
+
+// POST /api/companies (Add new company)
+app.post('/api/companies', async (req, res) => {
+  const { code, name, bank_account_number, bank_name } = req.body;
+  if (!code || !name) {
+    return res.status(400).json({ error: 'كود الشركة واسم الشركة مطلوبان' });
+  }
+  try {
+    const pool = getPool();
+    
+    // Check if code exists
+    const checkCode = await pool.request()
+      .input('code', sql.VarChar, code)
+      .query('SELECT id FROM companies WHERE code = @code');
+      
+    if (checkCode.recordset.length > 0) {
+      return res.status(400).json({ error: 'كود الشركة مسجل مسبقاً لشركة أخرى' });
+    }
+    
+    await pool.request()
+      .input('code', sql.VarChar, code)
+      .input('name', sql.NVarChar, name)
+      .input('bank_account_number', sql.VarChar, bank_account_number || null)
+      .input('bank_name', sql.NVarChar, bank_name || null)
+      .query(`
+        INSERT INTO companies (code, name, bank_account_number, bank_name)
+        VALUES (@code, @name, @bank_account_number, @bank_name)
+      `);
+      
+    res.status(201).json({ message: 'تم إضافة الشركة بنجاح' });
+  } catch (error) {
+    console.error('Error creating company:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء حفظ الشركة' });
+  }
+});
+
+// DELETE /api/companies/:id (Delete company)
+app.delete('/api/companies/:id', async (req, res) => {
+  const companyId = req.params.id;
+  try {
+    const pool = getPool();
+    
+    // Check if company exists
+    const checkCompany = await pool.request()
+      .input('companyId', sql.Int, companyId)
+      .query('SELECT id FROM companies WHERE id = @companyId');
+      
+    if (checkCompany.recordset.length === 0) {
+      return res.status(404).json({ error: 'الشركة غير موجودة' });
+    }
+    
+    // Check if there are transactions associated with this company
+    const checkTx = await pool.request()
+      .input('companyId', sql.Int, companyId)
+      .query('SELECT TOP 1 id FROM transactions WHERE company_id = @companyId');
+      
+    if (checkTx.recordset.length > 0) {
+      return res.status(400).json({ error: 'لا يمكن حذف الشركة لوجود معاملات مالية مرتبطة بها' });
+    }
+    
+    await pool.request()
+      .input('companyId', sql.Int, companyId)
+      .query('DELETE FROM companies WHERE id = @companyId');
+      
+    res.json({ message: 'تم حذف الشركة بنجاح' });
+  } catch (error) {
+    console.error('Error deleting company:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء حذف الشركة' });
+  }
+});
+
+// GET /api/companies/:id/transactions (Ledger for a specific company)
+app.get('/api/companies/:id/transactions', async (req, res) => {
+  const companyId = req.params.id;
+  try {
+    const pool = getPool();
+    
+    // Fetch company details
+    const companyResult = await pool.request()
+      .input('companyId', sql.Int, companyId)
+      .query('SELECT * FROM companies WHERE id = @companyId');
+      
+    if (companyResult.recordset.length === 0) {
+      return res.status(404).json({ error: 'الشركة غير موجودة' });
+    }
+    
+    const company = companyResult.recordset[0];
+    
+    // Fetch transactions mapped to this company
+    const txResult = await pool.request()
+      .input('companyId', sql.Int, companyId)
+      .query(`
+        SELECT t.id, t.type, t.payment_method, t.amount, t.date, t.notes, t.status,
+               b.name AS bank_name, b.code AS bank_code, b.account_number AS bank_account_number,
+               u.username AS creator_name, u2.username AS approver_name
+        FROM transactions t
+        LEFT JOIN banks b ON t.bank_id = b.id
+        LEFT JOIN users u ON t.created_by = u.id
+        LEFT JOIN users u2 ON t.approved_by = u2.id
+        WHERE t.company_id = @companyId AND (t.status = 'approved' OR t.status = 'disbursed' OR t.status IS NULL)
+        ORDER BY t.date DESC
+      `);
+      
+    res.json({
+      company,
+      summary: {
+        totalTransfers: txResult.recordset.reduce((sum, tx) => sum + Number(tx.amount), 0)
+      },
+      transactions: txResult.recordset
+    });
+  } catch (error) {
+    console.error('Error fetching company ledger:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء جلب كشف حساب الشركة' });
   }
 });
 
@@ -1259,7 +1407,7 @@ app.get('/api/transactions', async (req, res) => {
 });
 // 6. POST /api/transactions (Add deposit with denominations check or withdrawal)
 app.post('/api/transactions', async (req, res) => {
-  const { rep_id, bank_id, agency_id, type, amount, notes, denominations, payment_method, cash_amount, bank_transfer_amount, receipt_image_bank, withdrawal_sub_type, incomingDenominations, outgoingDenominations } = req.body;
+  const { rep_id, bank_id, agency_id, company_id, type, amount, notes, denominations, payment_method, cash_amount, bank_transfer_amount, receipt_image_bank, withdrawal_sub_type, incomingDenominations, outgoingDenominations } = req.body;
   const userRole = req.headers['x-user-role'];
   const userId = parseInt(req.headers['x-user-id']);
   const userAgencyId = parseInt(req.headers['x-user-agency-id']);
@@ -1268,8 +1416,8 @@ app.post('/api/transactions', async (req, res) => {
     return res.status(400).json({ error: 'نوع العملية مطلوب' });
   }
 
-  if (type !== 'deposit' && type !== 'withdrawal' && type !== 'exchange') {
-    return res.status(400).json({ error: 'نوع العملية غير صالح. يجب أن يكون توريد، صرف، أو تسوية' });
+  if (type !== 'deposit' && type !== 'withdrawal' && type !== 'exchange' && type !== 'company_transfer') {
+    return res.status(400).json({ error: 'نوع العملية غير صالح. يجب أن يكون توريد، صرف، تسوية، أو تحويل لشركة' });
   }
 
   try {
@@ -1307,6 +1455,8 @@ app.post('/api/transactions', async (req, res) => {
     } else if (type === 'deposit') {
       statusVal = (userRole === 'representative' ? 'pending_receipt' : 'approved');
     } else if (type === 'exchange') {
+      statusVal = (userRole === 'manager' ? 'approved' : 'pending');
+    } else if (type === 'company_transfer') {
       statusVal = (userRole === 'manager' ? 'approved' : 'pending');
     }
 
@@ -1649,7 +1799,7 @@ app.post('/api/transactions', async (req, res) => {
     }
 
     const transactionAmount = Number(amount);
-    const txPaymentMethod = (type === 'deposit' && payment_method === 'bank_transfer') ? 'bank_transfer' : 'cash';
+    const txPaymentMethod = (type === 'company_transfer' || (type === 'deposit' && payment_method === 'bank_transfer')) ? 'bank_transfer' : 'cash';
     let d200 = 0, d100 = 0, d50 = 0, d20 = 0, d10 = 0, d5 = 0, d1 = 0;
     if (txPaymentMethod === 'cash') {
       const isPendingWithdrawal = (type === 'withdrawal' && statusVal === 'pending');
@@ -1695,6 +1845,72 @@ app.post('/api/transactions', async (req, res) => {
         }
       }
 
+      // 1.3 If company_transfer, verify company exists and check bank balance if approved
+      if (type === 'company_transfer') {
+        if (!company_id) {
+          await transaction.rollback();
+          return res.status(400).json({ error: 'يجب تحديد الشركة المستلمة' });
+        }
+        if (!bank_id) {
+          await transaction.rollback();
+          return res.status(400).json({ error: 'يجب تحديد الحساب البنكي المصدر للتحويل' });
+        }
+        
+        const companyCheck = await transaction.request()
+          .input('companyId', sql.Int, company_id)
+          .query('SELECT id FROM companies WHERE id = @companyId');
+
+        if (companyCheck.recordset.length === 0) {
+          await transaction.rollback();
+          return res.status(404).json({ error: 'الشركة المحددة غير موجودة' });
+        }
+
+        if (statusVal === 'approved') {
+          // Calculate source bank account balance inside transaction with lock
+          const depRes = await transaction.request()
+            .input('bankId', sql.Int, bank_id)
+            .query(`
+              SELECT ISNULL(SUM(CASE
+                WHEN type = 'withdrawal' THEN amount
+                WHEN type = 'deposit' AND payment_method = 'bank_transfer' THEN amount
+                ELSE 0 END), 0) AS total
+              FROM transactions WITH (UPDLOCK, TABLOCKX)
+              WHERE bank_id = @bankId AND (
+                (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+                OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+              )
+            `);
+          const wdRes = await transaction.request()
+            .input('bankId', sql.Int, bank_id)
+            .query(`
+              SELECT ISNULL(SUM(CASE 
+                WHEN type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount 
+                WHEN type = 'company_transfer' THEN amount
+                ELSE 0 END), 0) AS total
+              FROM transactions
+              WHERE bank_id = @bankId AND (
+                (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+                OR (type = 'company_transfer' AND (status = 'approved' OR status IS NULL))
+              )
+            `);
+          const bankRes = await transaction.request()
+            .input('bankId', sql.Int, bank_id)
+            .query('SELECT initial_balance FROM banks WHERE id = @bankId');
+          
+          const initialBal = Number(bankRes.recordset[0].initial_balance) || 0;
+          const totalDeposits = Number(depRes.recordset[0].total) || 0;
+          const totalWithdrawals = Number(wdRes.recordset[0].total) || 0;
+          const currentBankBalance = initialBal + totalDeposits - totalWithdrawals;
+
+          if (currentBankBalance < transactionAmount) {
+            await transaction.rollback();
+            return res.status(400).json({
+              error: `رصيد الحساب البنكي المتاح هو ${currentBankBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} جنيه مصري، وهو غير كافٍ لإتمام عملية التحويل للشركة بقيمة ${transactionAmount.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} جنيه مصري.`
+            });
+          }
+        }
+      }
+
       // 2. If withdrawal AND approved/disbursed, verify CASH safe balance (cash only) with table lock
       if (type === 'withdrawal' && (statusVal === 'approved' || statusVal === 'disbursed')) {
         const cashDepositsResult = await transaction.request().query(`
@@ -1722,6 +1938,7 @@ app.post('/api/transactions', async (req, res) => {
       const insertSingle = await transaction.request()
         .input('rep_id', sql.Int, targetRepId)
         .input('bank_id', sql.Int, bank_id || null)
+        .input('company_id', sql.Int, company_id || null)
         .input('agency_id', sql.Int, resolvedAgencyId)
         .input('type', sql.VarChar, type)
         .input('payment_method', sql.VarChar, txPaymentMethod)
@@ -1739,9 +1956,9 @@ app.post('/api/transactions', async (req, res) => {
         .input('status', sql.VarChar, statusVal)
         .input('created_by', sql.Int, (userRole === 'representative' || isNaN(userId)) ? null : userId)
         .query(`
-          INSERT INTO transactions (rep_id, bank_id, agency_id, type, payment_method, amount, date, notes, withdrawal_sub_type, denom_200, denom_100, denom_50, denom_20, denom_10, denom_5, denom_1, status, created_by)
+          INSERT INTO transactions (rep_id, bank_id, company_id, agency_id, type, payment_method, amount, date, notes, withdrawal_sub_type, denom_200, denom_100, denom_50, denom_20, denom_10, denom_5, denom_1, status, created_by)
           OUTPUT INSERTED.id
-          VALUES (@rep_id, @bank_id, @agency_id, @type, @payment_method, @amount, @date, @notes, @withdrawal_sub_type, @denom_200, @denom_100, @denom_50, @denom_20, @denom_10, @denom_5, @denom_1, @status, @created_by)
+          VALUES (@rep_id, @bank_id, @company_id, @agency_id, @type, @payment_method, @amount, @date, @notes, @withdrawal_sub_type, @denom_200, @denom_100, @denom_50, @denom_20, @denom_10, @denom_5, @denom_1, @status, @created_by)
         `);
         
       const singleId = insertSingle.recordset[0].id;
@@ -1750,16 +1967,18 @@ app.post('/api/transactions', async (req, res) => {
       const txResult = await pool.request()
         .input('id', sql.Int, singleId)
         .query(`
-          SELECT t.id, t.rep_id, t.bank_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
+          SELECT t.id, t.rep_id, t.bank_id, t.company_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
                  t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
                  r.name AS rep_name, r.code AS rep_code,
                  b.name AS bank_name, b.code AS bank_code,
+                 c.name AS company_name, c.code AS company_code,
                  a.name AS agency_name, a.code AS agency_code,
                  s.name AS supervisor_name, s.code AS supervisor_code,
                  u.username AS creator_name, u2.username AS approver_name
           FROM transactions t
           LEFT JOIN representatives r ON t.rep_id = r.id
           LEFT JOIN banks b ON t.bank_id = b.id
+          LEFT JOIN companies c ON t.company_id = c.id
           LEFT JOIN agencies a ON (r.agency_id = a.id OR t.agency_id = a.id)
           LEFT JOIN supervisors s ON r.supervisor_id = s.id
           LEFT JOIN users u ON t.created_by = u.id
@@ -1768,7 +1987,11 @@ app.post('/api/transactions', async (req, res) => {
         `);
 
       res.status(201).json({ 
-        message: statusVal === 'pending' ? 'تم تسجيل طلب الصرف وبانتظار موافقة المدير' : statusVal === 'pending_receipt' ? 'تم تقديم طلب التوريد بنجاح وبانتظار استلام الحسابات' : 'تم تسجيل العملية بنجاح',
+        message: statusVal === 'pending' 
+          ? (type === 'company_transfer' ? 'تم تسجيل طلب التحويل للشركة وبانتظار موافقة المدير' : 'تم تسجيل طلب الصرف وبانتظار موافقة المدير') 
+          : statusVal === 'pending_receipt' 
+            ? 'تم تقديم طلب التوريد بنجاح وبانتظار استلام الحسابات' 
+            : 'تم تسجيل العملية بنجاح',
         status: statusVal,
         transaction: txResult.recordset[0]
       });
@@ -1921,6 +2144,58 @@ app.post('/api/transactions/:id/approve', async (req, res) => {
               });
             }
           }
+        }
+      }
+
+      // Balance check for bank-to-company transfers
+      if (tx.type === 'company_transfer') {
+        const bankId = tx.bank_id;
+        if (!bankId) {
+          await transaction.rollback();
+          return res.status(400).json({ error: 'الحساب البنكي غير محدد لهذه المعاملة' });
+        }
+        
+        // Calculate source bank account balance inside transaction with lock
+        const depRes = await transaction.request()
+          .input('bankId', sql.Int, bankId)
+          .query(`
+            SELECT ISNULL(SUM(CASE
+              WHEN type = 'withdrawal' THEN amount
+              WHEN type = 'deposit' AND payment_method = 'bank_transfer' THEN amount
+              ELSE 0 END), 0) AS total
+            FROM transactions WITH (UPDLOCK, TABLOCKX)
+            WHERE bank_id = @bankId AND (
+              (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+              OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+            )
+          `);
+        const wdRes = await transaction.request()
+          .input('bankId', sql.Int, bankId)
+          .query(`
+            SELECT ISNULL(SUM(CASE 
+              WHEN type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount 
+              WHEN type = 'company_transfer' THEN amount
+              ELSE 0 END), 0) AS total
+            FROM transactions
+            WHERE bank_id = @bankId AND (
+              (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+              OR (type = 'company_transfer' AND (status = 'approved' OR status IS NULL))
+            )
+          `);
+        const bankRes = await transaction.request()
+          .input('bankId', sql.Int, bankId)
+          .query('SELECT initial_balance FROM banks WHERE id = @bankId');
+        
+        const initialBal = Number(bankRes.recordset[0].initial_balance) || 0;
+        const totalDeposits = Number(depRes.recordset[0].total) || 0;
+        const totalWithdrawals = Number(wdRes.recordset[0].total) || 0;
+        const currentBankBalance = initialBal + totalDeposits - totalWithdrawals;
+
+        if (currentBankBalance < Number(tx.amount)) {
+          await transaction.rollback();
+          return res.status(400).json({
+            error: `لا يمكن الموافقة. رصيد الحساب البنكي الحالي هو ${currentBankBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م وهو غير كافٍ لإتمام عملية التحويل للشركة بقيمة ${Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م.`
+          });
         }
       }
       

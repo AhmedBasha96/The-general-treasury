@@ -191,6 +191,29 @@ async function createTables() {
       END
     `);
     
+    // 2.85. Create companies table
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'companies')
+      BEGIN
+        CREATE TABLE companies (
+          id INT IDENTITY(1,1) PRIMARY KEY,
+          code VARCHAR(50) UNIQUE NOT NULL,
+          name NVARCHAR(255) NOT NULL,
+          bank_account_number VARCHAR(100) NULL,
+          bank_name NVARCHAR(255) NULL,
+          created_at DATETIME DEFAULT GETDATE()
+        );
+      END
+    `);
+    
+    // Create index on companies code if table was created
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'idx_companies_code' AND object_id = OBJECT_ID('companies'))
+      BEGIN
+        CREATE INDEX idx_companies_code ON companies(code);
+      END
+    `);
+
     // 2.9. Create users table
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'users')
@@ -211,12 +234,13 @@ async function createTables() {
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'transactions')
       BEGIN
-        CREATE TABLE transactions (
+         CREATE TABLE transactions (
           id INT IDENTITY(1,1) PRIMARY KEY,
           rep_id INT,
           bank_id INT,
           agency_id INT,
-          type VARCHAR(20) NOT NULL CHECK(type IN ('deposit', 'withdrawal', 'exchange')),
+          company_id INT,
+          type VARCHAR(20) NOT NULL CHECK(type IN ('deposit', 'withdrawal', 'exchange', 'company_transfer')),
           payment_method VARCHAR(20) DEFAULT 'cash',
           withdrawal_sub_type NVARCHAR(50),
           amount DECIMAL(18, 2) NOT NULL,
@@ -237,6 +261,7 @@ async function createTables() {
           FOREIGN KEY (rep_id) REFERENCES representatives(id) ON DELETE SET NULL,
           FOREIGN KEY (bank_id) REFERENCES banks(id) ON DELETE SET NULL,
           FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE NO ACTION,
+          FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE SET NULL,
           FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE NO ACTION,
           FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE NO ACTION
         );
@@ -319,7 +344,14 @@ async function createTables() {
           ALTER TABLE transactions ADD CONSTRAINT FK_transactions_approved_by FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE NO ACTION;
         END
 
-        -- Update type constraint to allow 'exchange'
+        -- Add company_id column if missing in existing table
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'company_id')
+        BEGIN
+          ALTER TABLE transactions ADD company_id INT;
+          ALTER TABLE transactions ADD CONSTRAINT FK_transactions_companies FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE SET NULL;
+        END
+
+        -- Update type constraint to allow 'exchange' and 'company_transfer'
         DECLARE @ConstraintName NVARCHAR(200)
         SELECT @ConstraintName = dc.name
         FROM sys.check_constraints dc
@@ -331,17 +363,17 @@ async function createTables() {
             DECLARE @Definition NVARCHAR(MAX)
             SELECT @Definition = definition FROM sys.check_constraints WHERE name = @ConstraintName
             
-            IF CHARINDEX('exchange', @Definition) = 0
+            IF CHARINDEX('company_transfer', @Definition) = 0
             BEGIN
                 EXEC('ALTER TABLE transactions DROP CONSTRAINT ' + @ConstraintName)
-                ALTER TABLE transactions ADD CONSTRAINT CK_transactions_type CHECK (type IN ('deposit', 'withdrawal', 'exchange'))
+                ALTER TABLE transactions ADD CONSTRAINT CK_transactions_type CHECK (type IN ('deposit', 'withdrawal', 'exchange', 'company_transfer'))
             END
         END
         ELSE
         BEGIN
             IF NOT EXISTS (SELECT * FROM sys.check_constraints WHERE parent_object_id = OBJECT_ID('transactions') AND name = 'CK_transactions_type')
             BEGIN
-                ALTER TABLE transactions ADD CONSTRAINT CK_transactions_type CHECK (type IN ('deposit', 'withdrawal', 'exchange'))
+                ALTER TABLE transactions ADD CONSTRAINT CK_transactions_type CHECK (type IN ('deposit', 'withdrawal', 'exchange', 'company_transfer'))
             END
         END
       END

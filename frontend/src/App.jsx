@@ -76,6 +76,16 @@ export default function App() {
   const [repLedgerData, setRepLedgerData] = useState(null);
   const [repLedgerLoading, setRepLedgerLoading] = useState(false);
 
+  // Company States
+  const [companies, setCompanies] = useState([]);
+  const [companiesLoaded, setCompaniesLoaded] = useState(false);
+  const [newCompany, setNewCompany] = useState({ code: '', name: '', bank_account_number: '', bank_name: '' });
+  const [companyError, setCompanyError] = useState('');
+  const [companySuccess, setCompanySuccess] = useState('');
+  const [companyLedgerData, setCompanyLedgerData] = useState(null);
+  const [companyLedgerLoading, setCompanyLedgerLoading] = useState(false);
+  const [selectedCompanyForLedger, setSelectedCompanyForLedger] = useState(null);
+
   const loadRepLedger = async () => {
     const saved = localStorage.getItem('currentUser');
     const user = saved ? JSON.parse(saved) : null;
@@ -760,6 +770,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
         loadReps();
         loadAgencies();
         loadBanks();
+        loadCompanies();
         loadSupervisors();
         loadTransactions();
         loadCarExpenses();
@@ -866,6 +877,85 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
       }
     } catch (err) {
       console.error('Failed to load supervisors:', err);
+    }
+  };
+
+  const loadCompanies = async () => {
+    setCompaniesLoaded(false);
+    try {
+      const res = await fetch('/api/companies');
+      if (res.ok) {
+        const data = await res.json();
+        setCompanies(data);
+        setCompaniesLoaded(true);
+      }
+    } catch (err) {
+      console.error('Failed to load companies:', err);
+    }
+  };
+
+  const handleCreateCompany = async (e) => {
+    e.preventDefault();
+    setCompanyError('');
+    setCompanySuccess('');
+    try {
+      const res = await fetch('/api/companies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newCompany)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCompanySuccess('تم إضافة الشركة بنجاح');
+        setNewCompany({ code: '', name: '', bank_account_number: '', bank_name: '' });
+        loadCompanies();
+      } else {
+        setCompanyError(data.error || 'حدث خطأ أثناء إضافة الشركة');
+      }
+    } catch (err) {
+      console.error('Failed to create company:', err);
+      setCompanyError('فشل الاتصال بالخادم الخلفي');
+    }
+  };
+
+  const handleDeleteCompany = async (id) => {
+    if (!window.confirm('هل أنت متأكد من رغبتك في حذف هذه الشركة؟')) return;
+    setCompanyError('');
+    setCompanySuccess('');
+    try {
+      const res = await fetch(`/api/companies/${id}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCompanySuccess('تم حذف الشركة بنجاح');
+        loadCompanies();
+        if (selectedCompanyForLedger && selectedCompanyForLedger.id === id) {
+          setSelectedCompanyForLedger(null);
+          setCompanyLedgerData(null);
+        }
+      } else {
+        setCompanyError(data.error || 'حدث خطأ أثناء حذف الشركة');
+      }
+    } catch (err) {
+      console.error('Failed to delete company:', err);
+      setCompanyError('فشل الاتصال بالخادم الخلفي');
+    }
+  };
+
+  const loadCompanyLedger = async (company) => {
+    setCompanyLedgerLoading(true);
+    setSelectedCompanyForLedger(company);
+    try {
+      const res = await fetch(`/api/companies/${company.id}/transactions`);
+      if (res.ok) {
+        const data = await res.json();
+        setCompanyLedgerData(data);
+      }
+    } catch (err) {
+      console.error('Failed to load company ledger:', err);
+    } finally {
+      setCompanyLedgerLoading(false);
     }
   };
 
@@ -1180,6 +1270,79 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
     setTxError('');
     
     if (!window.confirm('هل أنت متأكد من تسجيل هذه العملية؟')) {
+      return;
+    }
+
+    // Check if we are doing a company transfer
+    if (newTx.type === 'company_transfer') {
+      const amountNum = parseFloat(newTx.amount);
+      if (!newTx.amount || isNaN(amountNum) || amountNum <= 0) {
+        const msg = 'يرجى إدخال مبلغ صحيح أكبر من الصفر';
+        setTxError(msg);
+        alert(msg);
+        return;
+      }
+      if (!newTx.bankId) {
+        setTxError('يرجى اختيار الحساب البنكي المصدر للتحويل');
+        return;
+      }
+      if (!newTx.companyId) {
+        setTxError('يرجى اختيار الشركة المستلمة للحوالة');
+        return;
+      }
+
+      try {
+        const requestBody = {
+          type: 'company_transfer',
+          amount: amountNum,
+          notes: newTx.notes,
+          payment_method: 'bank_transfer',
+          bank_id: Number(newTx.bankId),
+          company_id: Number(newTx.companyId)
+        };
+
+        const res = await fetch('/api/transactions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          const selectedBankName = banks.find(b => b.id === Number(newTx.bankId))?.name || 'البنك المصدر';
+          const selectedCompanyName = companies.find(c => c.id === Number(newTx.companyId))?.name || 'الشركة المستلمة';
+          
+          setTxSuccess({
+            type: 'company_transfer',
+            amount: amountNum,
+            bankName: selectedBankName,
+            companyName: selectedCompanyName,
+            notes: newTx.notes || 'حوالة لشركة'
+          });
+
+          if (data.transaction) {
+            handlePrintReceipt(data.transaction);
+          }
+          
+          // Reset Form
+          setNewTx({ type: 'deposit', repId: '', bankId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash' });
+          setTxSourceType('rep');
+          setSearchRepQuery('');
+          
+          // Refresh Lists
+          loadDashboard();
+          loadReps();
+          loadAgencies();
+          loadBanks();
+          loadCompanies();
+          loadTransactions();
+          loadCarExpenses();
+        } else {
+          setTxError(data.error || 'حدث خطأ أثناء إرسال الحوالة');
+        }
+      } catch (err) {
+        setTxError('تعذر الاتصال بالسيرفر');
+      }
       return;
     }
     
@@ -1878,6 +2041,15 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               </button>
             )}
 
+            {(currentUser.role === 'manager' || currentUser.role === 'accountant') && (
+              <button 
+                className={`tab-btn ${activeTab === 'companies' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('companies'); loadCompanies(); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+              >
+                🏢 الشركات
+              </button>
+            )}
+
 
             {currentUser.role === 'manager' && (
               <button 
@@ -2438,14 +2610,18 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                     <tr key={tx.id}>
                       <td>{new Date(tx.date).toLocaleString('ar-EG')}</td>
                       <td>
-                        {tx.bank_code ? (
+                        {tx.type === 'company_transfer' && tx.company_code ? (
+                          <strong style={{ color: '#22d3ee' }}>{tx.company_code}</strong>
+                        ) : tx.bank_code ? (
                           <strong style={{ color: 'var(--primary)' }}>{tx.bank_code}</strong>
                         ) : (
                           tx.rep_code || '—'
                         )}
                       </td>
                       <td>
-                        {tx.bank_name ? (
+                        {tx.type === 'company_transfer' ? (
+                          <span>🏦 {tx.bank_name} ➔ 🏢 {tx.company_name}</span>
+                        ) : tx.bank_name ? (
                           <span>🏦 {tx.bank_name}</span>
                         ) : (
                           tx.rep_name || 'خزينة مباشرة'
@@ -2453,7 +2629,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                       </td>
                       <td>
                         <span className={`badge badge-${tx.type}`}>
-                          {tx.type === 'deposit' ? '📥 توريد' : '📤 صرف'}
+                          {tx.type === 'deposit' ? '📥 توريد' : tx.type === 'withdrawal' ? '📤 صرف' : tx.type === 'company_transfer' ? '🏢 حوالة' : '🔄 تسوية'}
                         </span>
                       </td>
                       <td>
@@ -2463,6 +2639,8 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                           <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', background: 'var(--danger-bg)', color: 'var(--danger)', fontWeight: 'bold' }}>❌ مرفوض</span>
                         ) : tx.type === 'exchange' ? (
                           <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', background: 'rgba(139, 92, 246, 0.15)', color: '#c084fc', border: '1px solid rgba(139, 92, 246, 0.25)', fontWeight: 'bold' }}>🔄 تسوية فئات</span>
+                        ) : tx.type === 'company_transfer' ? (
+                          <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', background: 'rgba(6,182,212,0.15)', color: '#22d3ee', border: '1px solid rgba(6,182,212,0.25)', fontWeight: 'bold' }}>🏢 تم التحويل</span>
                         ) : tx.type === 'deposit' ? (
                           <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', background: 'var(--success-bg)', color: 'var(--success)', fontWeight: 'bold' }}>✔️ مكتمل - تم التوريد</span>
                         ) : tx.status === 'approved' ? (
@@ -2481,7 +2659,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                       </td>
                       <td>
                         <span className={`amount-${tx.type}`}>
-                          {tx.type === 'withdrawal' ? '-' : ''}
+                          {(tx.type === 'withdrawal' || tx.type === 'company_transfer') ? '-' : ''}
                           {Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
                         </span>
                       </td>
@@ -3408,12 +3586,18 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
                   <span style={{ color: 'var(--text-secondary)' }}>نوع الحركة:</span>
                   <span className={`badge badge-${txSuccess.type}`} style={{ fontSize: '0.85rem' }}>
-                    {txSuccess.type === 'deposit' ? '📥 توريد نقدي / كاش' : '📤 صرف نقدي'}
+                    {txSuccess.type === 'deposit' 
+                      ? '📥 توريد نقدي / كاش' 
+                      : txSuccess.type === 'withdrawal' 
+                        ? '📤 صرف نقدي' 
+                        : txSuccess.type === 'company_transfer' 
+                          ? '🏢 حوالة لشركة' 
+                          : '🔄 تسوية وفك فئات'}
                   </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>إجمالي المبلغ المورد:</span>
-                  <strong style={{ fontSize: '1.2rem', color: txSuccess.type === 'deposit' ? 'var(--success)' : 'var(--danger)' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>قيمة المبلغ:</span>
+                  <strong style={{ fontSize: '1.2rem', color: txSuccess.type === 'deposit' ? 'var(--success)' : txSuccess.type === 'company_transfer' ? '#22d3ee' : 'var(--danger)' }}>
                     {txSuccess.amount.toLocaleString()} ج.م
                   </strong>
                 </div>
@@ -3433,10 +3617,24 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                     )}
                   </>
                 )}
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>الجهة المعنية:</span>
-                  <strong>{txSuccess.repName}</strong>
-                </div>
+                {txSuccess.type === 'company_transfer' && (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>البنك المصدر:</span>
+                      <strong>{txSuccess.bankName || '—'}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>الشركة المستلمة:</span>
+                      <strong>{txSuccess.companyName || '—'}</strong>
+                    </div>
+                  </>
+                )}
+                {txSuccess.type !== 'company_transfer' && txSuccess.type !== 'exchange' && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>الجهة المعنية:</span>
+                    <strong>{txSuccess.repName || 'خزينة مباشرة'}</strong>
+                  </div>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: 'var(--text-secondary)' }}>ملاحظات:</span>
                   <span>{txSuccess.notes || 'لا يوجد'}</span>
@@ -3453,36 +3651,44 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               {/* Type Switcher */}
               <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                 <label>نوع المعاملة</label>
-                <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
                   <button 
                     type="button" 
                     className={`btn ${newTx.type === 'deposit' ? 'btn-primary' : 'btn-secondary'}`}
-                    style={{ flex: 1, background: newTx.type === 'deposit' ? 'var(--success)' : '', boxShadow: newTx.type === 'deposit' ? '0 4px 12px var(--success-glow)' : '' }}
+                    style={{ flex: 1, minWidth: '120px', background: newTx.type === 'deposit' ? 'var(--success)' : '', boxShadow: newTx.type === 'deposit' ? '0 4px 12px var(--success-glow)' : '' }}
                     onClick={() => setNewTx(prev => ({ ...prev, type: 'deposit' }))}
                   >
-                    📥 توريد (دخول أموال)
+                    📥 توريد (دخول)
                   </button>
                   <button 
                     type="button" 
                     className={`btn ${newTx.type === 'withdrawal' ? 'btn-primary' : 'btn-secondary'}`}
-                    style={{ flex: 1, background: newTx.type === 'withdrawal' ? 'var(--danger)' : '', boxShadow: newTx.type === 'withdrawal' ? '0 4px 12px var(--danger-glow)' : '' }}
+                    style={{ flex: 1, minWidth: '120px', background: newTx.type === 'withdrawal' ? 'var(--danger)' : '', boxShadow: newTx.type === 'withdrawal' ? '0 4px 12px var(--danger-glow)' : '' }}
                     onClick={() => setNewTx(prev => ({ ...prev, type: 'withdrawal' }))}
                   >
-                    📤 صرف (خروج أموال)
+                    📤 صرف (خروج)
                   </button>
                   <button 
                     type="button" 
                     className={`btn ${newTx.type === 'exchange' ? 'btn-primary' : 'btn-secondary'}`}
-                    style={{ flex: 1, background: newTx.type === 'exchange' ? '#7c3aed' : '', boxShadow: newTx.type === 'exchange' ? '0 4px 12px rgba(124, 58, 237, 0.2)' : '' }}
+                    style={{ flex: 1, minWidth: '120px', background: newTx.type === 'exchange' ? '#7c3aed' : '', boxShadow: newTx.type === 'exchange' ? '0 4px 12px rgba(124, 58, 237, 0.2)' : '' }}
                     onClick={() => { setNewTx(prev => ({ ...prev, type: 'exchange', repId: '', bankId: '', amount: '', cashAmount: '', bankTransferAmount: '' })); setTxSourceType('rep'); setSearchRepQuery(''); }}
                   >
                     🔄 فك / تسوية
+                  </button>
+                  <button 
+                    type="button" 
+                    className={`btn ${newTx.type === 'company_transfer' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ flex: 1, minWidth: '120px', background: newTx.type === 'company_transfer' ? '#06b6d4' : '', color: newTx.type === 'company_transfer' ? '#fff' : '', boxShadow: newTx.type === 'company_transfer' ? '0 4px 12px rgba(6, 182, 212, 0.3)' : '' }}
+                    onClick={() => { setNewTx(prev => ({ ...prev, type: 'company_transfer', repId: '', bankId: '', companyId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '' })); setTxSourceType('bank'); setSearchRepQuery(''); }}
+                  >
+                    🏢 حوالة لشركة
                   </button>
                 </div>
               </div>
 
               {/* Party Type Switcher */}
-              {newTx.type !== 'exchange' && (
+              {newTx.type !== 'exchange' && newTx.type !== 'company_transfer' && (
                 <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                   <label>{newTx.type === 'withdrawal' ? 'جهة الصرف' : 'الجهة المعنية بالعملية'}</label>
                   <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
@@ -3539,7 +3745,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               )}
 
               {/* Representative search input with suggestions */}
-              {newTx.type !== 'exchange' && txSourceType === 'rep' && (
+              {newTx.type !== 'exchange' && newTx.type !== 'company_transfer' && txSourceType === 'rep' && (
                 <div className="form-group" style={{ marginBottom: '1.5rem', position: 'relative' }}>
                   <label>المندوب المعني بالعملية <span style={{ color: 'var(--danger)' }}>*</span></label>
                   <input 
@@ -3871,6 +4077,53 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                     </div>
                   </div>
                 </>
+              ) : newTx.type === 'company_transfer' ? (
+                <>
+                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                    <label>الحساب البنكي المصدر للتحويل <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <select 
+                      value={newTx.bankId || ''}
+                      onChange={(e) => setNewTx(prev => ({ ...prev, bankId: e.target.value }))}
+                      required
+                    >
+                      <option value="">اختر الحساب البنكي...</option>
+                      {banks.map(b => (
+                        <option key={b.id} value={b.id}>{b.name} ({b.code}) — {b.account_number}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                    <label>الشركة أو المورد المستلم <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <select 
+                      value={newTx.companyId || ''}
+                      onChange={(e) => setNewTx(prev => ({ ...prev, companyId: e.target.value }))}
+                      required
+                    >
+                      <option value="">اختر الشركة...</option>
+                      {companies.map(c => (
+                        <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                    <label>قيمة المبلغ المراد تحويله <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <div style={{ position: 'relative', marginTop: '0.25rem' }}>
+                      <input 
+                        type="number" 
+                        step="0.01" 
+                        min="0.01"
+                        placeholder="0.00"
+                        value={newTx.amount}
+                        onChange={(e) => setNewTx(prev => ({ ...prev, amount: e.target.value }))}
+                        required
+                        style={{ width: '100%', paddingLeft: '3.5rem' }}
+                      />
+                      <span style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontWeight: 'bold' }}>ج.م</span>
+                    </div>
+                  </div>
+                </>
               ) : null}
 
               {/* Exchange Representative and Denomination Fields */}
@@ -4126,10 +4379,10 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                 className="btn btn-primary" 
                 style={{ 
                   width: '100%', 
-                  background: newTx.type === 'deposit' ? 'var(--success)' : newTx.type === 'withdrawal' ? 'var(--danger)' : '#7c3aed', 
+                  background: newTx.type === 'deposit' ? 'var(--success)' : newTx.type === 'withdrawal' ? 'var(--danger)' : newTx.type === 'company_transfer' ? '#06b6d4' : '#7c3aed', 
                   fontSize: '1.1rem', 
                   padding: '0.9rem',
-                  boxShadow: newTx.type === 'exchange' ? '0 4px 12px rgba(124, 58, 237, 0.2)' : ''
+                  boxShadow: newTx.type === 'exchange' ? '0 4px 12px rgba(124, 58, 237, 0.2)' : newTx.type === 'company_transfer' ? '0 4px 12px rgba(6, 182, 212, 0.2)' : ''
                 }}
                 disabled={(() => {
                   if (newTx.type !== 'exchange') return false;
@@ -4142,9 +4395,11 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                   ? '📥 تأكيد عملية التوريد' 
                   : newTx.type === 'withdrawal' 
                     ? '📤 تأكيد عملية الصرف' 
-                    : currentUser.role === 'manager' 
-                      ? '🔄 تنفيذ عملية التسوية والفك' 
-                      : '🔄 طلب إذن تسوية وفك فئات'}
+                    : newTx.type === 'company_transfer'
+                      ? (currentUser.role === 'manager' ? '🏢 تنفيذ الحوالة للشركة' : '🏢 طلب إذن تحويل للشركة')
+                      : currentUser.role === 'manager' 
+                        ? '🔄 تنفيذ عملية التسوية والفك' 
+                        : '🔄 طلب إذن تسوية وفك فئات'}
               </button>
             </form>
           )}
@@ -4836,6 +5091,202 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
         </div>
       )}
 
+      {/* COMPANIES TAB */}
+      {activeTab === 'companies' && (currentUser.role === 'manager' || currentUser.role === 'accountant') && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', width: '100%' }}>
+          
+          {companyError && <div className="alert alert-error">⚠️ {companyError}</div>}
+          {companySuccess && <div className="alert alert-success">✔️ {companySuccess}</div>}
+
+          {selectedCompanyForLedger && companyLedgerData ? (
+            /* INDIVIDUAL COMPANY LEDGER VIEW */
+            <div className="panel">
+              <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2 className="panel-title">🏢 كشف حساب الشركة: {selectedCompanyForLedger.name}</h2>
+                <button className="btn btn-secondary" onClick={() => { setSelectedCompanyForLedger(null); setCompanyLedgerData(null); }}>العودة للقائمة ⬅</button>
+              </div>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                <div>
+                  <h3 style={{ color: 'var(--primary)', fontWeight: 800 }}>{selectedCompanyForLedger.name}</h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                    كود الشركة: {selectedCompanyForLedger.code}
+                    {selectedCompanyForLedger.bank_account_number && ` | رقم حساب الشركة: ${selectedCompanyForLedger.bank_account_number}`}
+                    {selectedCompanyForLedger.bank_name && ` | بنك الشركة المستلم: ${selectedCompanyForLedger.bank_name}`}
+                  </p>
+                </div>
+                <div style={{ padding: '0.75rem 1.25rem', background: 'rgba(6, 182, 212, 0.05)', border: '1px solid rgba(6, 182, 212, 0.2)', borderRadius: '10px', textAlign: 'center' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.25rem' }}>إجمالي المبالغ المحولة</span>
+                  <strong style={{ fontSize: '1.3rem', color: '#22d3ee' }}>{Number(companyLedgerData.summary.totalTransfers).toLocaleString()} ج.م</strong>
+                </div>
+              </div>
+
+              <div className="table-container">
+                {companyLedgerData.transactions.length === 0 ? (
+                  <div className="no-data-msg">لم يتم تسجيل أي حوالات صادرة لهذه الشركة بعد.</div>
+                ) : (
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>رقم الحركة</th>
+                        <th>التاريخ</th>
+                        <th>البنك المورَّد منه</th>
+                        <th>المبلغ</th>
+                        <th>الملاحظات</th>
+                        <th>بواسطة</th>
+                        <th>الحالة</th>
+                        <th>الطباعة</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {companyLedgerData.transactions.map((tx) => (
+                        <tr key={tx.id}>
+                          <td>#{String(tx.id).padStart(6, '0')}</td>
+                          <td>{new Date(tx.date).toLocaleDateString('ar-EG')}</td>
+                          <td>
+                            {tx.bank_name} <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>({tx.bank_code})</span>
+                          </td>
+                          <td style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>{Number(tx.amount).toLocaleString()} ج.م</td>
+                          <td>{tx.notes || '—'}</td>
+                          <td>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{tx.creator_name || 'System'}</span>
+                          </td>
+                          <td>
+                            <span className="badge badge-deposit">مكتمل</span>
+                          </td>
+                          <td>
+                            <button className="action-icon-btn" title="طباعة الإيصال" onClick={() => handlePrintReceipt(tx)}>
+                              🖨️
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* COMPANIES DIRECTORY & ADD FORM */
+            <div className="grid-2col">
+              {/* Companies list */}
+              <div className="panel">
+                <div className="panel-header">
+                  <h2 className="panel-title">🏢 دليل الشركات والموردين</h2>
+                </div>
+                
+                {companies.length === 0 ? (
+                  <div className="no-data-msg">لا يوجد أي شركات مسجلة في النظام حالياً. يمكنك إضافة شركة من النموذج الجانبي.</div>
+                ) : (
+                  <div className="table-container">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>الكود</th>
+                          <th>اسم الشركة</th>
+                          <th>الحساب البنكي للشركة</th>
+                          <th>إجمالي المحولات</th>
+                          <th>الإجراءات</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {companies.map(company => (
+                          <tr key={company.id}>
+                            <td style={{ fontWeight: 'bold', color: 'var(--primary)' }}>{company.code}</td>
+                            <td>{company.name}</td>
+                            <td>
+                              {company.bank_account_number ? (
+                                <div>
+                                  <div>{company.bank_account_number}</div>
+                                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{company.bank_name}</span>
+                                </div>
+                              ) : (
+                                <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>—</span>
+                              )}
+                            </td>
+                            <td style={{ fontWeight: 'bold', color: '#22d3ee' }}>{Number(company.total_transfers).toLocaleString()} ج.م</td>
+                            <td>
+                              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <button className="btn btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }} onClick={() => loadCompanyLedger(company)}>
+                                  📃 كشف حساب
+                                </button>
+                                {currentUser.role === 'manager' && (
+                                  <button className="btn btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', color: 'var(--danger)' }} onClick={() => handleDeleteCompany(company.id)}>
+                                    🗑️ حذف
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Add company form */}
+              <div className="panel">
+                <div className="panel-header">
+                  <h2 className="panel-title">➕ إضافة شركة جديدة</h2>
+                </div>
+                <form onSubmit={handleCreateCompany}>
+                  <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                    <label>كود الشركة <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <input 
+                      type="text" 
+                      placeholder="مثال: COCA, PEPSI..." 
+                      value={newCompany.code}
+                      onChange={(e) => setNewCompany({ ...newCompany, code: e.target.value.toUpperCase() })}
+                      required
+                      style={{ marginTop: '0.25rem' }}
+                    />
+                  </div>
+                  
+                  <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                    <label>اسم الشركة التجاري <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <input 
+                      type="text" 
+                      placeholder="مثال: شركة الأهرم للمشروبات..." 
+                      value={newCompany.name}
+                      onChange={(e) => setNewCompany({ ...newCompany, name: e.target.value })}
+                      required
+                      style={{ marginTop: '0.25rem' }}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                    <label>رقم الحساب البنكي للشركة (اختياري)</label>
+                    <input 
+                      type="text" 
+                      placeholder="أدخل رقم الحساب البنكي للشركة المستلمة..." 
+                      value={newCompany.bank_account_number}
+                      onChange={(e) => setNewCompany({ ...newCompany, bank_account_number: e.target.value })}
+                      style={{ marginTop: '0.25rem' }}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                    <label>اسم بنك الشركة المستلم (اختياري)</label>
+                    <input 
+                      type="text" 
+                      placeholder="مثال: البنك الأهلي المصري..." 
+                      value={newCompany.bank_name}
+                      onChange={(e) => setNewCompany({ ...newCompany, bank_name: e.target.value })}
+                      style={{ marginTop: '0.25rem' }}
+                    />
+                  </div>
+
+                  <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '0.75rem', fontWeight: 'bold' }}>
+                    💾 حفظ الشركة
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* BANKS TAB */}
       {activeTab === 'banks' && currentUser.role === 'manager' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', width: '100%' }}>
@@ -5221,11 +5672,21 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                   {pendingTx.map((tx) => (
                     <tr key={tx.id}>
                       <td>{new Date(tx.date).toLocaleString('ar-EG')}</td>
-                      <td>{tx.rep_name ? (<span>👤 {tx.rep_name} <small style={{ color: 'var(--text-muted)' }}>({tx.rep_code})</small></span>) : <span style={{ color: 'var(--text-muted)' }}>خزينة مباشرة</span>}</td>
+                      <td>
+                        {tx.type === 'company_transfer' ? (
+                          <span>🏦 {tx.bank_name} ➔ 🏢 {tx.company_name}</span>
+                        ) : tx.rep_name ? (
+                          <span>👤 {tx.rep_name} <small style={{ color: 'var(--text-muted)' }}>({tx.rep_code})</small></span>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)' }}>خزينة مباشرة</span>
+                        )}
+                      </td>
                       <td>{tx.agency_name ? (<span>🏢 {tx.agency_name} <small style={{ color: 'var(--text-muted)' }}>({tx.agency_code})</small></span>) : '—'}</td>
                       <td>
                         {tx.type === 'exchange' ? (
                           <span className="badge badge-exchange">🔄 تسوية / فك فئات</span>
+                        ) : tx.type === 'company_transfer' ? (
+                          <span className="badge badge-company-transfer">🏢 حوالة لشركة</span>
                         ) : (
                           <span className="badge badge-withdrawal">
                             {tx.withdrawal_sub_type === 'car' ? '🚗 سيارة' : 
@@ -5242,7 +5703,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                           </span>
                         )}
                       </td>
-                      <td className={tx.type === 'exchange' ? 'amount-exchange' : 'amount-withdrawal'}>
+                      <td className={tx.type === 'exchange' ? 'amount-exchange' : tx.type === 'company_transfer' ? 'amount-company-transfer' : 'amount-withdrawal'}>
                         {Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
                       </td>
                       <td>{tx.notes || '—'}</td>
@@ -5900,11 +6361,14 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
             <strong style={{ fontSize: '11pt', display: 'block', margin: '2mm 0', textAlign: 'center' }}>
               {printingTx.type === 'deposit'
                 ? (printingTx.payment_method === 'bank_transfer' ? 'إيصال إيداع تحويل بنكي' : 'إيصال توريد نقدية (وارد)')
-                : 'إيصال صرف نقدية (منصرف)'}
+                : printingTx.type === 'company_transfer'
+                  ? 'إيصال تحويل بنكي لشركة (حوالة)'
+                  : 'إيصال صرف نقدية (منصرف)'}
             </strong>
             <div style={{ textAlign: 'center', marginTop: '1mm' }}>
               <span className="receipt-status-badge">
                 {printingTx.type === 'deposit' ? '✔ مكتمل'
+                  : printingTx.type === 'company_transfer' ? (printingTx.status === 'approved' ? '✔ مكتمل - تم التحويل' : '⏳ قيد المراجعة')
                   : (printingTx.status === 'disbursed' ? '✔ مكتمل - تم الصرف الفعلي'
                      : printingTx.status === 'approved' ? '✓ معتمد - بانتظار التسليم'
                      : printingTx.status === 'pending' ? '⏳ قيد المراجعة'
@@ -5926,13 +6390,13 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
             <div className="receipt-meta-row">
               <span className="receipt-meta-label">نوع العملية:</span>
               <span className="receipt-meta-value">
-                {printingTx.type === 'deposit' ? 'توريد (دخول أموال)' : 'صرف (خروج أموال)'}
+                {printingTx.type === 'deposit' ? 'توريد (دخول أموال)' : printingTx.type === 'company_transfer' ? 'تحويل لشركة (حوالة)' : 'صرف (خروج أموال)'}
               </span>
             </div>
             <div className="receipt-meta-row">
               <span className="receipt-meta-label">طريقة الدفع:</span>
               <span className="receipt-meta-value">
-                {printingTx.payment_method === 'bank_transfer' ? 'تحويل بنكي' : 'نقدي بالخزينة'}
+                {printingTx.type === 'company_transfer' || printingTx.payment_method === 'bank_transfer' ? 'تحويل بنكي' : 'نقدي بالخزينة'}
               </span>
             </div>
             {printingTx.rep_name && (
@@ -5964,6 +6428,14 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                 <span className="receipt-meta-label">الحساب البنكي:</span>
                 <span className="receipt-meta-value">
                   {printingTx.bank_name}{printingTx.bank_code ? ` (${printingTx.bank_code})` : ''}
+                </span>
+              </div>
+            )}
+            {printingTx.type === 'company_transfer' && printingTx.company_name && (
+              <div className="receipt-meta-row">
+                <span className="receipt-meta-label">الشركة المستلمة:</span>
+                <span className="receipt-meta-value">
+                  {printingTx.company_name}{printingTx.company_code ? ` (${printingTx.company_code})` : ''}
                 </span>
               </div>
             )}
