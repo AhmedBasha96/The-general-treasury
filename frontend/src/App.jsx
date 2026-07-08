@@ -6400,7 +6400,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
             </div>
             {printingTx.creator_name && (
               <div className="receipt-meta-row">
-                <span className="receipt-meta-label">بواسطة (المُنشئ):</span>
+                <span className="receipt-meta-label">المحاسب:</span>
                 <span className="receipt-meta-value">{printingTx.creator_name}</span>
               </div>
             )}
