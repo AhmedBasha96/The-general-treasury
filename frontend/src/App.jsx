@@ -59,6 +59,7 @@ export default function App() {
   const [disburseDenominations, setDisburseDenominations] = useState({ denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0 });
   const [disburseError, setDisburseError] = useState('');
   const [activeImageModal, setActiveImageModal] = useState(null);
+  const [prevTab, setPrevTab] = useState(() => localStorage.getItem('activeTab') || 'dashboard');
   
   const [usersList, setUsersList] = useState([]);
   const [newUser, setNewUser] = useState({ username: '', password: '', role: 'accountant', assigned_agency_id: '' });
@@ -805,9 +806,43 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
           loadPendingTx();
           loadUsers();
         }
+
+        // Restore persisted ledger state on refresh
+        const savedBankId = localStorage.getItem('selectedBankLedgerId');
+        const savedRepId = localStorage.getItem('selectedRepLedgerId');
+        const savedAgencyId = localStorage.getItem('selectedAgencyLedgerId');
+        const savedSupId = localStorage.getItem('selectedSupervisorRepsId');
+        
+        const currentTab = localStorage.getItem('activeTab') || 'dashboard';
+        if (currentTab === 'banks' && savedBankId) {
+          handleViewBankLedger(savedBankId);
+        } else if (currentTab === 'reps' && savedRepId) {
+          handleViewLedger(savedRepId);
+        } else if (currentTab === 'agencies' && savedAgencyId) {
+          handleViewAgencyLedger(savedAgencyId);
+        } else if (currentTab === 'reps' && savedSupId) {
+          handleViewSupervisorReps(savedSupId);
+        }
       }
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    if (activeTab !== prevTab) {
+      // Clear ledger views when user explicitly switches tabs
+      setSelectedRepLedger(null);
+      setSelectedAgencyLedger(null);
+      setSelectedBankLedger(null);
+      setSelectedSupervisorReps(null);
+      
+      localStorage.removeItem('selectedBankLedgerId');
+      localStorage.removeItem('selectedRepLedgerId');
+      localStorage.removeItem('selectedAgencyLedgerId');
+      localStorage.removeItem('selectedSupervisorRepsId');
+      
+      setPrevTab(activeTab);
+    }
+  }, [activeTab, prevTab]);
 
   // Force active tab for representatives
   useEffect(() => {
@@ -1065,6 +1100,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
       if (res.ok) {
         const data = await res.json();
         setSelectedAgencyLedger(data);
+        localStorage.setItem('selectedAgencyLedgerId', agencyId);
       }
     } catch (err) {
       console.error('Failed to load agency ledger:', err);
@@ -1131,6 +1167,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
       if (res.ok) {
         const data = await res.json();
         setSelectedBankLedger(data);
+        localStorage.setItem('selectedBankLedgerId', bankId);
       }
     } catch (err) {
       console.error('Failed to load bank ledger:', err);
@@ -1195,6 +1232,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
       if (res.ok) {
         const data = await res.json();
         setSelectedSupervisorReps(data);
+        localStorage.setItem('selectedSupervisorRepsId', supervisorId);
       }
     } catch (err) {
       console.error('Failed to load supervisor representatives:', err);
@@ -1720,6 +1758,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
       if (res.ok) {
         const data = await res.json();
         setSelectedRepLedger(data);
+        localStorage.setItem('selectedRepLedgerId', repId);
       }
     } catch (err) {
       console.error('Failed to load rep ledger:', err);
@@ -2926,7 +2965,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                       كود الحساب: {selectedRepLedger.representative.code} | هاتف: {selectedRepLedger.representative.phone || 'غير مسجل'} | التوكيل: {selectedRepLedger.representative.agency_name ? `${selectedRepLedger.representative.agency_name} (${selectedRepLedger.representative.agency_code})` : 'بدون توكيل'}
                     </p>
                   </div>
-                  <button className="btn btn-secondary" onClick={() => setSelectedRepLedger(null)}>العودة للقائمة ⬅</button>
+                  <button className="btn btn-secondary" onClick={() => { setSelectedRepLedger(null); localStorage.removeItem('selectedRepLedgerId'); }}>العودة للقائمة ⬅</button>
                 </div>
                 
                 <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
@@ -3060,7 +3099,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                       كود المشرف: {selectedSupervisorReps.supervisor.code} | عدد المناديب التابعين: {selectedSupervisorReps.representatives.length}
                     </p>
                   </div>
-                  <button className="btn btn-secondary" onClick={() => setSelectedSupervisorReps(null)}>العودة للقائمة ⬅</button>
+                  <button className="btn btn-secondary" onClick={() => { setSelectedSupervisorReps(null); localStorage.removeItem('selectedSupervisorRepsId'); }}>العودة للقائمة ⬅</button>
                 </div>
                 <h4 style={{ marginBottom: '1rem', color: 'var(--text-primary)' }}>👤 المناديب التابعين للمشرف:</h4>
                 <div className="table-container">
@@ -4973,7 +5012,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                     <h3 style={{ color: 'var(--primary)', fontWeight: 800 }}>{selectedAgencyLedger.agency.name}</h3>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>كود التوكيل: {selectedAgencyLedger.agency.code} | تاريخ التأسيس: {new Date(selectedAgencyLedger.agency.created_at).toLocaleDateString('ar-EG')}</p>
                   </div>
-                  <button className="btn btn-secondary" onClick={() => setSelectedAgencyLedger(null)}>العودة للقائمة ⬅</button>
+                  <button className="btn btn-secondary" onClick={() => { setSelectedAgencyLedger(null); localStorage.removeItem('selectedAgencyLedgerId'); }}>العودة للقائمة ⬅</button>
                 </div>
                 
                 <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
@@ -5441,7 +5480,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                       {selectedBankLedger.bank.branch && ` | الفرع: ${selectedBankLedger.bank.branch}`}
                     </p>
                   </div>
-                  <button className="btn btn-secondary" onClick={() => setSelectedBankLedger(null)}>العودة للقائمة ⬅</button>
+                  <button className="btn btn-secondary" onClick={() => { setSelectedBankLedger(null); localStorage.removeItem('selectedBankLedgerId'); }}>العودة للقائمة ⬅</button>
                 </div>
                 
                 <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', marginBottom: '1.5rem' }}>
