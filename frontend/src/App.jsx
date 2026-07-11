@@ -1265,6 +1265,33 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
     }
   };
 
+  const handleDeleteTransaction = async (id) => {
+    if (window.confirm(`هل أنت متأكد من حذف هذه العملية نهائياً؟ رقم العملية: TX-${String(id).padStart(6, '0')}`)) {
+      try {
+        const res = await fetch(`/api/transactions/${id}`, {
+          method: 'DELETE'
+        });
+        const data = await res.json();
+        if (res.ok) {
+          alert('تم حذف العملية بنجاح!');
+          loadDashboard();
+          loadTransactions();
+          loadCarExpenses();
+          loadBanks();
+          loadAgencies();
+          loadReps();
+          if (currentUser.role === 'manager') {
+            loadPendingTx();
+          }
+        } else {
+          alert(data.error || 'حدث خطأ أثناء حذف العملية');
+        }
+      } catch (err) {
+        alert('تعذر الاتصال بالسيرفر');
+      }
+    }
+  };
+
   const handleUpdateRepPassword = async (repId, repName) => {
     const password = window.prompt(`أدخل كلمة المرور الجديدة للمندوب "${repName}":`);
     if (password === null) return;
@@ -2559,6 +2586,15 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                               {tx.status === 'pending' && currentUser.role !== 'manager' && (
                                 <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>طلب معلق</span>
                               )}
+                              {currentUser.role === 'manager' && (
+                                <button
+                                  className="btn btn-secondary"
+                                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
+                                  onClick={() => handleDeleteTransaction(tx.id)}
+                                >
+                                  🗑️ حذف
+                                </button>
+                              )}
                               <button
                                 className="btn btn-secondary"
                                 style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}
@@ -2830,29 +2866,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                               <button
                                 className="btn btn-secondary"
                                 style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
-                                onClick={async () => {
-                                  if (window.confirm(`هل أنت متأكد من حذف هذه العملية نهائياً؟ رقم العملية: TX-${String(tx.id).padStart(6, '0')}`)) {
-                                    try {
-                                      const res = await fetch(`/api/transactions/${tx.id}`, {
-                                        method: 'DELETE'
-                                      });
-                                      const data = await res.json();
-                                      if (res.ok) {
-                                        alert('تم حذف العملية بنجاح!');
-                                        loadDashboard();
-                                        loadTransactions();
-                                        loadCarExpenses();
-                                        loadBanks();
-                                        loadAgencies();
-                                        loadReps();
-                                      } else {
-                                        alert(data.error || 'حدث خطأ أثناء حذف العملية');
-                                      }
-                                    } catch (err) {
-                                      alert('تعذر الاتصال بالسيرفر');
-                                    }
-                                  }
-                                }}
+                                onClick={() => handleDeleteTransaction(tx.id)}
                               >
                                 🗑️ حذف
                               </button>
