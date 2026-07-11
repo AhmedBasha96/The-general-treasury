@@ -58,6 +58,7 @@ export default function App() {
   const [disbursingTx, setDisbursingTx] = useState(null);
   const [disburseDenominations, setDisburseDenominations] = useState({ denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0 });
   const [disburseError, setDisburseError] = useState('');
+  const [activeImageModal, setActiveImageModal] = useState(null);
   
   const [usersList, setUsersList] = useState([]);
   const [newUser, setNewUser] = useState({ username: '', password: '', role: 'accountant', assigned_agency_id: '' });
@@ -2385,7 +2386,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                             <div style={{ marginTop: '0.3rem' }}>
                               <a 
                                 href="#" 
-                                onClick={(e) => { e.preventDefault(); window.open(tx.receipt_image, '_blank'); }} 
+                                onClick={(e) => { e.preventDefault(); setActiveImageModal(tx.receipt_image); }} 
                                 style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.78rem', color: '#a78bfa', textDecoration: 'underline', fontWeight: 600 }}
                               >
                                 📎 عرض الإيصال
@@ -2472,7 +2473,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                               <div style={{ marginTop: '0.3rem' }}>
                                 <a 
                                   href="#" 
-                                  onClick={(e) => { e.preventDefault(); window.open(tx.receipt_image, '_blank'); }} 
+                                  onClick={(e) => { e.preventDefault(); setActiveImageModal(tx.receipt_image); }} 
                                   style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.78rem', color: '#a78bfa', textDecoration: 'underline', fontWeight: 600 }}
                                 >
                                   📎 عرض الإيصال
@@ -5473,7 +5474,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                                       src={tx.receipt_image}
                                       alt="إيصال التحويل"
                                       style={{ width: '90px', height: '70px', borderRadius: '8px', objectFit: 'cover', border: '1px solid rgba(124,58,237,0.3)', cursor: 'pointer' }}
-                                      onClick={() => window.open(tx.receipt_image, '_blank')}
+                                      onClick={() => setActiveImageModal(tx.receipt_image)}
                                       title="اضغط لعرض الصورة بالحجم الكامل"
                                     />
                                   </div>
@@ -7048,6 +7049,51 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               <p style={{ margin: 0, fontWeight: 700, fontSize: '10pt' }}>توقيع المدير العام</p>
               <p style={{ marginTop: '15mm', borderBottom: '1px solid #000', width: '80%', marginInline: 'auto' }}></p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* IMAGE VIEWER MODAL */}
+      {activeImageModal && (
+        <div 
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(15, 23, 42, 0.9)', backdropFilter: 'blur(10px)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1100, direction: 'rtl', padding: '1.5rem'
+          }}
+          onClick={() => setActiveImageModal(null)}
+        >
+          <div 
+            style={{
+              position: 'relative', width: '100%', maxWidth: '800px', 
+              maxHeight: '85vh', display: 'flex', flexDirection: 'column', 
+              alignItems: 'center', justifyContent: 'center'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close Button */}
+            <button 
+              onClick={() => setActiveImageModal(null)}
+              style={{
+                position: 'absolute', top: '-40px', left: '0', 
+                background: 'rgba(255,255,255,0.1)', color: '#fff', 
+                border: 'none', borderRadius: '50%', width: '36px', height: '36px',
+                fontSize: '1.2rem', cursor: 'pointer', display: 'flex', 
+                alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s'
+              }}
+            >
+              ✕
+            </button>
+            <img 
+              src={activeImageModal} 
+              alt="إيصال التحويل بالحجم الكامل" 
+              style={{ 
+                maxWidth: '100%', maxHeight: '80vh', 
+                borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)',
+                boxShadow: '0 25px 50px rgba(0,0,0,0.5)', objectFit: 'contain'
+              }} 
+            />
           </div>
         </div>
       )}
