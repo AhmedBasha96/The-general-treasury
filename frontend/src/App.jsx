@@ -6406,11 +6406,123 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               <button 
                 className="btn btn-primary" 
                 onClick={() => {
-                  document.body.classList.add('print-report-mode');
-                  document.body.classList.remove('print-receipt-mode');
-                  setTimeout(() => {
-                    window.print();
-                  }, 100);
+                  if (!dailyReportData) return;
+                  const d = dailyReportData;
+                  const reportDate = new Date(d.date).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+                  const safeSummaryRows = `
+                    <tr>
+                      <td>${d.safeSummary.openingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                      <td style="color:green;font-weight:bold">+${d.safeSummary.deposits.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                      <td style="color:red;font-weight:bold">-${d.safeSummary.withdrawals.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                      <td style="font-weight:bold">${d.safeSummary.closingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                    </tr>`;
+
+                  const bankRows = d.banksSummary.map(bank => `
+                    <tr>
+                      <td style="font-weight:bold">${bank.code}</td>
+                      <td>${bank.name}</td>
+                      <td>${bank.account_number}</td>
+                      <td>${bank.openingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                      <td style="color:green">+${bank.deposits.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                      <td style="color:red">-${bank.withdrawals.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                      <td style="font-weight:bold">${bank.closingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                    </tr>`).join('');
+
+                  const txRows = d.transactions.length === 0
+                    ? `<tr><td colspan="7" style="text-align:center;padding:8px">لا توجد عمليات مسجلة في هذا اليوم.</td></tr>`
+                    : d.transactions.map(tx => {
+                        const subTypeLabel = tx.withdrawal_sub_type === 'car' ? 'مصاريف سيارات'
+                          : tx.withdrawal_sub_type === 'car_gas' ? 'جاز سيارات'
+                          : tx.withdrawal_sub_type === 'car_oil' ? 'زيت/صيانة'
+                          : tx.withdrawal_sub_type === 'salary' ? 'رواتب'
+                          : tx.withdrawal_sub_type === 'commission' ? 'عمولات'
+                          : tx.withdrawal_sub_type === 'loan' ? 'سلفة'
+                          : tx.withdrawal_sub_type === 'direct_rent' ? 'إيجار'
+                          : tx.withdrawal_sub_type === 'direct_operational' ? 'تشغيل عامة'
+                          : tx.withdrawal_sub_type ? 'أخرى' : '';
+                        const typeLabel = tx.type === 'deposit' ? 'وارد' : tx.type === 'company_transfer' ? 'حوالة لشركة' : 'منصرف';
+                        const details = [
+                          tx.type === 'company_transfer' && tx.company_name ? `تحويل لشركة: ${tx.company_name}` : '',
+                          tx.rep_name ? `المندوب: ${tx.rep_name}` : '',
+                          subTypeLabel ? `(بند: ${subTypeLabel})` : '',
+                          tx.notes ? `- ${tx.notes}` : ''
+                        ].filter(Boolean).join(' ');
+                        const payMethod = tx.bank_name ? `بنك: ${tx.bank_name}` : 'نقدي بالخزينة';
+                        const txTime = new Date(tx.date).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+                        const txColor = tx.type === 'deposit' ? 'color:#166534' : tx.type === 'company_transfer' ? 'color:#0369a1' : 'color:#991b1b';
+                        return `<tr>
+                          <td>TX-${String(tx.id).padStart(6, '0')}</td>
+                          <td>${txTime}</td>
+                          <td style="${txColor};font-weight:bold">${typeLabel}</td>
+                          <td style="text-align:right">${details || '—'}</td>
+                          <td>${payMethod}</td>
+                          <td style="font-weight:bold">${Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                          <td>${tx.creator_name || 'أمين الخزينة'}</td>
+                        </tr>`;
+                      }).join('');
+
+                  const tableStyle = `width:100%;border-collapse:collapse;margin-bottom:8mm;font-size:9pt`;
+                  const thStyle = `border:1px solid #333;padding:3mm;background:#e8e8e8;font-weight:bold;text-align:center`;
+                  const tdStyle = `border:1px solid #555;padding:2.5mm;text-align:center`;
+
+                  const html = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8"/>
+<title>التقرير اليومي - ${reportDate}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Arial', 'Tahoma', sans-serif; direction: rtl; background: #fff; color: #000; padding: 12mm 15mm; font-size: 10pt; line-height: 1.6; }
+  h1 { font-size: 16pt; text-align: center; margin-bottom: 2mm; }
+  h3 { font-size: 11pt; border-right: 4px solid #333; padding-right: 3mm; margin-bottom: 4mm; margin-top: 8mm; }
+  table { ${tableStyle} }
+  th { ${thStyle} }
+  td { ${tdStyle} }
+  .header { text-align:center; border-bottom: 3px double #000; padding-bottom: 5mm; margin-bottom: 8mm; }
+  .sigs { display:flex; gap: 20mm; margin-top: 20mm; }
+  .sig { flex: 1; text-align: center; font-weight: bold; font-size: 10pt; }
+  .sig-line { border-bottom: 1px solid #000; margin-top: 15mm; width: 80%; margin-inline: auto; }
+  @media print { @page { size: A4 portrait; margin: 10mm 15mm; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>تقرير حركة الخزينة والمصارف اليومي التفصيلي</h1>
+  <p style="font-size:11pt">تاريخ التقرير: <strong>${reportDate}</strong></p>
+</div>
+
+<h3>أولاً: ملخص حركة الخزينة النقدية (الخزنة الفعلية)</h3>
+<table>
+  <thead><tr><th>الرصيد الافتتاحي (بداية اليوم)</th><th>إجمالي الإيداعات (الوارد)</th><th>إجمالي الصرفيات (المنصرف)</th><th>الرصيد الختامي (نهاية اليوم)</th></tr></thead>
+  <tbody>${safeSummaryRows}</tbody>
+</table>
+
+<h3>ثانياً: ملخص حركة الحسابات البنكية والمصارف</h3>
+<table>
+  <thead><tr><th>كود البنك</th><th>اسم البنك</th><th>رقم الحساب</th><th>الرصيد الافتتاحي</th><th>إجمالي الوارد</th><th>إجمالي المنصرف</th><th>الرصيد الختامي</th></tr></thead>
+  <tbody>${bankRows}</tbody>
+</table>
+
+<h3>ثالثاً: كشف العمليات اليومي المفصل</h3>
+<table>
+  <thead><tr><th>رقم الحركة</th><th>الوقت</th><th>النوع</th><th>التفاصيل والمستفيد</th><th>طريقة الدفع / الحساب</th><th>المبلغ</th><th>المحاسب</th></tr></thead>
+  <tbody>${txRows}</tbody>
+</table>
+
+<div class="sigs">
+  <div class="sig"><p>توقيع المحاسب المستلم</p><div class="sig-line"></div></div>
+  <div class="sig"><p>توقيع المراجع المالي</p><div class="sig-line"></div></div>
+  <div class="sig"><p>توقيع المدير العام</p><div class="sig-line"></div></div>
+</div>
+</body>
+</html>`;
+
+                  const win = window.open('', '_blank', 'width=900,height=700');
+                  win.document.write(html);
+                  win.document.close();
+                  win.focus();
+                  setTimeout(() => { win.print(); }, 500);
                 }} 
                 style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', background: 'linear-gradient(135deg, var(--primary), var(--primary-hover))' }}
               >
