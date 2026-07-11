@@ -60,6 +60,7 @@ export default function App() {
   const [disburseError, setDisburseError] = useState('');
   const [activeImageModal, setActiveImageModal] = useState(null);
   const [prevTab, setPrevTab] = useState(() => localStorage.getItem('activeTab') || 'dashboard');
+  const [prevPendingCount, setPrevPendingCount] = useState(0);
   
   const [usersList, setUsersList] = useState([]);
   const [newUser, setNewUser] = useState({ username: '', password: '', role: 'accountant', assigned_agency_id: '' });
@@ -829,6 +830,63 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
       }
     }
   }, [currentUser]);
+
+  // Manager notification permissions and periodic polling
+  useEffect(() => {
+    if (currentUser && currentUser.role === 'manager') {
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+      
+      loadPendingTx();
+      
+      const interval = setInterval(() => {
+        loadPendingTx();
+      }, 15000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [currentUser]);
+
+  // Monitor pending transactions count for sound and desktop notifications
+  useEffect(() => {
+    if (currentUser && currentUser.role === 'manager') {
+      const currentCount = pendingTx.length;
+      if (currentCount > prevPendingCount) {
+        try {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) {
+            const ctx = new AudioContext();
+            const playTone = (freq, time, duration) => {
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = 'sine';
+              osc.frequency.setValueAtTime(freq, time);
+              gain.gain.setValueAtTime(0.15, time);
+              gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start(time);
+              osc.stop(time + duration);
+            };
+            const now = ctx.currentTime;
+            playTone(587.33, now, 0.15); // D5
+            playTone(880.00, now + 0.1, 0.3); // A5
+          }
+        } catch (e) {
+          console.warn('Audio notification failed:', e);
+        }
+        
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('طلبات معلقة بالخزينة ⚠️', {
+            body: `يوجد حالياً ${currentCount} من طلبات الصرف بانتظار موافقتك المباشرة.`,
+            dir: 'rtl'
+          });
+        }
+      }
+      setPrevPendingCount(currentCount);
+    }
+  }, [pendingTx, currentUser, prevPendingCount]);
 
   useEffect(() => {
     if (activeTab !== prevTab) {
@@ -2104,8 +2162,20 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               <button 
                 className={`tab-btn ${activeTab === 'pending-approvals' ? 'active' : ''}`}
                 onClick={() => { setActiveTab('pending-approvals'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
               >
                 📥 طلبات الصرف المعلقة
+                {pendingTx.length > 0 && (
+                  <span style={{ 
+                    background: 'var(--danger)', color: '#fff', 
+                    fontSize: '0.75rem', fontWeight: 'bold', 
+                    padding: '0.15rem 0.45rem', borderRadius: '50px',
+                    boxShadow: '0 0 10px rgba(239,68,68,0.5)',
+                    animation: 'pulse 1.5s infinite' 
+                  }}>
+                    {pendingTx.length}
+                  </span>
+                )}
               </button>
             )}
 
