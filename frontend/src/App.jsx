@@ -223,37 +223,37 @@ export default function App() {
   @page { size: 80mm auto; margin: 0; }
   body {
     font-family: 'Cairo', Arial, sans-serif;
-    font-size: 9pt;
+    font-size: 8pt;
     color: #000;
     background: #fff;
     direction: rtl;
     width: 80mm;
-    padding: 3mm 2mm;
-    line-height: 1.5;
+    padding: 1.5mm 1mm;
+    line-height: 1.4;
   }
-  .header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 3mm; margin-bottom: 3mm; }
-  .title { font-size: 15pt; font-weight: 900; margin: 1mm 0; }
-  .subtitle { font-size: 8pt; color: #444; margin-top: 1mm; }
-  .type-label { font-size: 11pt; font-weight: 800; display: block; margin: 2mm 0; }
-  .status-badge { display: inline-block; border: 1.5px solid #000; padding: 0.5mm 2mm; font-weight: 800; font-size: 8pt; margin: 1mm 0; }
-  .divider { border-top: 1px dashed #000; margin: 2.5mm 0; }
-  .meta-table { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 3mm; }
-  .meta-table td { padding: 1mm 0; border-bottom: 1px dotted #ccc; vertical-align: top; }
+  .header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 1.5mm; margin-bottom: 2mm; }
+  .title { font-size: 13pt; font-weight: 900; margin: 0.5mm 0; }
+  .subtitle { font-size: 8pt; color: #444; margin-top: 0.5mm; }
+  .type-label { font-size: 10pt; font-weight: 800; display: block; margin: 1mm 0; }
+  .status-badge { display: inline-block; border: 1.5px solid #000; padding: 0.2mm 1.5mm; font-weight: 800; font-size: 7.5pt; margin: 0.5mm 0; }
+  .divider { border-top: 1px dashed #000; margin: 1.5mm 0; }
+  .meta-table { width: 100%; border-collapse: collapse; font-size: 8pt; margin-bottom: 1.5mm; }
+  .meta-table td { padding: 0.5mm 0; border-bottom: 1px dotted #ccc; vertical-align: top; }
   .meta-table td:first-child { font-weight: 800; white-space: nowrap; padding-left: 2mm; width: 35%; }
   .meta-table tr:last-child td { border-bottom: none; }
-  .amount-box { text-align: center; background: #f0f0f0; border: 2px solid #000; padding: 3mm; margin: 3mm 0; }
-  .amount-title { font-size: 8.5pt; font-weight: 700; text-transform: uppercase; margin-bottom: 1mm; }
-  .amount-value { font-size: 18pt; font-weight: 900; line-height: 1.2; }
-  .amount-text { font-size: 7.5pt; font-style: italic; margin-top: 1.5mm; color: #333; }
-  .denom-header { font-size: 8.5pt; font-weight: 800; margin-bottom: 1.5mm; }
-  .denom-table { width: 100%; border-collapse: collapse; font-size: 8pt; margin: 2mm 0 4mm; }
-  .denom-table th, .denom-table td { padding: 1mm 1.5mm; border: 1px solid #999; text-align: center; }
+  .amount-box { text-align: center; background: #f0f0f0; border: 1.5px solid #000; padding: 1.5mm; margin: 2mm 0; }
+  .amount-title { font-size: 8pt; font-weight: 700; text-transform: uppercase; margin-bottom: 0.5mm; }
+  .amount-value { font-size: 14pt; font-weight: 900; line-height: 1.1; }
+  .amount-text { font-size: 7pt; font-style: italic; margin-top: 1mm; color: #333; }
+  .denom-header { font-size: 8pt; font-weight: 800; margin-bottom: 1.5mm; }
+  .denom-table { width: 100%; border-collapse: collapse; font-size: 7.5pt; margin: 1.5mm 0 3mm; }
+  .denom-table th, .denom-table td { padding: 0.8mm 1mm; border: 1px solid #999; text-align: center; }
   .denom-table th { font-weight: 800; background: #e0e0e0; font-size: 7.5pt; }
-  .notes-box { font-size: 8pt; border: 1px dashed #666; padding: 2mm; margin: 2mm 0 4mm; background: #fafafa; }
-  .notes-box strong { display: block; margin-bottom: 1mm; font-size: 8.5pt; }
-  .signatures { display: flex; justify-content: space-between; gap: 4mm; margin-top: 8mm; font-size: 8pt; text-align: center; }
-  .sig-box { flex: 1; border-top: 1.5px solid #000; padding-top: 2mm; margin-top: 10mm; font-size: 7.5pt; }
-  .footer { text-align: center; font-size: 7.5pt; margin-top: 5mm; border-top: 1px dashed #000; padding-top: 2.5mm; color: #444; line-height: 1.6; }
+  .notes-box { font-size: 7.5pt; border: 1px dashed #666; padding: 1.5mm; margin: 1.5mm 0 2mm; background: #fafafa; }
+  .notes-box strong { display: block; margin-bottom: 0.5mm; font-size: 8pt; }
+  .signatures { display: flex; justify-content: space-between; gap: 4mm; margin-top: 4mm; font-size: 7.5pt; text-align: center; }
+  .sig-box { flex: 1; border-top: 1.5px solid #000; padding-top: 1mm; margin-top: 6mm; font-size: 7.5pt; }
+  .footer { text-align: center; font-size: 7pt; margin-top: 3mm; border-top: 1px dashed #000; padding-top: 1.5mm; color: #444; line-height: 1.4; }
 </style>
 </head>
 <body>
@@ -275,6 +275,7 @@ export default function App() {
   ${tx.supervisor_name ? `<tr><td>المشرف:</td><td>${tx.supervisor_name}${tx.supervisor_code ? ` (${tx.supervisor_code})` : ''}</td></tr>` : ''}
   ${tx.bank_name ? `<tr><td>الحساب البنكي:</td><td>${tx.bank_name}${tx.bank_code ? ` (${tx.bank_code})` : ''}</td></tr>` : ''}
   ${withdrawalSubType ? `<tr><td>بند الصرف:</td><td>${withdrawalSubType}</td></tr>` : ''}
+  <tr><td>المحاسب المسؤول:</td><td><strong>${tx.creator_name || 'أمين الخزينة'}</strong></td></tr>
 </table>
 
 <div class="amount-box">
