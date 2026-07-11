@@ -303,7 +303,7 @@ app.get('/api/dashboard', async (req, res) => {
       LEFT JOIN companies c ON t.company_id = c.id
       LEFT JOIN users u ON t.created_by = u.id
       LEFT JOIN users u2 ON t.approved_by = u2.id
-      WHERE 1=1 ${agencyFilter}
+      WHERE (t.status IS NULL OR t.status != 'rejected') ${agencyFilter}
       ORDER BY t.date DESC
     `);
 
@@ -498,7 +498,7 @@ app.get('/api/agencies/:id/transactions', async (req, res) => {
         LEFT JOIN banks b ON t.bank_id = b.id
         LEFT JOIN users u ON t.created_by = u.id
         LEFT JOIN users u2 ON t.approved_by = u2.id
-        WHERE r.agency_id = @agencyId OR t.agency_id = @agencyId
+        WHERE (r.agency_id = @agencyId OR t.agency_id = @agencyId) AND (t.status IS NULL OR t.status != 'rejected')
         ORDER BY t.date DESC
       `);
       
@@ -714,7 +714,7 @@ app.get('/api/banks/:id/transactions', async (req, res) => {
         LEFT JOIN companies c ON t.company_id = c.id
         LEFT JOIN users u ON t.created_by = u.id
         LEFT JOIN users u2 ON t.approved_by = u2.id
-        WHERE t.bank_id = @bankId
+        WHERE t.bank_id = @bankId AND (t.status IS NULL OR t.status != 'rejected')
         ORDER BY t.date DESC
       `);
       
@@ -1308,7 +1308,7 @@ app.get('/api/reps/:id/transactions', async (req, res) => {
         LEFT JOIN banks b ON t.bank_id = b.id
         LEFT JOIN users u ON t.created_by = u.id
         LEFT JOIN users u2 ON t.approved_by = u2.id
-        WHERE t.rep_id = @repId
+        WHERE t.rep_id = @repId AND (t.status IS NULL OR t.status != 'rejected')
         ORDER BY t.date DESC
       `);
 
@@ -1428,7 +1428,7 @@ app.get('/api/reports/daily', async (req, res) => {
         LEFT JOIN companies c ON t.company_id = c.id
         LEFT JOIN users u ON t.created_by = u.id
         LEFT JOIN users u2 ON t.approved_by = u2.id
-        WHERE CAST(t.date AS DATE) = CAST(@date AS DATE)
+        WHERE CAST(t.date AS DATE) = CAST(@date AS DATE) AND (t.status IS NULL OR t.status != 'rejected')
         ORDER BY t.date ASC
       `);
 
@@ -1578,6 +1578,8 @@ app.get('/api/transactions', async (req, res) => {
     if (status) {
       query += ` AND t.status = @status`;
       request.input('status', sql.VarChar, status);
+    } else {
+      query += ` AND (t.status IS NULL OR t.status != 'rejected')`;
     }
 
     if (withdrawal_sub_type) {
