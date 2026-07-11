@@ -1094,14 +1094,13 @@ app.get('/api/reps', async (req, res) => {
         r.id, r.code, r.name, r.phone, r.type, r.classification, r.agency_id, r.supervisor_id, r.created_at,
         a.name AS agency_name, a.code AS agency_code,
         s.name AS supervisor_name, s.code AS supervisor_code,
-        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.amount WHEN t.type = 'withdrawal' THEN -t.amount ELSE 0 END), 0) AS balance
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS total_deposits,
+        ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND (t.status = 'disbursed' OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS total_disbursed,
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS balance
       FROM representatives r
       LEFT JOIN agencies a ON r.agency_id = a.id
       LEFT JOIN supervisors s ON r.supervisor_id = s.id
-      LEFT JOIN transactions t ON r.id = t.rep_id AND (
-         (t.type = 'deposit' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
-         OR (t.type = 'withdrawal' AND (t.status = 'disbursed' OR t.status IS NULL))
-      )
+      LEFT JOIN transactions t ON r.id = t.rep_id
       ${agencyFilter}
       GROUP BY r.id, r.code, r.name, r.phone, r.type, r.classification, r.agency_id, r.supervisor_id, r.created_at, a.name, a.code, s.name, s.code
       ORDER BY r.name
@@ -1313,9 +1312,11 @@ app.get('/api/reps/:id/transactions', async (req, res) => {
         ORDER BY t.date DESC
       `);
 
+    // Revenue = deposits made BY the rep (توريد نقدية)
+    // Disbursements = payments made TO the rep (راتب / سلفة / عمولة) — separate account, NOT deducted from revenue
     let cashDeposits = 0;
     let bankTransferDeposits = 0;
-    let totalWithdrawals = 0;
+    let totalDisbursed = 0; // Money paid to the rep (salary, loan, etc.) — tracked separately
     
     txResult.recordset.forEach(tx => {
       if (tx.type === 'deposit' && (tx.status === 'approved' || tx.status === 'disbursed' || tx.status === null)) {
@@ -1325,13 +1326,16 @@ app.get('/api/reps/:id/transactions', async (req, res) => {
           cashDeposits += Number(tx.amount);
         }
       } else if (tx.type === 'withdrawal' && (tx.status === 'disbursed' || tx.status === null)) {
-        totalWithdrawals += Number(tx.amount);
+        // Withdrawal = disbursement FROM safe TO rep (salary/loan/commission)
+        // This is a SEPARATE expense entry — does NOT reduce the rep's revenue/deposits
+        totalDisbursed += Number(tx.amount);
       }
     });
     
     const totalDeposits = cashDeposits + bankTransferDeposits;
-    const cashBalance = cashDeposits - totalWithdrawals;
-    const balance = totalDeposits - totalWithdrawals;
+    // Balance = total revenue deposited by the rep (withdrawals are NOT deducted)
+    const balance = totalDeposits;
+    const cashBalance = cashDeposits;
 
     res.json({
       representative: rep,
@@ -1339,7 +1343,8 @@ app.get('/api/reps/:id/transactions', async (req, res) => {
         cashDeposits,
         bankTransferDeposits,
         totalDeposits,
-        totalWithdrawals,
+        totalDisbursed,        // Salary/loan/commission paid to rep
+        totalWithdrawals: totalDisbursed, // Keep backward compat key
         cashBalance,
         balance
       },
