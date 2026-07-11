@@ -812,6 +812,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
         const savedRepId = localStorage.getItem('selectedRepLedgerId');
         const savedAgencyId = localStorage.getItem('selectedAgencyLedgerId');
         const savedSupId = localStorage.getItem('selectedSupervisorRepsId');
+        const savedCompany = localStorage.getItem('selectedCompanyForLedger');
         
         const currentTab = localStorage.getItem('activeTab') || 'dashboard';
         if (currentTab === 'banks' && savedBankId) {
@@ -822,6 +823,8 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
           handleViewAgencyLedger(savedAgencyId);
         } else if (currentTab === 'reps' && savedSupId) {
           handleViewSupervisorReps(savedSupId);
+        } else if (currentTab === 'companies' && savedCompany) {
+          loadCompanyLedger(JSON.parse(savedCompany));
         }
       }
     }
@@ -834,11 +837,14 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
       setSelectedAgencyLedger(null);
       setSelectedBankLedger(null);
       setSelectedSupervisorReps(null);
+      setSelectedCompanyForLedger(null);
+      setCompanyLedgerData(null);
       
       localStorage.removeItem('selectedBankLedgerId');
       localStorage.removeItem('selectedRepLedgerId');
       localStorage.removeItem('selectedAgencyLedgerId');
       localStorage.removeItem('selectedSupervisorRepsId');
+      localStorage.removeItem('selectedCompanyForLedger');
       
       setPrevTab(activeTab);
     }
@@ -1008,6 +1014,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   const loadCompanyLedger = async (company) => {
     setCompanyLedgerLoading(true);
     setSelectedCompanyForLedger(company);
+    localStorage.setItem('selectedCompanyForLedger', JSON.stringify(company));
     try {
       const res = await fetch(`/api/companies/${company.id}/transactions`);
       if (res.ok) {
@@ -5206,7 +5213,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
             <div className="panel">
               <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h2 className="panel-title">🏢 كشف حساب الشركة: {selectedCompanyForLedger.name}</h2>
-                <button className="btn btn-secondary" onClick={() => { setSelectedCompanyForLedger(null); setCompanyLedgerData(null); }}>العودة للقائمة ⬅</button>
+                <button className="btn btn-secondary" onClick={() => { setSelectedCompanyForLedger(null); setCompanyLedgerData(null); localStorage.removeItem('selectedCompanyForLedger'); }}>العودة للقائمة ⬅</button>
               </div>
               
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
