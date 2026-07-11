@@ -2058,7 +2058,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               </button>
             )}
 
-            {currentUser.role === 'manager' && (
+            {(currentUser.role === 'manager' || currentUser.role === 'accountant') && (
               <button 
                 className={`tab-btn ${activeTab === 'banks' ? 'active' : ''}`}
                 onClick={() => { setActiveTab('banks'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
@@ -5336,10 +5336,10 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
       )}
 
       {/* BANKS TAB */}
-      {activeTab === 'banks' && currentUser.role === 'manager' && (
+      {activeTab === 'banks' && (currentUser.role === 'manager' || currentUser.role === 'accountant') && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', width: '100%' }}>
           {/* Bank Initial Balance Setup Banner (only if there are banks with 0 initial balance) */}
-          {banks.filter(b => Number(b.initial_balance) === 0).length > 0 && (
+          {currentUser.role === 'manager' && banks.filter(b => Number(b.initial_balance) === 0).length > 0 && (
             <div className="panel" style={{
               background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.15) 0%, rgba(29, 78, 216, 0.05) 100%)',
               border: '1px solid rgba(37, 99, 235, 0.3)',
@@ -5407,7 +5407,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
             </div>
           )}
 
-          <div className="grid-2col">
+          <div className={currentUser.role === 'manager' ? "grid-2col" : ""} style={{ display: currentUser.role !== 'manager' ? 'block' : undefined }}>
             {/* Banks list */}
             <div className="panel">
             <div className="panel-header">
@@ -5600,13 +5600,15 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                               >
                                 📂 كشف حساب
                               </button>
-                              <button 
-                                className="btn btn-secondary" 
-                                style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
-                                onClick={() => handleDeleteBank(bank.id, bank.name)}
-                              >
-                                🗑️ حذف
-                              </button>
+                              {currentUser.role === 'manager' && (
+                                <button 
+                                  className="btn btn-secondary" 
+                                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
+                                  onClick={() => handleDeleteBank(bank.id, bank.name)}
+                                >
+                                  🗑️ حذف
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -5619,10 +5621,11 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
           </div>
           
           {/* Add Bank Panel */}
-          <div className="panel">
-            <div className="panel-header">
-              <h2 className="panel-title">➕ إضافة حساب بنكي جديد</h2>
-            </div>
+          {currentUser.role === 'manager' && (
+            <div className="panel">
+              <div className="panel-header">
+                <h2 className="panel-title">➕ إضافة حساب بنكي جديد</h2>
+              </div>
             
             {bankError && <div className="alert alert-error">⚠️ {bankError}</div>}
             {bankSuccess && <div className="alert alert-success">✔️ {bankSuccess}</div>}
@@ -5688,7 +5691,8 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               </div>
               <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>حفظ الحساب الجديد</button>
             </form>
-          </div>
+            </div>
+          )}
         </div>
         </div>
       )}
