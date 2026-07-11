@@ -831,21 +831,40 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
     }
   }, [currentUser]);
 
-  // Manager notification permissions and periodic polling
+  // Manager notification permissions only
   useEffect(() => {
     if (currentUser && currentUser.role === 'manager') {
       if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
       }
-      
-      loadPendingTx();
-      
-      const interval = setInterval(() => {
-        loadPendingTx();
-      }, 15000);
-      
-      return () => clearInterval(interval);
     }
+  }, [currentUser]);
+
+  // Periodic polling for ALL users to keep client state synchronized in real-time
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const pollData = () => {
+      if (currentUser.role === 'representative') {
+        loadRepLedger();
+      } else {
+        loadDashboard();
+        loadTransactions();
+        loadCarExpenses();
+        loadBanks();
+        loadAgencies();
+        loadReps();
+        loadSupervisors();
+        loadCompanies();
+        
+        if (currentUser.role === 'manager') {
+          loadPendingTx();
+        }
+      }
+    };
+
+    const interval = setInterval(pollData, 15000);
+    return () => clearInterval(interval);
   }, [currentUser]);
 
   // Monitor pending transactions count for sound and desktop notifications
