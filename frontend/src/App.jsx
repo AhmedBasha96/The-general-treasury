@@ -2258,26 +2258,40 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               </div>
             </div>
 
-            {/* BANK TRANSFER BALANCE */}
+            {/* BANKS TOTAL BALANCE */}
             <div style={{
-              background: 'linear-gradient(135deg, rgba(124,58,237,0.15) 0%, rgba(139,92,246,0.08) 100%)',
-              border: '2px solid rgba(124,58,237,0.35)',
+              background: 'linear-gradient(135deg, rgba(14,165,233,0.15) 0%, rgba(3,105,161,0.08) 100%)',
+              border: '2px solid rgba(14,165,233,0.35)',
               borderRadius: '20px', padding: '2rem',
               position: 'relative', overflow: 'hidden'
             }}>
-              <div style={{ position: 'absolute', top: '-20px', left: '-20px', width: '120px', height: '120px', background: 'rgba(124,58,237,0.08)', borderRadius: '50%' }} />
+              <div style={{ position: 'absolute', top: '-20px', left: '-20px', width: '120px', height: '120px', background: 'rgba(14,165,233,0.08)', borderRadius: '50%' }} />
               <div style={{ position: 'relative' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.75rem' }}>
-                  <span style={{ fontSize: '1.8rem' }}>🏧</span>
-                  <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#c4b5fd', textTransform: 'uppercase', letterSpacing: '0.08em' }}>الخزنة العامة (إجمالي تحويلات الكاش البنكية)</span>
+                  <span style={{ fontSize: '1.8rem' }}>🏦</span>
+                  <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>إجمالي أرصدة البنوك الحالية</span>
                 </div>
-                <div style={{ fontSize: '2.8rem', fontWeight: 900, color: '#a78bfa', letterSpacing: '-1px', lineHeight: 1, marginBottom: '0.5rem' }}>
-                  {(dashboardData.summary.bankTransferTotal ?? 0).toLocaleString('ar-EG', { minimumFractionDigits: 2 })}
-                  <span style={{ fontSize: '1rem', fontWeight: 400, color: '#c4b5fd', marginRight: '0.4rem' }}>ج.م</span>
+                <div style={{ fontSize: '2.8rem', fontWeight: 900, color: '#0ea5e9', letterSpacing: '-1px', lineHeight: 1, marginBottom: '0.5rem' }}>
+                  {banks.reduce((sum, b) => sum + (Number(b.balance) || 0), 0).toLocaleString('ar-EG', { minimumFractionDigits: 2 })}
+                  <span style={{ fontSize: '1rem', fontWeight: 400, color: '#7dd3fc', marginRight: '0.4rem' }}>ج.م</span>
                 </div>
-                <div style={{ marginTop: '1rem' }}>
-                  <div style={{ fontSize: '0.82rem', color: '#c4b5fd', lineHeight: 1.5 }}>المبالغ المحولة مباشرة إلى البنوك بدون المرور بالخزينة النقدية</div>
-                </div>
+                {banks.length === 0 ? (
+                  <div style={{ fontSize: '0.82rem', color: '#7dd3fc', lineHeight: 1.5, marginTop: '1rem' }}>لا توجد حسابات بنكية مسجلة</div>
+                ) : (
+                  <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px dashed rgba(14,165,233,0.25)' }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#7dd3fc', marginBottom: '0.6rem' }}>💳 تفصيل الأرصدة لكل حساب:</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '140px', overflowY: 'auto' }}>
+                      {banks.map(b => (
+                        <div key={b.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(14,165,233,0.08)', borderRadius: '8px', padding: '0.35rem 0.7rem', border: '1px solid rgba(14,165,233,0.15)' }}>
+                          <span style={{ fontSize: '0.8rem', color: '#bae6fd', fontWeight: 600 }}>🏦 {b.name} <span style={{ color: '#7dd3fc', fontWeight: 400 }}>({b.code})</span></span>
+                          <span style={{ fontSize: '0.85rem', fontWeight: 800, color: Number(b.balance) >= 0 ? '#34d399' : '#f87171' }}>
+                            {Number(b.balance || 0).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
