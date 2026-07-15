@@ -183,8 +183,8 @@ app.put('/api/users/:id', async (req, res) => {
   }
 });
 
-// Helper to get safe initial balance from settings
-async function getSafeInitialBalance(txOrPool) {
+// Helper to get safe initial settings data
+async function getSafeInitialData(txOrPool) {
   const initialBalanceResult = await txOrPool.query(
     "SELECT key_name, val FROM settings WHERE key_name LIKE 'safe_initial_%'"
   );
@@ -217,7 +217,13 @@ async function getSafeInitialBalance(txOrPool) {
       (initialDenoms.denom_5 * 5) +
       (initialDenoms.denom_1 * 1);
   }
-  return safeInitialBalance;
+  return { safeInitialBalance, initialDenoms };
+}
+
+// Wrapper to get safe initial balance from settings
+async function getSafeInitialBalance(txOrPool) {
+  const data = await getSafeInitialData(txOrPool);
+  return data.safeInitialBalance;
 }
 
 // 1. GET /api/dashboard
@@ -277,7 +283,7 @@ app.get('/api/dashboard', async (req, res) => {
       ${agencyFilter}
     `);
     
-    const safeInitialBalance = await getSafeInitialBalance(pool);
+    const { safeInitialBalance, initialDenoms } = await getSafeInitialData(pool);
     
     const cashDeposits = Number(cashDepositsResult.recordset[0].total);
     const bankTransferTotal = Number(bankTransferResult.recordset[0].total);
