@@ -185,7 +185,7 @@ app.put('/api/users/:id', async (req, res) => {
 
 // Helper to get safe initial settings data
 async function getSafeInitialData(txOrPool) {
-  const initialBalanceResult = await txOrPool.query(
+  const initialBalanceResult = await txOrPool.request().query(
     "SELECT key_name, val FROM settings WHERE key_name LIKE 'safe_initial_%'"
   );
 
