@@ -2056,10 +2056,11 @@ app.post('/api/transactions', async (req, res) => {
           await transaction.rollback();
           return res.status(400).json({ error: 'يجب تحديد الشركة المستلمة' });
         }
-        if (!bank_id) {
-          await transaction.rollback();
-          return res.status(400).json({ error: 'يجب تحديد الحساب البنكي المصدر للتحويل' });
-        }
+          // For company transfers, bank_id is required only for bank transfers
+          if (txPaymentMethod !== 'cash' && !bank_id) {
+            await transaction.rollback();
+            return res.status(400).json({ error: 'يجب تحديد الحساب البنكي المصدر للتحويل' });
+          }
         
         const companyCheck = await transaction.request()
           .input('companyId', sql.Int, company_id)
@@ -2283,7 +2284,6 @@ app.post('/api/transactions/:id/approve', async (req, res) => {
           });
         }
       }
-
       // Balance check for cash safe exchanges
       if (tx.type === 'exchange') {
         // Fetch safe initial balance settings
@@ -2350,13 +2350,34 @@ app.post('/api/transactions/:id/approve', async (req, res) => {
         }
       }
 
-      // Balance check for bank-to-company transfers
-      if (tx.type === 'company_transfer') {
-        const bankId = tx.bank_id;
-        if (!bankId) {
-          await transaction.rollback();
-          return res.status(400).json({ error: 'الحساب البنكي غير محدد لهذه المعاملة' });
-        }
+        // Balance check for company transfers
+        if (tx.type === 'company_transfer') {
+          if (tx.payment_method === 'cash' || tx.payment_method === null) {
+            // Cash safe transfer: verify cash safe balance similar to withdrawal
+            const cashDepositsResult = await transaction.request().query(`
+              SELECT ISNULL(SUM(amount), 0) AS total
+              FROM transactions WITH (UPDLOCK, TABLOCKX)
+              WHERE type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL)
+                AND (status IN ('approved', 'disbursed') OR status IS NULL)
+            `);
+            const withdrawalsResult = await transaction.request().query(`
+              SELECT ISNULL(SUM(amount), 0) AS total
+              FROM transactions
+              WHERE type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL)
+            `);
+            const currentCashBalance = Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
+            if (currentCashBalance < Number(tx.amount)) {
+              await transaction.rollback();
+              return res.status(400).json({
+                error: `لا يمكن الموافقة. رصيد الخزينة الحالي (${currentCashBalance.toLocaleString('ar-EG')} ج.م) أقل من مبلغ التحويل إلى الشركة (${Number(tx.amount).toLocaleString('ar-EG')} ج.م).`
+              });
+            }
+          } else {
+            const bankId = tx.bank_id;
+            if (!bankId) {
+              await transaction.rollback();
+              return res.status(400).json({ error: 'الحساب البنكي غير محدد لهذه المعاملة' });
+            }
         
         // Calculate source bank account balance inside transaction with lock
         const depRes = await transaction.request()
