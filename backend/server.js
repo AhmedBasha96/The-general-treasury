@@ -227,14 +227,17 @@ app.get('/api/dashboard', async (req, res) => {
         ${agencyFilter}
     `);
     
-    // Total withdrawals (from physical safe)
+    // Total withdrawals (from physical safe) including cash company transfers
     const withdrawalsResult = await createFilteredRequest().query(`
       SELECT ISNULL(SUM(t.amount), 0) AS total 
       FROM transactions t
       ${agencyJoin}
-      WHERE t.type = 'withdrawal'
-        AND (t.status = 'disbursed' OR t.status IS NULL)
-        ${agencyFilter}
+      WHERE (
+        (t.type = 'withdrawal' AND (t.status = 'disbursed' OR t.status IS NULL))
+        OR
+        (t.type = 'company_transfer' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status = 'approved' OR t.status IS NULL))
+      )
+      ${agencyFilter}
     `);
     
     const initialBalanceResult = await pool.request()
@@ -2004,12 +2007,14 @@ app.post('/api/transactions', async (req, res) => {
     }
 
     const transactionAmount = Number(amount);
-    const txPaymentMethod = (type === 'company_transfer' || (type === 'deposit' && payment_method === 'bank_transfer')) ? 'bank_transfer' : 'cash';
+    const txPaymentMethod = (type === 'company_transfer')
+      ? (payment_method === 'cash' ? 'cash' : 'bank_transfer')
+      : ((type === 'deposit' && payment_method === 'bank_transfer') ? 'bank_transfer' : 'cash');
     let d200 = 0, d100 = 0, d50 = 0, d20 = 0, d10 = 0, d5 = 0, d1 = 0;
     if (txPaymentMethod === 'cash') {
-      const isPendingWithdrawal = (type === 'withdrawal' && statusVal === 'pending');
+      const skipDenoms = (type === 'withdrawal' && statusVal === 'pending') || (type === 'company_transfer');
       
-      if (!isPendingWithdrawal) {
+      if (!skipDenoms) {
         if (!denominations) {
           return res.status(400).json({ error: 'يجب تحديد الفئات النقدية لهذه المعاملة' });
         }
@@ -2115,8 +2120,10 @@ app.post('/api/transactions', async (req, res) => {
         }
       }
 
-      // 2. If withdrawal AND approved/disbursed, verify CASH safe balance (cash only) with table lock
-      if (type === 'withdrawal' && (statusVal === 'approved' || statusVal === 'disbursed')) {
+      // 2. Verify CASH safe balance if it is a cash withdrawal or a cash company transfer that is approved
+      const isCashOut = (type === 'withdrawal' && (statusVal === 'approved' || statusVal === 'disbursed')) ||
+                        (type === 'company_transfer' && txPaymentMethod === 'cash' && (statusVal === 'approved' || statusVal === null));
+      if (isCashOut) {
         const cashDepositsResult = await transaction.request().query(`
           SELECT ISNULL(SUM(amount), 0) AS total 
           FROM transactions WITH (UPDLOCK, TABLOCKX) 
@@ -2125,7 +2132,8 @@ app.post('/api/transactions', async (req, res) => {
         const withdrawalsResult = await transaction.request().query(`
           SELECT ISNULL(SUM(amount), 0) AS total 
           FROM transactions 
-          WHERE type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL)
+          WHERE (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+             OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status = 'approved' OR status IS NULL))
         `);
 
         const currentCashBalance = Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
@@ -2272,7 +2280,8 @@ app.post('/api/transactions/:id/approve', async (req, res) => {
         const withdrawalsResult = await transaction.request().query(`
           SELECT ISNULL(SUM(amount), 0) AS total 
           FROM transactions 
-          WHERE type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL)
+          WHERE (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+             OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status = 'approved' OR status IS NULL))
         `);
         
         const currentCashBalance = Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
@@ -2363,7 +2372,8 @@ app.post('/api/transactions/:id/approve', async (req, res) => {
             const withdrawalsResult = await transaction.request().query(`
               SELECT ISNULL(SUM(amount), 0) AS total
               FROM transactions
-              WHERE type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL)
+              WHERE (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+                 OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status = 'approved' OR status IS NULL))
             `);
             const currentCashBalance = Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
             if (currentCashBalance < Number(tx.amount)) {
@@ -2422,6 +2432,7 @@ app.post('/api/transactions/:id/approve', async (req, res) => {
           });
         }
       }
+    }
       
       // Update status to approved
       await transaction.request()
@@ -2587,7 +2598,8 @@ app.post('/api/transactions/:id/disburse', async (req, res) => {
       const withdrawalsResult = await transaction.request().query(`
         SELECT ISNULL(SUM(amount), 0) AS total 
         FROM transactions 
-        WHERE type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL)
+        WHERE (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+           OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status = 'approved' OR status IS NULL))
       `);
       
       const currentCashBalance = Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
@@ -2715,18 +2727,25 @@ app.put('/api/transactions/:id', async (req, res) => {
         }
       }
       
-      // If it's an approved withdrawal and amount changes, verify balance
-      if (tx.type === 'withdrawal' && (tx.status === 'approved' || tx.status === 'disbursed')) {
+      // If it's an approved withdrawal or cash company transfer, and amount changes, verify balance
+      const isCashOut = (tx.type === 'withdrawal' && (tx.status === 'approved' || tx.status === 'disbursed')) ||
+                        (tx.type === 'company_transfer' && (tx.payment_method === 'cash' || tx.payment_method === null) && (tx.status === 'approved' || tx.status === null));
+      if (isCashOut) {
         const cashDepositsResult = await transaction.request().query(`
           SELECT ISNULL(SUM(amount), 0) AS total 
           FROM transactions WITH (UPDLOCK, TABLOCKX) 
           WHERE type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved', 'disbursed') OR status IS NULL)
         `);
-        const withdrawalsResult = await transaction.request().query(`
-          SELECT ISNULL(SUM(amount), 0) AS total 
-          FROM transactions 
-          WHERE type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL) AND id <> @txId
-        `);
+        const withdrawalsResult = await transaction.request()
+          .input('txId', sql.Int, txId)
+          .query(`
+            SELECT ISNULL(SUM(amount), 0) AS total 
+            FROM transactions 
+            WHERE (
+              (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+              OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status = 'approved' OR status IS NULL))
+            ) AND id <> @txId
+          `);
         
         const currentCashBalance = Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
         

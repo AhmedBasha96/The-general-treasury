@@ -1459,7 +1459,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
         alert(msg);
         return;
       }
-      if (!newTx.bankId) {
+      if (txSourceType === 'bank' && !newTx.bankId) {
         setTxError('يرجى اختيار الحساب البنكي المصدر للتحويل');
         return;
       }
@@ -1473,8 +1473,8 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
           type: 'company_transfer',
           amount: amountNum,
           notes: newTx.notes,
-          payment_method: 'bank_transfer',
-          bank_id: Number(newTx.bankId),
+          payment_method: txSourceType === 'bank' ? 'bank_transfer' : 'cash',
+          bank_id: txSourceType === 'bank' ? Number(newTx.bankId) : null,
           company_id: Number(newTx.companyId)
         };
 
@@ -1486,7 +1486,9 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
 
         const data = await res.json();
         if (res.ok) {
-          const selectedBankName = banks.find(b => b.id === Number(newTx.bankId))?.name || 'البنك المصدر';
+          const selectedBankName = txSourceType === 'bank' 
+            ? (banks.find(b => b.id === Number(newTx.bankId))?.name || 'البنك المصدر')
+            : 'الخزينة المباشرة';
           const selectedCompanyName = companies.find(c => c.id === Number(newTx.companyId))?.name || 'الشركة المستلمة';
           
           setTxSuccess({
@@ -3944,6 +3946,31 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                 </div>
               )}
 
+              {/* Company Transfer Source Switcher */}
+              {newTx.type === 'company_transfer' && (
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label>مصدر التحويل للشركة</label>
+                  <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                    <button 
+                      type="button" 
+                      className={`btn ${txSourceType === 'bank' ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ flex: 1 }}
+                      onClick={() => { setTxSourceType('bank'); setNewTx(prev => ({ ...prev, bankId: '' })); }}
+                    >
+                      🏦 من البنك (حوالة بنكية)
+                    </button>
+                    <button 
+                      type="button" 
+                      className={`btn ${txSourceType === 'safe' ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ flex: 1 }}
+                      onClick={() => { setTxSourceType('safe'); setNewTx(prev => ({ ...prev, bankId: '' })); }}
+                    >
+                      💸 من الخزينة المباشرة (نقدي)
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Representative search input with suggestions */}
               {newTx.type !== 'exchange' && newTx.type !== 'company_transfer' && txSourceType === 'rep' && (
                 <div className="form-group" style={{ marginBottom: '1.5rem', position: 'relative' }}>
@@ -4279,19 +4306,21 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                 </>
               ) : newTx.type === 'company_transfer' ? (
                 <>
-                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                    <label>الحساب البنكي المصدر للتحويل <span style={{ color: 'var(--danger)' }}>*</span></label>
-                    <select 
-                      value={newTx.bankId || ''}
-                      onChange={(e) => setNewTx(prev => ({ ...prev, bankId: e.target.value }))}
-                      required
-                    >
-                      <option value="">اختر الحساب البنكي...</option>
-                      {banks.map(b => (
-                        <option key={b.id} value={b.id}>{b.name} ({b.code}) — {b.account_number}</option>
-                      ))}
-                    </select>
-                  </div>
+                  {txSourceType === 'bank' && (
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                      <label>الحساب البنكي المصدر للتحويل <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <select 
+                        value={newTx.bankId || ''}
+                        onChange={(e) => setNewTx(prev => ({ ...prev, bankId: e.target.value }))}
+                        required
+                      >
+                        <option value="">اختر الحساب البنكي...</option>
+                        {banks.map(b => (
+                          <option key={b.id} value={b.id}>{b.name} ({b.code}) — {b.account_number}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                     <label>الشركة أو المورد المستلم <span style={{ color: 'var(--danger)' }}>*</span></label>
