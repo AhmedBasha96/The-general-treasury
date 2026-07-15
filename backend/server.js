@@ -183,6 +183,43 @@ app.put('/api/users/:id', async (req, res) => {
   }
 });
 
+// Helper to get safe initial balance from settings
+async function getSafeInitialBalance(txOrPool) {
+  const initialBalanceResult = await txOrPool.query(
+    "SELECT key_name, val FROM settings WHERE key_name LIKE 'safe_initial_%'"
+  );
+
+  const initialDenoms = {
+    denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0
+  };
+  let safeInitialBalance = 0;
+  let safeInitialBalanceSet = false;
+
+  initialBalanceResult.recordset.forEach(row => {
+    if (row.key_name === 'safe_initial_balance') {
+      safeInitialBalanceSet = true;
+    }
+    const match = row.key_name.match(/^safe_initial_denom_(\d+)$/);
+    if (match) {
+      const denom = parseInt(match[1]);
+      const val = parseInt(row.val) || 0;
+      initialDenoms[`denom_${denom}`] = val;
+    }
+  });
+
+  if (safeInitialBalanceSet) {
+    safeInitialBalance = 
+      (initialDenoms.denom_200 * 200) +
+      (initialDenoms.denom_100 * 100) +
+      (initialDenoms.denom_50 * 50) +
+      (initialDenoms.denom_20 * 20) +
+      (initialDenoms.denom_10 * 10) +
+      (initialDenoms.denom_5 * 5) +
+      (initialDenoms.denom_1 * 1);
+  }
+  return safeInitialBalance;
+}
+
 // 1. GET /api/dashboard
 app.get('/api/dashboard', async (req, res) => {
   const userRole = req.headers['x-user-role'];
@@ -240,43 +277,7 @@ app.get('/api/dashboard', async (req, res) => {
       ${agencyFilter}
     `);
     
-    const initialBalanceResult = await pool.request()
-      .query("SELECT key_name, val FROM settings WHERE key_name LIKE 'safe_initial_%'");
-
-    const initialDenoms = {
-      denom_200: 0,
-      denom_100: 0,
-      denom_50: 0,
-      denom_20: 0,
-      denom_10: 0,
-      denom_5: 0,
-      denom_1: 0
-    };
-    let safeInitialBalance = 0;
-    let safeInitialBalanceSet = false;
-
-    initialBalanceResult.recordset.forEach(row => {
-      if (row.key_name === 'safe_initial_balance') {
-        safeInitialBalanceSet = true;
-      }
-      const match = row.key_name.match(/^safe_initial_denom_(\d+)$/);
-      if (match) {
-        const denom = parseInt(match[1]);
-        const val = parseInt(row.val) || 0;
-        initialDenoms[`denom_${denom}`] = val;
-      }
-    });
-
-    if (safeInitialBalanceSet) {
-      safeInitialBalance = 
-        (initialDenoms.denom_200 * 200) +
-        (initialDenoms.denom_100 * 100) +
-        (initialDenoms.denom_50 * 50) +
-        (initialDenoms.denom_20 * 20) +
-        (initialDenoms.denom_10 * 10) +
-        (initialDenoms.denom_5 * 5) +
-        (initialDenoms.denom_1 * 1);
-    }
+    const safeInitialBalance = await getSafeInitialBalance(pool);
     
     const cashDeposits = Number(cashDepositsResult.recordset[0].total);
     const bankTransferTotal = Number(bankTransferResult.recordset[0].total);
@@ -2142,7 +2143,8 @@ app.post('/api/transactions', async (req, res) => {
              OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status = 'approved' OR status IS NULL))
         `);
 
-        const currentCashBalance = Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
+        const safeInitialBalance = await getSafeInitialBalance(transaction);
+        const currentCashBalance = safeInitialBalance + Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
 
         if (currentCashBalance < transactionAmount) {
           await transaction.rollback();
@@ -2294,7 +2296,8 @@ app.post('/api/transactions/:id/approve', async (req, res) => {
              OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status = 'approved' OR status IS NULL))
         `);
         
-        const currentCashBalance = Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
+        const safeInitialBalance = await getSafeInitialBalance(transaction);
+        const currentCashBalance = safeInitialBalance + Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
         
         if (currentCashBalance < Number(tx.amount)) {
           await transaction.rollback();
@@ -2385,7 +2388,8 @@ app.post('/api/transactions/:id/approve', async (req, res) => {
               WHERE (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
                  OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status = 'approved' OR status IS NULL))
             `);
-            const currentCashBalance = Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
+            const safeInitialBalance = await getSafeInitialBalance(transaction);
+            const currentCashBalance = safeInitialBalance + Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
             if (currentCashBalance < Number(tx.amount)) {
               await transaction.rollback();
               return res.status(400).json({
@@ -2612,7 +2616,8 @@ app.post('/api/transactions/:id/disburse', async (req, res) => {
            OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status = 'approved' OR status IS NULL))
       `);
       
-      const currentCashBalance = Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
+      const safeInitialBalance = await getSafeInitialBalance(transaction);
+      const currentCashBalance = safeInitialBalance + Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
       const txAmount = Number(tx.amount);
 
       const calculatedTotal = (d200 * 200) + (d100 * 100) + (d50 * 50) + (d20 * 20) + (d10 * 10) + (d5 * 5) + (d1 * 1);
@@ -2757,7 +2762,8 @@ app.put('/api/transactions/:id', async (req, res) => {
             ) AND id <> @txId
           `);
         
-        const currentCashBalance = Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
+        const safeInitialBalance = await getSafeInitialBalance(transaction);
+        const currentCashBalance = safeInitialBalance + Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
         
         if (currentCashBalance < Number(amount)) {
           await transaction.rollback();
