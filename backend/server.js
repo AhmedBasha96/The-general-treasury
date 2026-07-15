@@ -217,7 +217,7 @@ async function getSafeInitialData(txOrPool) {
       (initialDenoms.denom_5 * 5) +
       (initialDenoms.denom_1 * 1);
   }
-  return { safeInitialBalance, initialDenoms };
+  return { safeInitialBalance, initialDenoms, safeInitialBalanceSet };
 }
 
 // Wrapper to get safe initial balance from settings
@@ -283,7 +283,7 @@ app.get('/api/dashboard', async (req, res) => {
       ${agencyFilter}
     `);
     
-    const { safeInitialBalance, initialDenoms } = await getSafeInitialData(pool);
+    const { safeInitialBalance, initialDenoms, safeInitialBalanceSet } = await getSafeInitialData(pool);
     
     const cashDeposits = Number(cashDepositsResult.recordset[0].total);
     const bankTransferTotal = Number(bankTransferResult.recordset[0].total);
