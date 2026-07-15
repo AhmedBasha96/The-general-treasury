@@ -2844,11 +2844,22 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                       </td>
                       <td>
                         {tx.type === 'company_transfer' ? (
-                          <span>🏦 {tx.bank_name} ➔ 🏢 {tx.company_name}</span>
+                          <div>
+                            <div>{tx.payment_method === 'cash' ? '💵 الخزينة المباشرة' : `🏦 ${tx.bank_name || 'البنك'}`} ➔ 🏢 {tx.company_name}</div>
+                          </div>
                         ) : tx.bank_name ? (
                           <span>🏦 {tx.bank_name}</span>
                         ) : (
-                          tx.rep_name || 'خزينة مباشرة'
+                          <div>
+                            <div style={{ fontWeight: 600 }}>{tx.rep_name || 'خزينة مباشرة'}</div>
+                            {tx.rep_name && (
+                              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                                {tx.agency_name && <span>🏢 {tx.agency_name}</span>}
+                                {tx.agency_name && tx.supervisor_name && <span> | </span>}
+                                {tx.supervisor_name && <span>👤 مشرف: {tx.supervisor_name}</span>}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </td>
                       <td>

@@ -299,11 +299,15 @@ app.get('/api/dashboard', async (req, res) => {
         r.name AS rep_name, r.code AS rep_code,
         b.name AS bank_name, b.code AS bank_code,
         c.name AS company_name, c.code AS company_code,
+        a.name AS agency_name, a.code AS agency_code,
+        s.name AS supervisor_name, s.code AS supervisor_code,
         u.username AS creator_name, u2.username AS approver_name
       FROM transactions t
       LEFT JOIN representatives r ON t.rep_id = r.id
       LEFT JOIN banks b ON t.bank_id = b.id
       LEFT JOIN companies c ON t.company_id = c.id
+      LEFT JOIN agencies a ON (r.agency_id = a.id OR t.agency_id = a.id)
+      LEFT JOIN supervisors s ON r.supervisor_id = s.id
       LEFT JOIN users u ON t.created_by = u.id
       LEFT JOIN users u2 ON t.approved_by = u2.id
       WHERE (t.status IS NULL OR t.status != 'rejected') ${agencyFilter}
@@ -1539,16 +1543,18 @@ app.get('/api/transactions', async (req, res) => {
   try {
     const pool = getPool();
     let query = `
-      SELECT t.id, t.rep_id, t.bank_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
+      SELECT t.id, t.rep_id, t.bank_id, t.company_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
              t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
              r.name AS rep_name, r.code AS rep_code,
              b.name AS bank_name, b.code AS bank_code,
+             c.name AS company_name, c.code AS company_code,
              a.name AS agency_name, a.code AS agency_code,
              s.name AS supervisor_name, s.code AS supervisor_code,
              u.username AS creator_name, u2.username AS approver_name
       FROM transactions t
       LEFT JOIN representatives r ON t.rep_id = r.id
       LEFT JOIN banks b ON t.bank_id = b.id
+      LEFT JOIN companies c ON t.company_id = c.id
       LEFT JOIN agencies a ON (r.agency_id = a.id OR t.agency_id = a.id)
       LEFT JOIN supervisors s ON r.supervisor_id = s.id
       LEFT JOIN users u ON t.created_by = u.id
@@ -2222,15 +2228,19 @@ app.get('/api/transactions/pending', async (req, res) => {
   try {
     const pool = getPool();
     const result = await pool.request().query(`
-      SELECT t.id, t.rep_id, t.bank_id, t.agency_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
+      SELECT t.id, t.rep_id, t.bank_id, t.company_id, t.agency_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
              r.name AS rep_name, r.code AS rep_code,
              b.name AS bank_name, b.code AS bank_code,
+             c.name AS company_name, c.code AS company_code,
              a.name AS agency_name, a.code AS agency_code,
+             s.name AS supervisor_name, s.code AS supervisor_code,
              u.username AS creator_name, u2.username AS approver_name
       FROM transactions t
       LEFT JOIN representatives r ON t.rep_id = r.id
       LEFT JOIN banks b ON t.bank_id = b.id
+      LEFT JOIN companies c ON t.company_id = c.id
       LEFT JOIN agencies a ON (r.agency_id = a.id OR t.agency_id = a.id)
+      LEFT JOIN supervisors s ON r.supervisor_id = s.id
       LEFT JOIN users u ON t.created_by = u.id
       LEFT JOIN users u2 ON t.approved_by = u2.id
       WHERE t.status = 'pending'
