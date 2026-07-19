@@ -39,10 +39,11 @@ router.get('/', async (req, res) => {
 
 // POST /api/cars - add a new car (multipart/form-data)
 router.post('/', upload.single('image'), async (req, res) => {
-  const { plate_number } = req.body;
+  let { plate_number } = req.body;
   if (!plate_number) {
     return res.status(400).json({ error: 'رقم اللوحة مطلوب' });
   }
+  plate_number = decodeURIComponent(plate_number);
   const imagePath = req.file ? path.join('uploads', 'cars', req.file.filename) : null;
   try {
     const pool = getPool();
@@ -89,10 +90,11 @@ router.get('/:id/transactions', async (req, res) => {
 // PUT /api/cars/:id - update a car (multipart/form-data)
 router.put('/:id', upload.single('image'), async (req, res) => {
   const { id } = req.params;
-  const { plate_number } = req.body;
+  let { plate_number } = req.body;
   if (!plate_number) {
     return res.status(400).json({ error: 'رقم اللوحة مطلوب' });
   }
+  plate_number = decodeURIComponent(plate_number);
   const imagePath = req.file ? path.join('uploads', 'cars', req.file.filename) : null;
   
   try {

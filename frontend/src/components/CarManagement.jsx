@@ -32,7 +32,8 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
     setError('');
 
     const form = new FormData();
-    form.append('plate_number', combinedPlate);
+    // Encode the plate number to avoid any multipart/form-data encoding issues with Arabic
+    form.append('plate_number', encodeURIComponent(combinedPlate));
     if (image) form.append('image', image);
 
     try {
@@ -111,39 +112,40 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>رقم اللوحة:</label>
-              <div style={{ display: 'flex', gap: '0.5rem', direction: 'ltr' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', direction: 'ltr', justifyContent: 'center' }}>
                 <input
                   type="text"
                   className="input-field"
-                  style={{ flex: 2, textAlign: 'center' }}
+                  style={{ width: '80px', textAlign: 'center', fontSize: '1.2rem', padding: '0.5rem' }}
                   value={plateNum}
                   onChange={(e) => setPlateNum(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
-                  placeholder="أرقام (1234)"
+                  placeholder="أرقام"
                   required
                 />
+                <span style={{ fontSize: '1.5rem', display: 'flex', alignItems: 'center' }}>-</span>
                 <input
                   type="text"
                   className="input-field"
-                  style={{ flex: 1, textAlign: 'center' }}
+                  style={{ width: '45px', textAlign: 'center', fontSize: '1.2rem', padding: '0.5rem' }}
                   value={plateL3}
                   onChange={(e) => setPlateL3(e.target.value.slice(0, 1))}
-                  placeholder="حرف 3"
+                  placeholder="ح٣"
                 />
                 <input
                   type="text"
                   className="input-field"
-                  style={{ flex: 1, textAlign: 'center' }}
+                  style={{ width: '45px', textAlign: 'center', fontSize: '1.2rem', padding: '0.5rem' }}
                   value={plateL2}
                   onChange={(e) => setPlateL2(e.target.value.slice(0, 1))}
-                  placeholder="حرف 2"
+                  placeholder="ح٢"
                 />
                 <input
                   type="text"
                   className="input-field"
-                  style={{ flex: 1, textAlign: 'center' }}
+                  style={{ width: '45px', textAlign: 'center', fontSize: '1.2rem', padding: '0.5rem' }}
                   value={plateL1}
                   onChange={(e) => setPlateL1(e.target.value.slice(0, 1))}
-                  placeholder="حرف 1"
+                  placeholder="ح١"
                   required
                 />
               </div>
