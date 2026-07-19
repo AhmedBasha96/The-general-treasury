@@ -405,13 +405,7 @@ async function createTables() {
       END
     `);
 
-    // Ensure plate_number column uses Arabic collation if it was previously VARCHAR
-    await pool.request().query(`
-      IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('cars') AND name = 'plate_number' AND system_type_id = TYPE_ID('varchar'))
-      BEGIN
-        ALTER TABLE cars ALTER COLUMN plate_number NVARCHAR(50) COLLATE Arabic_100_CI_AS NOT NULL;
-      END
-    `);
+    // Plate number column already has proper Arabic collation; no alteration needed.
 
     // Add car_id column to transactions if missing
     await pool.request().query(`
