@@ -391,6 +391,28 @@ async function createTables() {
         );
       END
     `);
+
+    // Create cars table if not exists
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'cars')
+      BEGIN
+        CREATE TABLE cars (
+          id INT IDENTITY(1,1) PRIMARY KEY,
+          plate_number VARCHAR(50) UNIQUE NOT NULL,
+          image_path NVARCHAR(MAX) NULL,
+          created_at DATETIME DEFAULT GETDATE()
+        );
+      END
+    `);
+
+    // Add car_id column to transactions if missing
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'car_id')
+      BEGIN
+        ALTER TABLE transactions ADD car_id INT NULL;
+        ALTER TABLE transactions ADD CONSTRAINT FK_transactions_cars FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE SET NULL;
+      END
+    `);
     
     console.log('Database tables verified/created.');
   } catch (error) {
