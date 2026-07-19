@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import CarManagement from './components/CarManagement';
 
 const compressImage = (file, maxWidth = 1000, maxHeight = 1000, quality = 0.6) => {
   return new Promise((resolve, reject) => {
@@ -505,6 +506,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
 
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('activeTab') || 'dashboard');
   const [repsSubTab, setRepsSubTab] = useState('delegates');
+const [showCarModal, setShowCarModal] = useState(false);
 
   const getClassificationLabel = (cls) => {
     switch(cls) {
@@ -3491,6 +3493,15 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                 <span style={{ fontSize: '1rem', fontWeight: 400, color: '#fca5a5', marginRight: '0.3rem' }}>ج.م</span>
               </div>
             </div>
+            <button className="btn btn-primary" style={{ marginTop: '1rem' }} onClick={() => setShowCarModal(true)}>
+              إضافة سيارة
+            </button>
+            {showCarModal && (
+              <CarManagement
+                onClose={() => setShowCarModal(false)}
+                onCarAdded={loadCarExpenses}
+              />
+            )}
 
             <div style={{
               background: 'linear-gradient(135deg, rgba(245,158,11,0.15) 0%, rgba(217,119,6,0.08) 100%)',
