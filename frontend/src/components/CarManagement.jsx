@@ -31,15 +31,21 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
     setLoading(true);
     setError('');
 
-    const form = new FormData();
-    // Encode the plate number to avoid any multipart/form-data encoding issues with Arabic
-    form.append('plate_number', encodeURIComponent(combinedPlate));
-    if (image) form.append('image', image);
-
     try {
       const url = editingCar ? `/api/cars/${editingCar.id}` : '/api/cars';
       const method = editingCar ? 'PUT' : 'POST';
-      const res = await fetch(url, { method, body: form });
+      let reqBody, headers = {};
+
+      if (image) {
+        reqBody = new FormData();
+        reqBody.append('plate_number', combinedPlate);
+        reqBody.append('image', image);
+      } else {
+        reqBody = JSON.stringify({ plate_number: combinedPlate });
+        headers = { 'Content-Type': 'application/json' };
+      }
+
+      const res = await fetch(url, { method, headers, body: reqBody });
       const data = await res.json();
       if (res.ok) {
         setPlateL1(''); setPlateL2(''); setPlateL3(''); setPlateNum('');

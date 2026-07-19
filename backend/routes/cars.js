@@ -36,27 +36,34 @@ router.get('/', async (req, res) => {
     res.status(500).json({ error: 'فشل جلب بيانات السيارات' });
   }
 });
-
-// POST /api/cars - add a new car (multipart/form-data)
+// POST /api/cars - add a new car
 router.post('/', upload.single('image'), async (req, res) => {
-  let { plate_number } = req.body;
+  let plate_number = req.body.plate_number;
   if (!plate_number) {
     return res.status(400).json({ error: 'رقم اللوحة مطلوب' });
   }
-  plate_number = decodeURIComponent(plate_number);
+  // If it came from multer, it might be latin1 encoded instead of utf8.
+  if (req.headers['content-type'] && req.headers['content-type'].includes('multipart/form-data')) {
+    try {
+      // Safely attempt to convert from latin1 to utf8 if it has garbled characters
+      if (/[^\x00-\x7F]/.test(plate_number) && plate_number.includes('Ø')) {
+         plate_number = Buffer.from(plate_number, 'latin1').toString('utf8');
+      }
+    } catch(e) {}
+  }
   const imagePath = req.file ? path.join('uploads', 'cars', req.file.filename) : null;
   try {
     const pool = getPool();
     // Check duplicate plate
     const dup = await pool.request()
-      .input('plate', sql.NVarChar, plate_number.trim())
+      .input('plate', sql.NVarChar(50), plate_number.trim())
       .query('SELECT id FROM cars WHERE plate_number = @plate');
     if (dup.recordset.length > 0) {
       return res.status(400).json({ error: 'رقم اللوحة مسجل مسبقاً' });
     }
     await pool.request()
-      .input('plate', sql.NVarChar, plate_number.trim())
-      .input('img', sql.NVarChar, imagePath)
+      .input('plate', sql.NVarChar(50), plate_number.trim())
+      .input('img', sql.NVarChar(sql.MAX), imagePath)
       .query(`INSERT INTO cars (plate_number, image_path) VALUES (@plate, @img)`);
     res.status(201).json({ message: 'تم إضافة السيارة بنجاح' });
   } catch (error) {
@@ -90,18 +97,24 @@ router.get('/:id/transactions', async (req, res) => {
 // PUT /api/cars/:id - update a car (multipart/form-data)
 router.put('/:id', upload.single('image'), async (req, res) => {
   const { id } = req.params;
-  let { plate_number } = req.body;
+  let plate_number = req.body.plate_number;
   if (!plate_number) {
     return res.status(400).json({ error: 'رقم اللوحة مطلوب' });
   }
-  plate_number = decodeURIComponent(plate_number);
+  if (req.headers['content-type'] && req.headers['content-type'].includes('multipart/form-data')) {
+    try {
+      if (/[^\x00-\x7F]/.test(plate_number) && plate_number.includes('Ø')) {
+         plate_number = Buffer.from(plate_number, 'latin1').toString('utf8');
+      }
+    } catch(e) {}
+  }
   const imagePath = req.file ? path.join('uploads', 'cars', req.file.filename) : null;
   
   try {
     const pool = getPool();
     // Check duplicate plate for other cars
     const dup = await pool.request()
-      .input('plate', sql.NVarChar, plate_number.trim())
+      .input('plate', sql.NVarChar(50), plate_number.trim())
       .input('id', sql.Int, id)
       .query('SELECT id FROM cars WHERE plate_number = @plate AND id != @id');
     if (dup.recordset.length > 0) {
@@ -111,13 +124,13 @@ router.put('/:id', upload.single('image'), async (req, res) => {
     if (imagePath) {
       await pool.request()
         .input('id', sql.Int, id)
-        .input('plate', sql.NVarChar, plate_number.trim())
-        .input('img', sql.NVarChar, imagePath)
+        .input('plate', sql.NVarChar(50), plate_number.trim())
+        .input('img', sql.NVarChar(sql.MAX), imagePath)
         .query(`UPDATE cars SET plate_number = @plate, image_path = @img WHERE id = @id`);
     } else {
       await pool.request()
         .input('id', sql.Int, id)
-        .input('plate', sql.NVarChar, plate_number.trim())
+        .input('plate', sql.NVarChar(50), plate_number.trim())
         .query(`UPDATE cars SET plate_number = @plate WHERE id = @id`);
     }
     res.json({ message: 'تم تحديث بيانات السيارة بنجاح' });
