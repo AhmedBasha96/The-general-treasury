@@ -43,13 +43,10 @@ router.post('/', upload.single('image'), async (req, res) => {
   if (!plate_number) {
     return res.status(400).json({ error: 'رقم اللوحة مطلوب' });
   }
-  // If it came from multer, it might be latin1 encoded instead of utf8.
+  // If it came from multer, it was explicitly encoded in the frontend using encodeURIComponent to prevent mangling
   if (req.headers['content-type'] && req.headers['content-type'].includes('multipart/form-data')) {
     try {
-      // Safely attempt to convert from latin1 to utf8 if it has garbled characters
-      if (/[^\x00-\x7F]/.test(plate_number) && plate_number.includes('Ø')) {
-         plate_number = Buffer.from(plate_number, 'latin1').toString('utf8');
-      }
+      plate_number = decodeURIComponent(plate_number);
     } catch(e) {}
   }
   const imagePath = req.file ? path.join('uploads', 'cars', req.file.filename) : null;
@@ -105,9 +102,7 @@ router.put('/:id', upload.single('image'), async (req, res) => {
   }
   if (req.headers['content-type'] && req.headers['content-type'].includes('multipart/form-data')) {
     try {
-      if (/[^\x00-\x7F]/.test(plate_number) && plate_number.includes('Ø')) {
-         plate_number = Buffer.from(plate_number, 'latin1').toString('utf8');
-      }
+      plate_number = decodeURIComponent(plate_number);
     } catch(e) {}
   }
   const imagePath = req.file ? path.join('uploads', 'cars', req.file.filename) : null;

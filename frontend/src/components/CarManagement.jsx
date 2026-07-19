@@ -38,7 +38,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
 
       if (image) {
         reqBody = new FormData();
-        reqBody.append('plate_number', combinedPlate);
+        reqBody.append('plate_number', encodeURIComponent(combinedPlate));
         reqBody.append('image', image);
       } else {
         reqBody = JSON.stringify({ plate_number: combinedPlate });
