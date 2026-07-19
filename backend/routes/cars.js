@@ -38,7 +38,7 @@ router.get('/', async (req, res) => {
 });
 // POST /api/cars - add a new car
 router.post('/', upload.single('image'), async (req, res) => {
-  let plate_number = req.body.plate_number;
+  let plate_number = req.body?.plate_number;
   if (!plate_number) {
     return res.status(400).json({ error: 'رقم اللوحة مطلوب' });
   }
@@ -97,7 +97,7 @@ router.get('/:id/transactions', async (req, res) => {
 // PUT /api/cars/:id - update a car (multipart/form-data)
 router.put('/:id', upload.single('image'), async (req, res) => {
   const { id } = req.params;
-  let plate_number = req.body.plate_number;
+  let plate_number = req.body?.plate_number;
   if (!plate_number) {
     return res.status(400).json({ error: 'رقم اللوحة مطلوب' });
   }

@@ -9,9 +9,7 @@ const PORT = process.env.PORT || 5000;
 const path = require('path');
 // Serve uploaded car images statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-// Car routes
-const carRouter = require('./routes/cars');
-app.use('/api/cars', carRouter);
+
 
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
@@ -21,6 +19,10 @@ app.use(express.urlencoded({ limit: '5mb', extended: true }));
 app.get('/api/status', (req, res) => {
   res.json({ status: 'OK', message: 'Cash Safe API is running.' });
 });
+
+// Car routes
+const carRouter = require('./routes/cars');
+app.use('/api/cars', carRouter);
 
 // POST /api/auth/login
 app.post('/api/auth/login', async (req, res) => {
