@@ -6,6 +6,12 @@ const { connectDB, getPool, sql } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const path = require('path');
+// Serve uploaded car images statically
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Car routes
+const carRouter = require('./routes/cars');
+app.use('/api/cars', carRouter);
 
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
