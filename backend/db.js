@@ -73,7 +73,7 @@ async function createTables() {
       BEGIN
         CREATE TABLE agencies (
           id INT IDENTITY(1,1) PRIMARY KEY,
-          code VARCHAR(50) UNIQUE NOT NULL,
+          code NVARCHAR(50) UNIQUE NOT NULL,
           name NVARCHAR(255) NOT NULL,
           created_at DATETIME DEFAULT GETDATE()
         );
@@ -86,7 +86,7 @@ async function createTables() {
       BEGIN
         CREATE TABLE banks (
           id INT IDENTITY(1,1) PRIMARY KEY,
-          code VARCHAR(50) UNIQUE NOT NULL,
+          code NVARCHAR(50) UNIQUE NOT NULL,
           name NVARCHAR(255) NOT NULL,
           account_number VARCHAR(100) NOT NULL,
           account_name NVARCHAR(255),
@@ -111,7 +111,7 @@ async function createTables() {
       BEGIN
         CREATE TABLE supervisors (
           id INT IDENTITY(1,1) PRIMARY KEY,
-          code VARCHAR(50) UNIQUE NOT NULL,
+          code NVARCHAR(50) UNIQUE NOT NULL,
           name NVARCHAR(255) NOT NULL,
           created_at DATETIME DEFAULT GETDATE()
         );
@@ -132,7 +132,7 @@ async function createTables() {
       BEGIN
         CREATE TABLE representatives (
           id INT IDENTITY(1,1) PRIMARY KEY,
-          code VARCHAR(50) UNIQUE NOT NULL,
+          code NVARCHAR(50) UNIQUE NOT NULL,
           name NVARCHAR(255) NOT NULL,
           phone VARCHAR(50),
           type VARCHAR(20) DEFAULT 'retail',
@@ -197,7 +197,7 @@ async function createTables() {
       BEGIN
         CREATE TABLE companies (
           id INT IDENTITY(1,1) PRIMARY KEY,
-          code VARCHAR(50) UNIQUE NOT NULL,
+          code NVARCHAR(50) UNIQUE NOT NULL,
           name NVARCHAR(255) NOT NULL,
           bank_account_number VARCHAR(100) NULL,
           bank_name NVARCHAR(255) NULL,
