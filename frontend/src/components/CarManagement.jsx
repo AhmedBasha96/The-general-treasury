@@ -13,7 +13,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
 
   const loadCars = async () => {
     try {
-      const res = await fetch('/api/cars');
+      const res = await fetch(`/api/cars?t=${new Date().getTime()}`);
       if (res.ok) setCars(await res.json());
     } catch (e) {
       console.error('Error fetching cars', e);
