@@ -86,4 +86,58 @@ router.get('/:id/transactions', async (req, res) => {
   }
 });
 
+// PUT /api/cars/:id - update a car (multipart/form-data)
+router.put('/:id', upload.single('image'), async (req, res) => {
+  const { id } = req.params;
+  const { plate_number } = req.body;
+  if (!plate_number) {
+    return res.status(400).json({ error: 'رقم اللوحة مطلوب' });
+  }
+  const imagePath = req.file ? path.join('uploads', 'cars', req.file.filename) : null;
+  
+  try {
+    const pool = getPool();
+    // Check duplicate plate for other cars
+    const dup = await pool.request()
+      .input('plate', sql.NVarChar, plate_number.trim())
+      .input('id', sql.Int, id)
+      .query('SELECT id FROM cars WHERE plate_number = @plate AND id != @id');
+    if (dup.recordset.length > 0) {
+      return res.status(400).json({ error: 'رقم اللوحة مسجل لسيارة أخرى' });
+    }
+
+    if (imagePath) {
+      await pool.request()
+        .input('id', sql.Int, id)
+        .input('plate', sql.NVarChar, plate_number.trim())
+        .input('img', sql.NVarChar, imagePath)
+        .query(`UPDATE cars SET plate_number = @plate, image_path = @img WHERE id = @id`);
+    } else {
+      await pool.request()
+        .input('id', sql.Int, id)
+        .input('plate', sql.NVarChar, plate_number.trim())
+        .query(`UPDATE cars SET plate_number = @plate WHERE id = @id`);
+    }
+    res.json({ message: 'تم تحديث بيانات السيارة بنجاح' });
+  } catch (error) {
+    console.error('Error updating car:', error);
+    res.status(500).json({ error: 'فشل تحديث بيانات السيارة' });
+  }
+});
+
+// DELETE /api/cars/:id - delete a car
+router.delete('/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const pool = getPool();
+    await pool.request()
+      .input('id', sql.Int, id)
+      .query(`DELETE FROM cars WHERE id = @id`);
+    res.json({ message: 'تم حذف السيارة بنجاح' });
+  } catch (error) {
+    console.error('Error deleting car:', error);
+    res.status(500).json({ error: 'فشل حذف السيارة' });
+  }
+});
+
 module.exports = router;

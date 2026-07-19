@@ -6,6 +6,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
   const [image, setImage] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [editingCar, setEditingCar] = useState(null);
 
   const loadCars = async () => {
     try {
@@ -31,15 +32,18 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
     if (image) form.append('image', image);
 
     try {
-      const res = await fetch('/api/cars', { method: 'POST', body: form });
+      const url = editingCar ? `/api/cars/${editingCar.id}` : '/api/cars';
+      const method = editingCar ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, body: form });
       const data = await res.json();
       if (res.ok) {
         setPlate('');
         setImage(null);
+        setEditingCar(null);
         loadCars();
         if (onCarAdded) onCarAdded();
       } else {
-        setError(data.error || 'فشل إضافة السيارة');
+        setError(data.error || (editingCar ? 'فشل تعديل السيارة' : 'فشل إضافة السيارة'));
       }
     } catch (err) {
       console.error(err);
@@ -49,13 +53,45 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
     }
   };
 
+  const handleEditClick = (c, e) => {
+    e.stopPropagation();
+    setEditingCar(c);
+    setPlate(c.plate_number);
+    setImage(null);
+    setError('');
+  };
+
+  const handleDeleteClick = async (c, e) => {
+    e.stopPropagation();
+    if (!window.confirm(`هل أنت متأكد من حذف السيارة ${c.plate_number}؟`)) return;
+    
+    try {
+      const res = await fetch(`/api/cars/${c.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        if (editingCar && editingCar.id === c.id) {
+          setEditingCar(null);
+          setPlate('');
+          setImage(null);
+          setError('');
+        }
+        loadCars();
+        if (onCarAdded) onCarAdded();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'فشل حذف السيارة');
+      }
+    } catch (err) {
+      alert('تعذر الاتصال بالخادم');
+    }
+  };
+
   return (
     <div style={{ padding: '1.5rem' }}>
       
       <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
         {/* Form Section */}
         <div style={{ flex: '1', minWidth: '300px', background: 'var(--bg-primary)', padding: '1.5rem', borderRadius: '15px', border: '1px solid var(--border-color)' }}>
-          <h4 style={{ marginBottom: '1rem', color: 'var(--text-primary)' }}>إضافة سيارة جديدة</h4>
+          <h4 style={{ marginBottom: '1rem', color: 'var(--text-primary)' }}>{editingCar ? 'تعديل سيارة' : 'إضافة سيارة جديدة'}</h4>
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>رقم اللوحة:</label>
@@ -81,8 +117,17 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
             {error && <div style={{ color: 'var(--error)', background: 'var(--error-bg)', padding: '0.5rem', borderRadius: '8px' }}>{error}</div>}
 
             <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop: '0.5rem' }}>
-              {loading ? 'جاري الإضافة…' : 'إضافة سيارة'}
+              {loading ? 'جاري الحفظ…' : (editingCar ? 'تحديث البيانات' : 'إضافة سيارة')}
             </button>
+            {editingCar && (
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                onClick={() => { setEditingCar(null); setPlate(''); setImage(null); setError(''); }} 
+                style={{ marginTop: '0.5rem' }}>
+                إلغاء التعديل
+              </button>
+            )}
           </form>
         </div>
 
@@ -122,6 +167,18 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
                   )}
                   <div style={{ padding: '1rem', fontWeight: 'bold', fontSize: '1.2rem', color: 'var(--text-primary)' }}>
                     {c.plate_number}
+                  </div>
+                  <div style={{ display: 'flex', borderTop: '1px solid var(--border-color)', background: 'var(--bg-primary)' }}>
+                    <button 
+                      onClick={(e) => handleEditClick(c, e)} 
+                      style={{ flex: 1, padding: '0.5rem', background: 'transparent', border: 'none', borderLeft: '1px solid var(--border-color)', cursor: 'pointer', color: 'var(--primary)', fontWeight: 'bold' }}>
+                      تعديل ✏️
+                    </button>
+                    <button 
+                      onClick={(e) => handleDeleteClick(c, e)} 
+                      style={{ flex: 1, padding: '0.5rem', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontWeight: 'bold' }}>
+                      حذف 🗑️
+                    </button>
                   </div>
                 </div>
               ))}
