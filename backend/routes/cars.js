@@ -30,6 +30,7 @@ router.get('/', async (req, res) => {
   try {
     const pool = getPool();
     const result = await pool.request().query(`SELECT id, plate_number, image_path FROM cars ORDER BY plate_number`);
+    console.log("GET /api/cars returning:", result.recordset);
     res.json(result.recordset);
   } catch (error) {
     console.error('Error fetching cars:', error);
