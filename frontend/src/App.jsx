@@ -658,11 +658,16 @@ const [showCarModal, setShowCarModal] = useState(false);
   const [agenciesLoaded, setAgenciesLoaded] = useState(false);
   const [banksLoaded, setBanksLoaded] = useState(false);
   const [supervisorsLoaded, setSupervisorsLoaded] = useState(false);
+  const [carsList, setCarsList] = useState([]);
+  const [carsLoaded, setCarsLoaded] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [selectedRepLedger, setSelectedRepLedger] = useState(null); // Detailed statement modal/view
   const [selectedAgencyLedger, setSelectedAgencyLedger] = useState(null); // Detailed agency ledger view
   const [selectedBankLedger, setSelectedBankLedger] = useState(null); // Detailed bank ledger view
   const [selectedSupervisorReps, setSelectedSupervisorReps] = useState(null); // Detailed supervisor reps view
+  const [selectedCarLedger, setSelectedCarLedger] = useState(null); // Detailed car ledger view
+  const [carLedgerLoading, setCarLedgerLoading] = useState(false);
+  const [carLedgerData, setCarLedgerData] = useState(null);
   
   // New Agency Form State
   const [newAgency, setNewAgency] = useState({ code: '', name: '' });
@@ -751,8 +756,8 @@ const [showCarModal, setShowCarModal] = useState(false);
   }, [supervisors, supervisorsLoaded, newSupervisor.code]);
   
   // New Transaction Form State
-  const [newTx, setNewTx] = useState({ type: 'deposit', repId: '', bankId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash' });
-  const [txSourceType, setTxSourceType] = useState('rep'); // 'rep' | 'bank' | 'direct'
+  const [newTx, setNewTx] = useState({ type: 'deposit', repId: '', bankId: '', companyId: '', carId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash' });
+  const [txSourceType, setTxSourceType] = useState('rep'); // 'rep' | 'bank' | 'direct' | 'company'
   const [denominations, setDenominations] = useState({
     denom_200: 0,
     denom_100: 0,
@@ -805,6 +810,7 @@ const [showCarModal, setShowCarModal] = useState(false);
         loadBanks();
         loadCompanies();
         loadSupervisors();
+        loadCarsList();
         loadTransactions();
         loadCarExpenses();
         if (currentUser.role === 'manager') {
@@ -860,6 +866,7 @@ const [showCarModal, setShowCarModal] = useState(false);
         loadReps();
         loadSupervisors();
         loadCompanies();
+        loadCarsList();
         
         if (currentUser.role === 'manager') {
           loadPendingTx();
@@ -958,6 +965,21 @@ const [showCarModal, setShowCarModal] = useState(false);
       }
     } catch (err) {
       console.error('Failed to load car expenses:', err);
+    }
+  };
+
+  const loadCarsList = async () => {
+    setCarsLoaded(false);
+    try {
+      const res = await fetch('/api/cars');
+      if (res.ok) {
+        const data = await res.json();
+        setCarsList(data);
+      }
+    } catch (err) {
+      console.error('Failed to load cars list:', err);
+    } finally {
+      setCarsLoaded(true);
     }
   };
 
@@ -3531,8 +3553,53 @@ const [showCarModal, setShowCarModal] = useState(false);
             <div className="panel-header">
               <h3 className="panel-title">🚗 إدارة أسطول السيارات</h3>
             </div>
-            <CarManagement onCarAdded={loadCarExpenses} />
+            <CarManagement onCarAdded={loadCarExpenses} onCarClick={(car) => loadCarLedger(car)} />
           </div>
+
+          {selectedCarLedger && (
+            <div className="panel" style={{ border: '2px solid var(--primary)', marginBottom: '2rem', animation: 'fadeIn 0.3s' }}>
+               <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                 <div>
+                   <h2 className="panel-title" style={{ margin: 0 }}>📋 كشف مصاريف السيارة: {selectedCarLedger.plate_number}</h2>
+                 </div>
+                 <button className="btn btn-secondary" onClick={() => setSelectedCarLedger(null)}>العودة للسيارات 🔙</button>
+               </div>
+               {carLedgerLoading ? (
+                 <div style={{ padding: '2rem', textAlign: 'center' }}>جاري التحميل...</div>
+               ) : (
+                 <table style={{ marginTop: '1rem' }}>
+                   <thead>
+                     <tr>
+                       <th>التاريخ</th>
+                       <th>بند الصرف</th>
+                       <th>القيمة</th>
+                       <th>بواسطة</th>
+                       <th>ملاحظات</th>
+                     </tr>
+                   </thead>
+                   <tbody>
+                     {!carLedgerData || carLedgerData.length === 0 ? (
+                       <tr><td colSpan="5" style={{ textAlign: 'center', padding: '2rem' }}>لا يوجد مصاريف مسجلة لهذه السيارة</td></tr>
+                     ) : (
+                       carLedgerData.map(tx => (
+                         <tr key={tx.id}>
+                           <td>{new Date(tx.date).toLocaleString('ar-EG')}</td>
+                           <td>
+                             <span className="badge badge-withdrawal">
+                               {tx.withdrawal_sub_type === 'car_gas' ? 'جاز' : tx.withdrawal_sub_type === 'car_oil' ? 'زيت' : 'مصاريف أخرى'}
+                             </span>
+                           </td>
+                           <td style={{ color: '#ef4444', fontWeight: 'bold' }}>{Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                           <td>{tx.creator_name || '—'}</td>
+                           <td>{tx.notes || '—'}</td>
+                         </tr>
+                       ))
+                     )}
+                   </tbody>
+                 </table>
+               )}
+            </div>
+          )}
 
           {/* Analytical Breakdowns */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', marginBottom: '1.5rem' }}>
@@ -4292,18 +4359,31 @@ const [showCarModal, setShowCarModal] = useState(false);
                       </div>
 
                       {newTx.withdrawal_sub_type && newTx.withdrawal_sub_type.startsWith('car') && (
-                        <div className="form-group" style={{ marginBottom: '1.5rem', paddingRight: '1rem', borderRight: '3px solid var(--primary)' }}>
-                          <label>بند مصروفات السيارة <span style={{ color: 'var(--danger)' }}>*</span></label>
-                          <select 
-                            value={newTx.withdrawal_sub_type}
-                            onChange={(e) => setNewTx(prev => ({ ...prev, withdrawal_sub_type: e.target.value }))}
-                            required
-                          >
-                            <option value="car_gas">جاز</option>
-                            <option value="car_oil">زيت</option>
-                            <option value="car_other">مصاريف أخرى</option>
-                          </select>
-                        </div>
+                        <>
+                          <div className="form-group" style={{ marginBottom: '1.5rem', paddingRight: '1rem', borderRight: '3px solid var(--primary)' }}>
+                            <label>السيارة <span style={{ color: 'var(--danger)' }}>*</span></label>
+                            <select 
+                              value={newTx.carId || ''}
+                              onChange={(e) => setNewTx(prev => ({ ...prev, carId: e.target.value }))}
+                              required
+                            >
+                              <option value="">اختر السيارة...</option>
+                              {carsList.map(c => <option key={c.id} value={c.id}>{c.plate_number}</option>)}
+                            </select>
+                          </div>
+                          <div className="form-group" style={{ marginBottom: '1.5rem', paddingRight: '1rem', borderRight: '3px solid var(--primary)' }}>
+                            <label>بند مصروفات السيارة <span style={{ color: 'var(--danger)' }}>*</span></label>
+                            <select 
+                              value={newTx.withdrawal_sub_type}
+                              onChange={(e) => setNewTx(prev => ({ ...prev, withdrawal_sub_type: e.target.value }))}
+                              required
+                            >
+                              <option value="car_gas">جاز</option>
+                              <option value="car_oil">زيت</option>
+                              <option value="car_other">مصاريف أخرى</option>
+                            </select>
+                          </div>
+                        </>
                       )}
                     </>
                   )}

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-export default function CarManagement({ onCarAdded }) {
+export default function CarManagement({ onCarAdded, onCarClick }) {
   const [cars, setCars] = useState([]);
   const [plate, setPlate] = useState('');
   const [image, setImage] = useState(null);
@@ -96,13 +96,21 @@ export default function CarManagement({ onCarAdded }) {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
               {cars.map((c) => (
-                <div key={c.id} style={{ 
-                  background: 'var(--bg-secondary)', 
-                  border: '1px solid var(--border-color)', 
-                  borderRadius: '12px', 
-                  overflow: 'hidden',
-                  textAlign: 'center'
-                }}>
+                <div 
+                  key={c.id} 
+                  style={{ 
+                    background: 'var(--bg-secondary)', 
+                    border: '1px solid var(--border-color)', 
+                    borderRadius: '12px', 
+                    overflow: 'hidden',
+                    textAlign: 'center',
+                    cursor: onCarClick ? 'pointer' : 'default',
+                    transition: 'transform 0.2s'
+                  }}
+                  onClick={() => onCarClick && onCarClick(c)}
+                  onMouseOver={(e) => { if (onCarClick) e.currentTarget.style.transform = 'scale(1.03)'; }}
+                  onMouseOut={(e) => { if (onCarClick) e.currentTarget.style.transform = 'scale(1)'; }}
+                >
                   {c.image_path ? (
                     <div style={{ height: '120px', width: '100%', overflow: 'hidden', background: '#e2e8f0' }}>
                       <img src={`/${c.image_path}`} alt={c.plate_number} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />

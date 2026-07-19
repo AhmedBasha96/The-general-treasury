@@ -1634,7 +1634,7 @@ app.get('/api/transactions', async (req, res) => {
 });
 // 6. POST /api/transactions (Add deposit with denominations check or withdrawal)
 app.post('/api/transactions', async (req, res) => {
-  const { rep_id, bank_id, agency_id, company_id, type, amount, notes, denominations, payment_method, cash_amount, bank_transfer_amount, receipt_image_bank, withdrawal_sub_type, incomingDenominations, outgoingDenominations } = req.body;
+  const { rep_id, bank_id, agency_id, company_id, type, amount, notes, denominations, payment_method, cash_amount, bank_transfer_amount, receipt_image_bank, withdrawal_sub_type, incomingDenominations, outgoingDenominations, car_id } = req.body;
   const userRole = req.headers['x-user-role'];
   const userId = parseInt(req.headers['x-user-id']);
   const userAgencyId = parseInt(req.headers['x-user-agency-id']);
@@ -2187,10 +2187,11 @@ app.post('/api/transactions', async (req, res) => {
         .input('denom_1', sql.Int, d1)
         .input('status', sql.VarChar, statusVal)
         .input('created_by', sql.Int, (userRole === 'representative' || isNaN(userId)) ? null : userId)
+        .input('car_id', sql.Int, car_id || null)
         .query(`
-          INSERT INTO transactions (rep_id, bank_id, company_id, agency_id, type, payment_method, amount, date, notes, withdrawal_sub_type, denom_200, denom_100, denom_50, denom_20, denom_10, denom_5, denom_1, status, created_by)
+          INSERT INTO transactions (rep_id, bank_id, company_id, agency_id, type, payment_method, amount, date, notes, withdrawal_sub_type, denom_200, denom_100, denom_50, denom_20, denom_10, denom_5, denom_1, status, created_by, car_id)
           OUTPUT INSERTED.id
-          VALUES (@rep_id, @bank_id, @company_id, @agency_id, @type, @payment_method, @amount, @date, @notes, @withdrawal_sub_type, @denom_200, @denom_100, @denom_50, @denom_20, @denom_10, @denom_5, @denom_1, @status, @created_by)
+          VALUES (@rep_id, @bank_id, @company_id, @agency_id, @type, @payment_method, @amount, @date, @notes, @withdrawal_sub_type, @denom_200, @denom_100, @denom_50, @denom_20, @denom_10, @denom_5, @denom_1, @status, @created_by, @car_id)
         `);
         
       const singleId = insertSingle.recordset[0].id;
