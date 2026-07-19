@@ -398,10 +398,18 @@ async function createTables() {
       BEGIN
         CREATE TABLE cars (
           id INT IDENTITY(1,1) PRIMARY KEY,
-          plate_number NVARCHAR(50) UNIQUE NOT NULL,
+          plate_number NVARCHAR(50) COLLATE Arabic_100_CI_AS UNIQUE NOT NULL,
           image_path NVARCHAR(MAX) NULL,
           created_at DATETIME DEFAULT GETDATE()
         );
+      END
+    `);
+
+    // Ensure plate_number column uses Arabic collation if it was previously VARCHAR
+    await pool.request().query(`
+      IF EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('cars') AND name = 'plate_number' AND system_type_id = TYPE_ID('varchar'))
+      BEGIN
+        ALTER TABLE cars ALTER COLUMN plate_number NVARCHAR(50) COLLATE Arabic_100_CI_AS NOT NULL;
       END
     `);
 
