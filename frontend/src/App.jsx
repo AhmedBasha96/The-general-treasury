@@ -546,6 +546,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   const getWithdrawalSubTypes = () => {
     if (txSourceType === 'direct') {
       return [
+        { value: 'car', label: '🚗 مصاريف سيارات' },
         { value: 'direct_rent', label: '🏢 الإيجار' },
         { value: 'direct_operational', label: '🔧 مصاريف تشغيل عامة' },
         { value: 'direct_other', label: '📝 أخرى' }
