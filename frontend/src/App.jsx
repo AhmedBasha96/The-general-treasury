@@ -3493,15 +3493,6 @@ const [showCarModal, setShowCarModal] = useState(false);
                 <span style={{ fontSize: '1rem', fontWeight: 400, color: '#fca5a5', marginRight: '0.3rem' }}>ج.م</span>
               </div>
             </div>
-            <button className="btn btn-primary" style={{ marginTop: '1rem' }} onClick={() => setShowCarModal(true)}>
-              إضافة سيارة
-            </button>
-            {showCarModal && (
-              <CarManagement
-                onClose={() => setShowCarModal(false)}
-                onCarAdded={loadCarExpenses}
-              />
-            )}
 
             <div style={{
               background: 'linear-gradient(135deg, rgba(245,158,11,0.15) 0%, rgba(217,119,6,0.08) 100%)',
@@ -3534,6 +3525,13 @@ const [showCarModal, setShowCarModal] = useState(false);
                 <span style={{ fontSize: '1rem', fontWeight: 400, color: '#93c5fd', marginRight: '0.3rem' }}>ج.م</span>
               </div>
             </div>
+          </div>
+
+          <div className="panel" style={{ marginBottom: '1.5rem', overflow: 'hidden' }}>
+            <div className="panel-header">
+              <h3 className="panel-title">🚗 إدارة أسطول السيارات</h3>
+            </div>
+            <CarManagement onCarAdded={loadCarExpenses} />
           </div>
 
           {/* Analytical Breakdowns */}
