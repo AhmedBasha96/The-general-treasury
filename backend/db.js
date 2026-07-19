@@ -398,7 +398,7 @@ async function createTables() {
       BEGIN
         CREATE TABLE cars (
           id INT IDENTITY(1,1) PRIMARY KEY,
-          plate_number VARCHAR(50) UNIQUE NOT NULL,
+          plate_number NVARCHAR(50) UNIQUE NOT NULL,
           image_path NVARCHAR(MAX) NULL,
           created_at DATETIME DEFAULT GETDATE()
         );

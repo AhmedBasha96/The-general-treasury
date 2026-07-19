@@ -2,7 +2,10 @@ import React, { useEffect, useState } from 'react';
 
 export default function CarManagement({ onCarAdded, onCarClick }) {
   const [cars, setCars] = useState([]);
-  const [plate, setPlate] = useState('');
+  const [plateL1, setPlateL1] = useState('');
+  const [plateL2, setPlateL2] = useState('');
+  const [plateL3, setPlateL3] = useState('');
+  const [plateNum, setPlateNum] = useState('');
   const [image, setImage] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -23,12 +26,13 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!plate) return setError('رقم اللوحة مطلوب');
+    const combinedPlate = [plateL1.trim(), plateL2.trim(), plateL3.trim(), plateNum.trim()].filter(Boolean).join(' ');
+    if (!combinedPlate || !plateNum) return setError('أرقام اللوحة مطلوبة على الأقل');
     setLoading(true);
     setError('');
 
     const form = new FormData();
-    form.append('plate_number', plate);
+    form.append('plate_number', combinedPlate);
     if (image) form.append('image', image);
 
     try {
@@ -37,7 +41,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
       const res = await fetch(url, { method, body: form });
       const data = await res.json();
       if (res.ok) {
-        setPlate('');
+        setPlateL1(''); setPlateL2(''); setPlateL3(''); setPlateNum('');
         setImage(null);
         setEditingCar(null);
         loadCars();
@@ -56,7 +60,19 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
   const handleEditClick = (c, e) => {
     e.stopPropagation();
     setEditingCar(c);
-    setPlate(c.plate_number);
+    
+    // Parse plate format (e.g. "أ ب ج 1234")
+    const parts = (c.plate_number || '').split(' ');
+    if (parts.length > 1) {
+      setPlateNum(parts.pop());
+      setPlateL1(parts[0] || '');
+      setPlateL2(parts[1] || '');
+      setPlateL3(parts[2] || '');
+    } else {
+      setPlateL1(''); setPlateL2(''); setPlateL3('');
+      setPlateNum(c.plate_number);
+    }
+    
     setImage(null);
     setError('');
   };
@@ -70,7 +86,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
       if (res.ok) {
         if (editingCar && editingCar.id === c.id) {
           setEditingCar(null);
-          setPlate('');
+          setPlateL1(''); setPlateL2(''); setPlateL3(''); setPlateNum('');
           setImage(null);
           setError('');
         }
@@ -95,14 +111,42 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div>
               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>رقم اللوحة:</label>
-              <input
-                type="text"
-                className="input-field"
-                value={plate}
-                onChange={(e) => setPlate(e.target.value)}
-                placeholder="أ ب ج 1234"
-                required
-              />
+              <div style={{ display: 'flex', gap: '0.5rem', direction: 'ltr' }}>
+                <input
+                  type="text"
+                  className="input-field"
+                  style={{ flex: 2, textAlign: 'center' }}
+                  value={plateNum}
+                  onChange={(e) => setPlateNum(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
+                  placeholder="أرقام (1234)"
+                  required
+                />
+                <input
+                  type="text"
+                  className="input-field"
+                  style={{ flex: 1, textAlign: 'center' }}
+                  value={plateL3}
+                  onChange={(e) => setPlateL3(e.target.value.slice(0, 1))}
+                  placeholder="حرف 3"
+                />
+                <input
+                  type="text"
+                  className="input-field"
+                  style={{ flex: 1, textAlign: 'center' }}
+                  value={plateL2}
+                  onChange={(e) => setPlateL2(e.target.value.slice(0, 1))}
+                  placeholder="حرف 2"
+                />
+                <input
+                  type="text"
+                  className="input-field"
+                  style={{ flex: 1, textAlign: 'center' }}
+                  value={plateL1}
+                  onChange={(e) => setPlateL1(e.target.value.slice(0, 1))}
+                  placeholder="حرف 1"
+                  required
+                />
+              </div>
             </div>
             <div>
               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>صورة السيارة (اختياري):</label>
@@ -123,7 +167,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
               <button 
                 type="button" 
                 className="btn btn-secondary" 
-                onClick={() => { setEditingCar(null); setPlate(''); setImage(null); setError(''); }} 
+                onClick={() => { setEditingCar(null); setPlateL1(''); setPlateL2(''); setPlateL3(''); setPlateNum(''); setImage(null); setError(''); }} 
                 style={{ marginTop: '0.5rem' }}>
                 إلغاء التعديل
               </button>
