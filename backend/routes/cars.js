@@ -25,45 +25,61 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
+const fixUtf8String = (str) => {
+  if (!str) return '';
+  try {
+    if (str.includes('%')) {
+      return decodeURIComponent(str);
+    }
+    const decoded = Buffer.from(str, 'latin1').toString('utf8');
+    return decoded;
+  } catch (e) {
+    return str;
+  }
+};
+
 // GET /api/cars - list all cars
 router.get('/', async (req, res) => {
   try {
     const pool = getPool();
-    const result = await pool.request().query(`SELECT id, plate_number, image_path FROM cars ORDER BY plate_number`);
-    console.log("GET /api/cars returning:", result.recordset);
+    const result = await pool.request().query(`SELECT id, plate_number, plate_letters, plate_numbers, image_path FROM cars ORDER BY id DESC`);
     res.json(result.recordset);
   } catch (error) {
     console.error('Error fetching cars:', error);
     res.status(500).json({ error: 'فشل جلب بيانات السيارات' });
   }
 });
+
 // POST /api/cars - add a new car
 router.post('/', upload.single('image'), async (req, res) => {
-  let plate_number = req.body?.plate_number;
-  console.log("POST /api/cars received plate_number:", plate_number);
+  let plate_letters = fixUtf8String(req.body?.plate_letters).trim();
+  let plate_numbers = fixUtf8String(req.body?.plate_numbers).trim();
+  let plate_number = fixUtf8String(req.body?.plate_number).trim();
+
+  if (!plate_number && (plate_letters || plate_numbers)) {
+    plate_number = [plate_letters, plate_numbers].filter(Boolean).join(' ');
+  }
+
   if (!plate_number) {
     return res.status(400).json({ error: 'رقم اللوحة مطلوب' });
   }
-  // If it came from multer, it was explicitly encoded in the frontend using encodeURIComponent to prevent mangling
-  if (req.headers['content-type'] && req.headers['content-type'].includes('multipart/form-data')) {
-    try {
-      plate_number = decodeURIComponent(plate_number);
-    } catch(e) {}
-  }
+
   const imagePath = req.file ? `uploads/cars/${req.file.filename}` : null;
   try {
     const pool = getPool();
     // Check duplicate plate
     const dup = await pool.request()
-      .input('plate', sql.NVarChar(50), plate_number.trim())
+      .input('plate', sql.NVarChar(255), plate_number)
       .query('SELECT id FROM cars WHERE plate_number = @plate');
     if (dup.recordset.length > 0) {
       return res.status(400).json({ error: 'رقم اللوحة مسجل مسبقاً' });
     }
     await pool.request()
-      .input('plate', sql.NVarChar(50), plate_number.trim())
+      .input('plate', sql.NVarChar(255), plate_number)
+      .input('letters', sql.NVarChar(50), plate_letters || null)
+      .input('numbers', sql.NVarChar(50), plate_numbers || null)
       .input('img', sql.NVarChar(sql.MAX), imagePath)
-      .query(`INSERT INTO cars (plate_number, image_path) VALUES (@plate, @img)`);
+      .query(`INSERT INTO cars (plate_number, plate_letters, plate_numbers, image_path) VALUES (@plate, @letters, @numbers, @img)`);
     res.status(201).json({ message: 'تم إضافة السيارة بنجاح' });
   } catch (error) {
     console.error('Error adding car:', error);
@@ -79,7 +95,7 @@ router.get('/:id/transactions', async (req, res) => {
     const result = await pool.request()
       .input('car_id', sql.Int, id)
       .query(`
-        SELECT t.*, u.name as creator_name, c.plate_number
+        SELECT t.*, u.name as creator_name, c.plate_number, c.plate_letters, c.plate_numbers
         FROM transactions t
         LEFT JOIN users u ON t.created_by = u.id
         LEFT JOIN cars c ON t.car_id = c.id
@@ -96,23 +112,25 @@ router.get('/:id/transactions', async (req, res) => {
 // PUT /api/cars/:id - update a car (multipart/form-data)
 router.put('/:id', upload.single('image'), async (req, res) => {
   const { id } = req.params;
-  let plate_number = req.body?.plate_number;
-  console.log(`PUT /api/cars/${id} received plate_number:`, plate_number);
+  let plate_letters = fixUtf8String(req.body?.plate_letters).trim();
+  let plate_numbers = fixUtf8String(req.body?.plate_numbers).trim();
+  let plate_number = fixUtf8String(req.body?.plate_number).trim();
+
+  if (!plate_number && (plate_letters || plate_numbers)) {
+    plate_number = [plate_letters, plate_numbers].filter(Boolean).join(' ');
+  }
+
   if (!plate_number) {
     return res.status(400).json({ error: 'رقم اللوحة مطلوب' });
   }
-  if (req.headers['content-type'] && req.headers['content-type'].includes('multipart/form-data')) {
-    try {
-      plate_number = decodeURIComponent(plate_number);
-    } catch(e) {}
-  }
+
   const imagePath = req.file ? `uploads/cars/${req.file.filename}` : null;
   
   try {
     const pool = getPool();
     // Check duplicate plate for other cars
     const dup = await pool.request()
-      .input('plate', sql.NVarChar(50), plate_number.trim())
+      .input('plate', sql.NVarChar(255), plate_number)
       .input('id', sql.Int, id)
       .query('SELECT id FROM cars WHERE plate_number = @plate AND id != @id');
     if (dup.recordset.length > 0) {
@@ -122,14 +140,18 @@ router.put('/:id', upload.single('image'), async (req, res) => {
     if (imagePath) {
       await pool.request()
         .input('id', sql.Int, id)
-        .input('plate', sql.NVarChar(50), plate_number.trim())
+        .input('plate', sql.NVarChar(255), plate_number)
+        .input('letters', sql.NVarChar(50), plate_letters || null)
+        .input('numbers', sql.NVarChar(50), plate_numbers || null)
         .input('img', sql.NVarChar(sql.MAX), imagePath)
-        .query(`UPDATE cars SET plate_number = @plate, image_path = @img WHERE id = @id`);
+        .query(`UPDATE cars SET plate_number = @plate, plate_letters = @letters, plate_numbers = @numbers, image_path = @img WHERE id = @id`);
     } else {
       await pool.request()
         .input('id', sql.Int, id)
-        .input('plate', sql.NVarChar(50), plate_number.trim())
-        .query(`UPDATE cars SET plate_number = @plate WHERE id = @id`);
+        .input('plate', sql.NVarChar(255), plate_number)
+        .input('letters', sql.NVarChar(50), plate_letters || null)
+        .input('numbers', sql.NVarChar(50), plate_numbers || null)
+        .query(`UPDATE cars SET plate_number = @plate, plate_letters = @letters, plate_numbers = @numbers WHERE id = @id`);
     }
     res.json({ message: 'تم تحديث بيانات السيارة بنجاح' });
   } catch (error) {

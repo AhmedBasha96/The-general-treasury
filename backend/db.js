@@ -405,7 +405,17 @@ async function createTables() {
       END
     `);
 
-    // Plate number column already has proper Arabic collation; no alteration needed.
+    // Ensure plate_letters and plate_numbers columns exist in cars table
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('cars') AND name = 'plate_letters')
+      BEGIN
+        ALTER TABLE cars ADD plate_letters NVARCHAR(50) NULL;
+      END
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('cars') AND name = 'plate_numbers')
+      BEGIN
+        ALTER TABLE cars ADD plate_numbers NVARCHAR(50) NULL;
+      END
+    `);
 
     // Add car_id column to transactions if missing
     await pool.request().query(`

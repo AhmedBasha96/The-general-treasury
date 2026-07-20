@@ -27,7 +27,10 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const combinedPlate = [plateL1.trim(), plateL2.trim(), plateL3.trim(), plateNum.trim()].filter(Boolean).join(' ');
+    const lettersStr = [plateL1.trim(), plateL2.trim(), plateL3.trim()].filter(Boolean).join(' ');
+    const numbersStr = plateNum.trim();
+    const combinedPlate = [lettersStr, numbersStr].filter(Boolean).join(' ');
+
     if (!combinedPlate || !plateNum) return setError('أرقام اللوحة مطلوبة على الأقل');
     setLoading(true);
     setError('');
@@ -39,10 +42,12 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
 
       if (image) {
         reqBody = new FormData();
+        reqBody.append('plate_letters', lettersStr);
+        reqBody.append('plate_numbers', numbersStr);
         reqBody.append('plate_number', combinedPlate);
         reqBody.append('image', image);
       } else {
-        reqBody = JSON.stringify({ plate_number: combinedPlate });
+        reqBody = JSON.stringify({ plate_letters: lettersStr, plate_numbers: numbersStr, plate_number: combinedPlate });
         headers = { 'Content-Type': 'application/json' };
       }
 
@@ -69,16 +74,23 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
     e.stopPropagation();
     setEditingCar(c);
     
-    // Parse plate format (e.g. "أ ب ج 1234")
-    const parts = (c.plate_number || '').split(' ');
-    if (parts.length > 1) {
-      setPlateNum(parts.pop());
-      setPlateL1(parts[0] || '');
-      setPlateL2(parts[1] || '');
-      setPlateL3(parts[2] || '');
+    if (c.plate_letters || c.plate_numbers) {
+      const letters = (c.plate_letters || '').split(' ');
+      setPlateL1(letters[0] || '');
+      setPlateL2(letters[1] || '');
+      setPlateL3(letters[2] || '');
+      setPlateNum(c.plate_numbers || '');
     } else {
-      setPlateL1(''); setPlateL2(''); setPlateL3('');
-      setPlateNum(c.plate_number);
+      const parts = (c.plate_number || '').split(' ');
+      if (parts.length > 1) {
+        setPlateNum(parts.pop());
+        setPlateL1(parts[0] || '');
+        setPlateL2(parts[1] || '');
+        setPlateL3(parts[2] || '');
+      } else {
+        setPlateL1(''); setPlateL2(''); setPlateL3('');
+        setPlateNum(c.plate_number || '');
+      }
     }
     
     setImage(null);
@@ -223,8 +235,15 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
                       🚗
                     </div>
                   )}
-                  <div style={{ padding: '1rem', fontWeight: 'bold', fontSize: '1.2rem', color: 'var(--text-primary)' }}>
-                    {c.plate_number}
+                  <div style={{ padding: '0.8rem 1rem', fontWeight: 'bold', fontSize: '1.2rem', color: 'var(--text-primary)' }}>
+                    {c.plate_letters || c.plate_numbers ? (
+                      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}>
+                        <span>{c.plate_letters}</span>
+                        <span style={{ opacity: 0.85 }}>{c.plate_numbers}</span>
+                      </div>
+                    ) : (
+                      c.plate_number
+                    )}
                   </div>
                   <div style={{ display: 'flex', borderTop: '1px solid var(--border-color)', background: 'var(--bg-primary)' }}>
                     <button 
