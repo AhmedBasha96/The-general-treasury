@@ -10,6 +10,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [editingCar, setEditingCar] = useState(null);
+  const [failedImages, setFailedImages] = useState({});
 
   const loadCars = async () => {
     try {
@@ -38,7 +39,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
 
       if (image) {
         reqBody = new FormData();
-        reqBody.append('plate_number', encodeURIComponent(combinedPlate));
+        reqBody.append('plate_number', combinedPlate);
         reqBody.append('image', image);
       } else {
         reqBody = JSON.stringify({ plate_number: combinedPlate });
@@ -208,9 +209,14 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
                   onMouseOver={(e) => { if (onCarClick) e.currentTarget.style.transform = 'scale(1.03)'; }}
                   onMouseOut={(e) => { if (onCarClick) e.currentTarget.style.transform = 'scale(1)'; }}
                 >
-                  {c.image_path ? (
-                    <div style={{ height: '120px', width: '100%', overflow: 'hidden', background: '#e2e8f0' }}>
-                      <img src={`/${c.image_path}`} alt={c.plate_number} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  {c.image_path && !failedImages[c.id] ? (
+                    <div style={{ height: '120px', width: '100%', overflow: 'hidden', background: 'var(--bg-primary)' }}>
+                      <img 
+                        src={c.image_path.startsWith('http') || c.image_path.startsWith('/') ? c.image_path.replace(/\\/g, '/') : `/${c.image_path.replace(/\\/g, '/')}`} 
+                        alt={c.plate_number} 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        onError={() => setFailedImages(prev => ({ ...prev, [c.id]: true }))}
+                      />
                     </div>
                   ) : (
                     <div style={{ height: '120px', width: '100%', background: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '3rem' }}>

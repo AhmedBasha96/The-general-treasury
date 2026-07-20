@@ -50,7 +50,7 @@ router.post('/', upload.single('image'), async (req, res) => {
       plate_number = decodeURIComponent(plate_number);
     } catch(e) {}
   }
-  const imagePath = req.file ? path.join('uploads', 'cars', req.file.filename) : null;
+  const imagePath = req.file ? `uploads/cars/${req.file.filename}` : null;
   try {
     const pool = getPool();
     // Check duplicate plate
@@ -106,7 +106,7 @@ router.put('/:id', upload.single('image'), async (req, res) => {
       plate_number = decodeURIComponent(plate_number);
     } catch(e) {}
   }
-  const imagePath = req.file ? path.join('uploads', 'cars', req.file.filename) : null;
+  const imagePath = req.file ? `uploads/cars/${req.file.filename}` : null;
   
   try {
     const pool = getPool();
