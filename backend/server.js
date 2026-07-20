@@ -2033,7 +2033,7 @@ app.post('/api/transactions', async (req, res) => {
       : ((type === 'deposit' && payment_method === 'bank_transfer') ? 'bank_transfer' : 'cash');
     let d200 = 0, d100 = 0, d50 = 0, d20 = 0, d10 = 0, d5 = 0, d1 = 0;
     if (txPaymentMethod === 'cash') {
-      const skipDenoms = (type === 'withdrawal' && statusVal === 'pending') || (type === 'company_transfer');
+      const skipDenoms = (type === 'withdrawal') || (type === 'company_transfer');
       
       if (!skipDenoms) {
         if (!denominations) {
@@ -2732,7 +2732,7 @@ app.put('/api/transactions/:id', async (req, res) => {
       
       // Validate denominations if it's a cash deposit
       let d200 = tx.denom_200, d100 = tx.denom_100, d50 = tx.denom_50, d20 = tx.denom_20, d10 = tx.denom_10, d5 = tx.denom_5, d1 = tx.denom_1;
-      if ((tx.type === 'deposit' || tx.type === 'withdrawal') && (tx.payment_method === 'cash' || !tx.payment_method)) {
+      if (tx.type === 'deposit' && (tx.payment_method === 'cash' || !tx.payment_method)) {
         if (denominations) {
           d200 = Number(denominations.denom_200) || 0;
           d100 = Number(denominations.denom_100) || 0;

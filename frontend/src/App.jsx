@@ -4636,9 +4636,8 @@ const [showCarModal, setShowCarModal] = useState(false);
                 </>
               )}
 
-              {/* Cash Denominations Calculator - FOR DEPOSITS WITH CASH & FOR ALL WITHDRAWALS */}
-              {newTx.type !== 'exchange' && ((newTx.type === 'deposit' && (txSourceType === 'bank' ? (parseFloat(newTx.amount) || 0) > 0 : (parseFloat(newTx.cashAmount) || 0) > 0)) ||
-                (newTx.type === 'withdrawal' && (parseFloat(newTx.amount) || 0) > 0)) && (
+              {/* Cash Denominations Calculator - FOR DEPOSITS WITH CASH ONLY */}
+              {newTx.type !== 'exchange' && newTx.type === 'deposit' && (txSourceType === 'bank' ? (parseFloat(newTx.amount) || 0) > 0 : (parseFloat(newTx.cashAmount) || 0) > 0) && (
                 <div className="denom-section">
                   <div className="denom-section-title">
                     <span>💵 فئات المبالغ النقدية</span>
@@ -6141,7 +6140,7 @@ const [showCarModal, setShowCarModal] = useState(false);
               setEditError('');
               setEditSuccess('');
               
-              if ((editingTx.type === 'deposit' || editingTx.type === 'withdrawal') && editingTx.payment_method === 'cash') {
+              if (editingTx.type === 'deposit' && editingTx.payment_method === 'cash') {
                 const d = editingTx.denominations;
                 const calc = 
                   (Number(d.denom_200 || 0) * 200) + 
@@ -6313,7 +6312,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                 />
               </div>
               
-              {(editingTx.type === 'deposit' || editingTx.type === 'withdrawal') && editingTx.payment_method === 'cash' && (
+              {editingTx.type === 'deposit' && editingTx.payment_method === 'cash' && (
                 <div className="denom-section" style={{ marginTop: '1.5rem', marginBottom: '1.5rem' }}>
                   <div className="denom-section-title">💵 فئات المبالغ النقدية</div>
                   <div className="denom-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
