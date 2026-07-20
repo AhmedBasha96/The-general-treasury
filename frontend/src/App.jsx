@@ -5366,7 +5366,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                               {currentUser.role === 'manager' && (
                                 <button 
                                   className="btn btn-secondary" 
-                                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
+                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
                                   onClick={() => handleDeleteAgency(agency.id, agency.name)}
                                 >
                                   🗑️ حذف
