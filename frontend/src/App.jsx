@@ -1660,8 +1660,8 @@ const [showCarModal, setShowCarModal] = useState(false);
         return;
       }
 
-      // Validate denominations for safe withdrawals and bank deposits
-      if (newTx.type === 'withdrawal' || (newTx.type === 'deposit' && txSourceType === 'bank')) {
+      // Validate denominations for bank deposits only
+      if (newTx.type === 'deposit' && txSourceType === 'bank') {
         const calculatedTotal = 
           (Number(denominations.denom_200 || 0) * 200) + 
           (Number(denominations.denom_100 || 0) * 100) + 
@@ -1694,8 +1694,8 @@ const [showCarModal, setShowCarModal] = useState(false);
           requestBody.agency_id = newTx.agencyId || null;
         }
 
-        // Include denominations for cash transactions (deposits and withdrawals)
-        requestBody.denominations = denominations;
+        // Include denominations for cash deposits
+        requestBody.denominations = newTx.type === 'deposit' ? denominations : null;
 
         const res = await fetch('/api/transactions', {
           method: 'POST',
