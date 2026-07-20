@@ -6123,9 +6123,9 @@ const [showCarModal, setShowCarModal] = useState(false);
                     amount: Number(editingTx.amount),
                     notes: editingTx.notes,
                     withdrawal_sub_type: editingTx.withdrawal_sub_type,
-                    rep_id: editingTx.rep_id,
-                    bank_id: editingTx.bank_id,
-                    agency_id: editingTx.agency_id,
+                    ...(editingTx.rep_id ? { rep_id: editingTx.rep_id } : {}),
+                    ...(editingTx.bank_id ? { bank_id: editingTx.bank_id } : {}),
+                    ...(editingTx.agency_id ? { agency_id: editingTx.agency_id } : {}),
                     denominations: editingTx.type === 'deposit' && editingTx.payment_method === 'cash' ? editingTx.denominations : null
                   })
                 });
@@ -6167,14 +6167,10 @@ const [showCarModal, setShowCarModal] = useState(false);
                   <div className="form-group" style={{ marginBottom: '1rem' }}>
                     <label>نوع الصرف <span style={{ color: 'var(--danger)' }}>*</span></label>
                     <select
-                      value={editingTx.withdrawal_sub_type && editingTx.withdrawal_sub_type.startsWith('car') ? 'car' : (editingTx.withdrawal_sub_type || '')}
+                      value={editingTx.withdrawal_sub_type || ''}
                       onChange={(e) => {
                         const val = e.target.value;
-                        if (val === 'car') {
-                          setEditingTx({ ...editingTx, withdrawal_sub_type: 'car_gas' });
-                        } else {
-                          setEditingTx({ ...editingTx, withdrawal_sub_type: val });
-                        }
+                        setEditingTx({ ...editingTx, withdrawal_sub_type: val });
                       }}
                       required
                       style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
