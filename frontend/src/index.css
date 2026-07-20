@@ -348,6 +348,14 @@ input::placeholder, textarea::placeholder {
   color: var(--text-primary);
 }
 
+.btn-xs {
+  padding: 0.15rem 0.4rem !important;
+  font-size: 0.65rem !important;
+  border-radius: 4px !important;
+  line-height: 1.2 !important;
+  min-height: auto !important;
+}
+
 /* Tables & Lists */
 .table-container {
   overflow-x: auto;

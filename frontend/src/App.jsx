@@ -2651,7 +2651,19 @@ const [showCarModal, setShowCarModal] = useState(false);
                           </td>
                           <td>
                             <span className={`badge badge-${tx.type}`}>
-                              {tx.type === 'deposit' ? '📥 توريد' : '📤 صرف'}
+                              {tx.type === 'deposit' ? '📥 توريد' : (
+                                tx.withdrawal_sub_type === 'car' ? '🚗 سيارة' :
+                                tx.withdrawal_sub_type === 'car_gas' ? '⛽ سيارة (جاز)' :
+                                tx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)' :
+                                tx.withdrawal_sub_type === 'car_other' ? '🔧 سيارة (أخرى)' :
+                                tx.withdrawal_sub_type === 'salary' ? '💼 راتب' :
+                                tx.withdrawal_sub_type === 'commission' ? '💰 عمولة' :
+                                tx.withdrawal_sub_type === 'loan' ? '💸 سلفة' :
+                                tx.withdrawal_sub_type === 'direct_rent' ? '🏢 إيجار' :
+                                tx.withdrawal_sub_type === 'direct_operational' ? '🔧 تشغيل' :
+                                tx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى' :
+                                tx.withdrawal_sub_type === 'other' ? '📤 صرف عام' : '📤 صرف'
+                              )}
                             </span>
                           </td>
                           <td style={{ fontWeight: 'bold', color: tx.type === 'deposit' ? 'var(--success)' : 'var(--danger)' }}>
@@ -2889,7 +2901,19 @@ const [showCarModal, setShowCarModal] = useState(false);
                       </td>
                       <td>
                         <span className={`badge badge-${tx.type}`}>
-                          {tx.type === 'deposit' ? '📥 توريد' : tx.type === 'withdrawal' ? '📤 صرف' : tx.type === 'company_transfer' ? '🏢 حوالة' : '🔄 تسوية'}
+                          {tx.type === 'deposit' ? '📥 توريد' : tx.type === 'withdrawal' ? (
+                            tx.withdrawal_sub_type === 'car' ? '🚗 سيارة' :
+                            tx.withdrawal_sub_type === 'car_gas' ? '⛽ سيارة (جاز)' :
+                            tx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)' :
+                            tx.withdrawal_sub_type === 'car_other' ? '🔧 سيارة (أخرى)' :
+                            tx.withdrawal_sub_type === 'salary' ? '💼 راتب' :
+                            tx.withdrawal_sub_type === 'commission' ? '💰 عمولة' :
+                            tx.withdrawal_sub_type === 'loan' ? '💸 سلفة' :
+                            tx.withdrawal_sub_type === 'direct_rent' ? '🏢 إيجار' :
+                            tx.withdrawal_sub_type === 'direct_operational' ? '🔧 تشغيل' :
+                            tx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى' :
+                            tx.withdrawal_sub_type === 'other' ? '📤 صرف عام' : '📤 صرف'
+                          ) : tx.type === 'company_transfer' ? '🏢 حوالة' : '🔄 تسوية'}
                         </span>
                       </td>
                       <td>
@@ -3153,7 +3177,12 @@ const [showCarModal, setShowCarModal] = useState(false);
                                   tx.withdrawal_sub_type === 'car_oil' ? ' - سيارة (زيت)' : 
                                   tx.withdrawal_sub_type === 'car_other' ? ' - سيارة (مصاريف أخرى)' : 
                                   tx.withdrawal_sub_type === 'salary' ? ' - راتب' : 
-                                  tx.withdrawal_sub_type === 'commission' ? ' - عمولة' : ''
+                                  tx.withdrawal_sub_type === 'commission' ? ' - عمولة' :
+                                  tx.withdrawal_sub_type === 'loan' ? ' - سلفة' :
+                                  tx.withdrawal_sub_type === 'direct_rent' ? ' - إيجار' :
+                                  tx.withdrawal_sub_type === 'direct_operational' ? ' - تشغيل' :
+                                  tx.withdrawal_sub_type === 'direct_other' ? ' - عامة أخرى' :
+                                  tx.withdrawal_sub_type === 'other' ? ' - صرف عام' : ''
                                 )}
                               </span>
                             </td>
@@ -5293,7 +5322,12 @@ const [showCarModal, setShowCarModal] = useState(false);
                                  tx.withdrawal_sub_type === 'car_oil' ? ' - سيارة (زيت)' : 
                                  tx.withdrawal_sub_type === 'car_other' ? ' - سيارة (مصاريف أخرى)' : 
                                  tx.withdrawal_sub_type === 'salary' ? ' - راتب' : 
-                                 tx.withdrawal_sub_type === 'commission' ? ' - عمولة' : ''}
+                                 tx.withdrawal_sub_type === 'commission' ? ' - عمولة' :
+                                 tx.withdrawal_sub_type === 'loan' ? ' - سلفة' :
+                                 tx.withdrawal_sub_type === 'direct_rent' ? ' - إيجار' :
+                                 tx.withdrawal_sub_type === 'direct_operational' ? ' - تشغيل' :
+                                 tx.withdrawal_sub_type === 'direct_other' ? ' - عامة أخرى' :
+                                 tx.withdrawal_sub_type === 'other' ? ' - صرف عام' : ''}
                               </span>
                             </td>
                             <td>
@@ -5365,8 +5399,8 @@ const [showCarModal, setShowCarModal] = useState(false);
                               </button>
                               {currentUser.role === 'manager' && (
                                 <button 
-                                  className="btn btn-secondary" 
-                                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
+                                  className="btn btn-secondary btn-xs" 
+                                  style={{ padding: '0.15rem 0.4rem', fontSize: '0.65rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
                                   onClick={() => handleDeleteAgency(agency.id, agency.name)}
                                 >
                                   🗑️ حذف
@@ -5700,7 +5734,17 @@ const [showCarModal, setShowCarModal] = useState(false);
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
                   <div>
-                    <h3 style={{ color: 'var(--primary)', fontWeight: 800 }}>{selectedBankLedger.bank.name}</h3>
+                    <h3 style={{ color: 'var(--primary)', fontWeight: 800 }}>{selectedBankLedger.bank.name}
+                      {currentUser.role === 'manager' && (
+                        <button 
+                          className="btn btn-secondary btn-xs" 
+                          style={{ padding: '0.15rem 0.4rem', fontSize: '0.65rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)', marginRight: '10px' }}
+                          onClick={() => handleDeleteBank(selectedBankLedger.bank.id, selectedBankLedger.bank.name)}
+                        >
+                          🗑️ حذف
+                        </button>
+                      )}
+                    </h3>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
                       كود الحساب: {selectedBankLedger.bank.code} | رقم الحساب: {selectedBankLedger.bank.account_number}
                       {selectedBankLedger.bank.account_name && ` | اسم الحساب: ${selectedBankLedger.bank.account_name}`}
@@ -5883,8 +5927,8 @@ const [showCarModal, setShowCarModal] = useState(false);
                               </button>
                               {currentUser.role === 'manager' && (
                                 <button 
-                                  className="btn btn-secondary" 
-                                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
+                                  className="btn btn-secondary btn-xs"
+                                  style={{ padding: '0.15rem 0.4rem', fontSize: '0.65rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
                                   onClick={() => handleDeleteBank(bank.id, bank.name)}
                                 >
                                   🗑️ حذف
