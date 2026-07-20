@@ -235,12 +235,9 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
                       🚗
                     </div>
                   )}
-                  <div style={{ padding: '0.8rem 1rem', fontWeight: 'bold', fontSize: '1.2rem', color: 'var(--text-primary)' }}>
-                    {c.plate_letters || c.plate_numbers ? (
-                      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}>
-                        <span>{c.plate_letters}</span>
-                        <span style={{ opacity: 0.85 }}>{c.plate_numbers}</span>
-                      </div>
+                  <div style={{ padding: '0.8rem 1rem', fontWeight: 'bold', fontSize: '1.25rem', color: 'var(--text-primary)', direction: 'rtl', letterSpacing: '0.5px' }}>
+                    {c.plate_letters && c.plate_numbers ? (
+                      `${c.plate_letters} - ${c.plate_numbers}`
                     ) : (
                       c.plate_number
                     )}

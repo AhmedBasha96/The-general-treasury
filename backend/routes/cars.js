@@ -31,8 +31,15 @@ const fixUtf8String = (str) => {
     if (str.includes('%')) {
       return decodeURIComponent(str);
     }
+    // If str is already valid Arabic text, keep it as is
+    if (/[\u0600-\u06FF]/.test(str)) {
+      return str;
+    }
     const decoded = Buffer.from(str, 'latin1').toString('utf8');
-    return decoded;
+    if (/[\u0600-\u06FF]/.test(decoded)) {
+      return decoded;
+    }
+    return str;
   } catch (e) {
     return str;
   }
