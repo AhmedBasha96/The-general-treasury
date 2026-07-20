@@ -6187,7 +6187,10 @@ const [showCarModal, setShowCarModal] = useState(false);
                         const rep = reps.find(r => r.id === editingTx.rep_id);
                         if (rep && (rep.classification === 'retail_rep' || rep.classification === 'wholesale_rep')) {
                           return [
-                            { value: 'car', label: '🚗 مصاريف سيارات' },
+                            { value: 'car', label: '🚗 مصاريف سيارات (عام)' },
+                            { value: 'car_gas', label: '🚗 مصاريف سيارات (جاز)' },
+                            { value: 'car_oil', label: '🚗 مصاريف سيارات (زيت)' },
+                            { value: 'car_other', label: '🚗 مصاريف سيارات (مصاريف أخرى)' },
                             { value: 'salary', label: '💵 راتب' },
                             { value: 'commission', label: '💰 عمولة' },
                             { value: 'loan', label: '💸 سلفة' },
