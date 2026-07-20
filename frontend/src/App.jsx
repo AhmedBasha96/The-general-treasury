@@ -6181,7 +6181,11 @@ const [showCarModal, setShowCarModal] = useState(false);
                           return [
                             { value: 'direct_rent', label: '🏢 الإيجار' },
                             { value: 'direct_operational', label: '🔧 مصاريف تشغيل عامة' },
-                            { value: 'direct_other', label: '📝 مصاريف عامة أخرى' }
+                            { value: 'direct_other', label: '📝 مصاريف عامة أخرى' },
+                            { value: 'car', label: '🚗 مصاريف سيارات (عام)' },
+                            { value: 'car_gas', label: '🚗 مصاريف سيارات (جاز)' },
+                            { value: 'car_oil', label: '🚗 مصاريف سيارات (زيت)' },
+                            { value: 'car_other', label: '🚗 مصاريف سيارات (مصاريف أخرى)' }
                           ];
                         }
                         const rep = reps.find(r => r.id === editingTx.rep_id);
