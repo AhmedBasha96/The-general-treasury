@@ -6212,6 +6212,34 @@ const [showCarModal, setShowCarModal] = useState(false);
                       ))}
                     </select>
                   </div>
+{/* عرض نوع المعاملة المختار */}
+<div className="form-group" style={{ marginTop: '0.5rem' }}>
+  <label>نوع المعاملة</label>
+  <div style={{ padding: '0.4rem', background: 'var(--bg-secondary)', borderRadius: '6px', color: 'var(--text-primary)' }}>
+    {(() => {
+      switch (editingTx.withdrawal_sub_type) {
+        case 'car':
+          return 'مصاريف سيارات (عام)';
+        case 'car_gas':
+          return 'مصاريف سيارات (جاز)';
+        case 'car_oil':
+          return 'مصاريف سيارات (زيت)';
+        case 'car_other':
+          return 'مصاريف سيارات (مصاريف أخرى)';
+        case 'salary':
+          return 'رواتب وأجور';
+        case 'commission':
+          return 'عمولات';
+        case 'loan':
+          return 'سلفة';
+        case 'other':
+          return 'صرف عام';
+        default:
+          return editingTx.withdrawal_sub_type || '';
+      }
+    })()}
+  </div>
+</div>
 
                   {editingTx.withdrawal_sub_type && editingTx.withdrawal_sub_type.startsWith('car') && (
                     <div className="form-group" style={{ marginBottom: '1rem', paddingRight: '1rem', borderRight: '3px solid var(--primary)' }}>
