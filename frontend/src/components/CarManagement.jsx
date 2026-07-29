@@ -11,6 +11,13 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
   const [loading, setLoading] = useState(false);
   const [editingCar, setEditingCar] = useState(null);
   const [failedImages, setFailedImages] = useState({});
+  const [companies, setCompanies] = useState([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState('');
+  const [transferAmount, setTransferAmount] = useState('');
+  const [transferDate, setTransferDate] = useState('');
+  const [transferNote, setTransferNote] = useState('');
+  const [transferError, setTransferError] = useState('');
+  const [transferSuccess, setTransferSuccess] = useState('');
 
   const loadCars = async () => {
     try {
@@ -20,9 +27,16 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
       console.error('Error fetching cars', e);
     }
   };
+  const loadCompanies = async () => {
+    try {
+      const res = await fetch('/api/companies');
+      if (res.ok) setCompanies(await res.json());
+    } catch (e) { console.error('Error fetching companies', e); }
+  };
 
   useEffect(() => {
     loadCars();
+    loadCompanies();
   }, []);
 
   const handleSubmit = async (e) => {
@@ -121,6 +135,44 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
     }
   };
 
+  const handleTransferSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedCompanyId || !transferAmount) return setTransferError('الكمية والشركة مطلوبة');
+    setLoading(true);
+    setTransferError('');
+    setTransferSuccess('');
+    try {
+      const payload = {
+        type: 'company_transfer',
+        payment_method: 'cash',
+        amount: parseFloat(transferAmount),
+        date: transferDate || new Date().toISOString(),
+        notes: transferNote,
+        company_id: parseInt(selectedCompanyId)
+      };
+      const res = await fetch('/api/transfers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTransferSuccess('تم تسجيل التحويل بنجاح');
+        setSelectedCompanyId('');
+        setTransferAmount('');
+        setTransferDate('');
+        setTransferNote('');
+      } else {
+        setTransferError(data.error || 'فشل تسجيل التحويل');
+      }
+    } catch (err) {
+      console.error(err);
+      setTransferError('تعذر الاتصال بالخادم');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div style={{ padding: '1.5rem' }}>
       
@@ -193,7 +245,39 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
                 إلغاء التعديل
               </button>
             )}
-          </form>
+            </form>
+          {/* Transfer Section */}
+          <div style={{ flex: '1', minWidth: '300px', background: 'var(--bg-primary)', padding: '1.5rem', borderRadius: '15px', border: '1px solid var(--border-color)' }}>
+            <h4 style={{ marginBottom: '1rem', color: 'var(--text-primary)' }}>تحويل من الخزينة إلى شركة</h4>
+            <form onSubmit={handleTransferSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>الشركة</label>
+                <select value={selectedCompanyId} onChange={e => setSelectedCompanyId(e.target.value)} style={{ width: '100%', padding: '0.5rem' }}>
+                  <option value="">اختر شركة</option>
+                  {companies.map(comp => (
+                    <option key={comp.id} value={comp.id}>{comp.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>المبلغ</label>
+                <input type="number" step="0.01" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} style={{ width: '100%', padding: '0.5rem' }} required />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>التاريخ</label>
+                <input type="date" value={transferDate} onChange={e => setTransferDate(e.target.value)} style={{ width: '100%', padding: '0.5rem' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>ملاحظة</label>
+                <textarea value={transferNote} onChange={e => setTransferNote(e.target.value)} style={{ width: '100%', padding: '0.5rem' }} />
+              </div>
+              {transferError && <div style={{ color: 'var(--error)', background: 'var(--error-bg)', padding: '0.5rem', borderRadius: '8px' }}>{transferError}</div>}
+              {transferSuccess && <div style={{ color: 'var(--success)', background: 'var(--success-bg)', padding: '0.5rem', borderRadius: '8px' }}>{transferSuccess}</div>}
+              <button type="submit" className="btn btn-primary" disabled={loading} style={{ marginTop: '0.5rem' }}>
+                {loading ? 'جاري الحفظ…' : 'تسجيل التحويل'}
+              </button>
+            </form>
+          </div>
         </div>
 
         {/* List Section */}

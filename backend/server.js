@@ -23,6 +23,8 @@ app.get('/api/status', (req, res) => {
 // Car routes
 const carRouter = require('./routes/cars');
 app.use('/api/cars', carRouter);
+const transfersRouter = require('./routes/transfers');
+app.use('/api/transfers', transfersRouter);
 
 // POST /api/auth/login
 app.post('/api/auth/login', async (req, res) => {
