@@ -2989,7 +2989,13 @@ async function setExactSafeDenominations(pool, targets) {
     }
   }
 
-  // Set safe_initial_balance to 2741.00 so total safe balance stays exactly 106,186.00
+  // Calculate net cash deposits and withdrawals to keep total cashSafeBalance strictly at 106,186.00
+  const cashDepRes = await pool.request().query("SELECT ISNULL(SUM(amount), 0) AS total FROM transactions WHERE type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved', 'disbursed') OR status IS NULL)");
+  const withRes = await pool.request().query("SELECT ISNULL(SUM(amount), 0) AS total FROM transactions WHERE ((type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL)) OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status = 'approved' OR status IS NULL)))");
+  const netCashTx = (Number(cashDepRes.recordset[0].total) || 0) - (Number(withRes.recordset[0].total) || 0);
+  const targetTotalBalance = 106186.00;
+  const reqInitialBalance = targetTotalBalance - netCashTx;
+
   const initBalKey = await pool.request()
     .input('key', sql.VarChar, 'safe_initial_balance')
     .query('SELECT key_name FROM settings WHERE key_name = @key');
@@ -2997,12 +3003,12 @@ async function setExactSafeDenominations(pool, targets) {
   if (initBalKey.recordset.length > 0) {
     await pool.request()
       .input('key', sql.VarChar, 'safe_initial_balance')
-      .input('val', sql.NVarChar, '2741.00')
+      .input('val', sql.NVarChar, String(reqInitialBalance))
       .query('UPDATE settings SET val = @val, updated_at = GETDATE() WHERE key_name = @key');
   } else {
     await pool.request()
       .input('key', sql.VarChar, 'safe_initial_balance')
-      .input('val', sql.NVarChar, '2741.00')
+      .input('val', sql.NVarChar, String(reqInitialBalance))
       .query('INSERT INTO settings (key_name, val) VALUES (@key, @val)');
   }
 }
