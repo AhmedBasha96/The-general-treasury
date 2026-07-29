@@ -4513,7 +4513,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                               required
                             >
                               <option value="">اختر السيارة...</option>
-                              {carsList.map(c => <option key={c.id} value={c.id}>{c.plate_number}</option>)}
+                              {carsList.map(c => <option key={c.id} value={c.id}>{c.plate_letters && c.plate_numbers ? `${c.plate_letters} - ${c.plate_numbers}` : c.plate_number}</option>)}
                             </select>
                           </div>
                           <div className="form-group" style={{ marginBottom: '1.5rem', paddingRight: '1rem', borderRight: '3px solid var(--primary)' }}>
