@@ -29,7 +29,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
   };
   const loadCompanies = async () => {
     try {
-      const res = await fetch('/api/companies');
+      const res = await fetch(`${backendUrl}/api/companies`);
       if (res.ok) setCompanies(await res.json());
     } catch (e) { console.error('Error fetching companies', e); }
   };
@@ -150,7 +150,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
         notes: transferNote,
         company_id: parseInt(selectedCompanyId)
       };
-      const res = await fetch('/api/transfers', {
+      const res = await fetch(`${backendUrl}/api/transfers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
