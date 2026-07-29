@@ -208,6 +208,7 @@ async function getSafeInitialData(txOrPool) {
   initialBalanceResult.recordset.forEach(row => {
     if (row.key_name === 'safe_initial_balance') {
       safeInitialBalanceSet = true;
+      safeInitialBalance = parseFloat(row.val) || 0;
     }
     const match = row.key_name.match(/^safe_initial_denom_(\d+)$/);
     if (match) {
@@ -217,7 +218,7 @@ async function getSafeInitialData(txOrPool) {
     }
   });
 
-  if (safeInitialBalanceSet) {
+  if (!safeInitialBalanceSet) {
     safeInitialBalance = 
       (initialDenoms.denom_200 * 200) +
       (initialDenoms.denom_100 * 100) +
@@ -2986,6 +2987,23 @@ async function setExactSafeDenominations(pool, targets) {
           .query('INSERT INTO settings (key_name, val) VALUES (@key, @val)');
       }
     }
+  }
+
+  // Set safe_initial_balance to 2741.00 so total safe balance stays exactly 106,186.00
+  const initBalKey = await pool.request()
+    .input('key', sql.VarChar, 'safe_initial_balance')
+    .query('SELECT key_name FROM settings WHERE key_name = @key');
+
+  if (initBalKey.recordset.length > 0) {
+    await pool.request()
+      .input('key', sql.VarChar, 'safe_initial_balance')
+      .input('val', sql.NVarChar, '2741.00')
+      .query('UPDATE settings SET val = @val, updated_at = GETDATE() WHERE key_name = @key');
+  } else {
+    await pool.request()
+      .input('key', sql.VarChar, 'safe_initial_balance')
+      .input('val', sql.NVarChar, '2741.00')
+      .query('INSERT INTO settings (key_name, val) VALUES (@key, @val)');
   }
 }
 
