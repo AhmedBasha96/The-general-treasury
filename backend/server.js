@@ -2937,9 +2937,98 @@ app.delete('/api/transactions/:id', async (req, res) => {
   }
 });
 
+
+// Helper function to adjust initial safe settings so that current total denominations match target exact counts
+async function setExactSafeDenominations(pool, targets) {
+  const denomsResult = await pool.request().query(`
+    SELECT 
+      ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_200 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_200 ELSE t.denom_200 END), 0) AS denom_200,
+      ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_100 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_100 ELSE t.denom_100 END), 0) AS denom_100,
+      ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_50 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_50 ELSE t.denom_50 END), 0) AS denom_50,
+      ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_20 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_20 ELSE t.denom_20 END), 0) AS denom_20,
+      ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_10 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_10 ELSE t.denom_10 END), 0) AS denom_10,
+      ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_5 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_5 ELSE t.denom_5 END), 0) AS denom_5,
+      ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_1 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_1 ELSE t.denom_1 END), 0) AS denom_1
+    FROM transactions t
+    WHERE (
+      (t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
+      OR 
+      (t.type = 'withdrawal' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status = 'disbursed' OR t.status IS NULL))
+      OR
+      (t.type = 'company_transfer' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
+      OR
+      (t.type = 'exchange' AND (t.status = 'approved' OR t.status IS NULL))
+    )
+  `);
+
+  const netDenoms = denomsResult.recordset[0];
+  const denoms = [200, 100, 50, 20, 10, 5, 1];
+
+  for (const d of denoms) {
+    const desired = targets[`denom_${d}`] !== undefined ? targets[`denom_${d}`] : targets[d];
+    if (desired !== undefined) {
+      const netVal = Number(netDenoms[`denom_${d}`]) || 0;
+      const initialNeeded = desired - netVal;
+
+      const checkKey = await pool.request()
+        .input('key', sql.VarChar, `safe_initial_denom_${d}`)
+        .query('SELECT key_name FROM settings WHERE key_name = @key');
+
+      if (checkKey.recordset.length > 0) {
+        await pool.request()
+          .input('key', sql.VarChar, `safe_initial_denom_${d}`)
+          .input('val', sql.NVarChar, String(initialNeeded))
+          .query('UPDATE settings SET val = @val, updated_at = GETDATE() WHERE key_name = @key');
+      } else {
+        await pool.request()
+          .input('key', sql.VarChar, `safe_initial_denom_${d}`)
+          .input('val', sql.NVarChar, String(initialNeeded))
+          .query('INSERT INTO settings (key_name, val) VALUES (@key, @val)');
+      }
+    }
+  }
+}
+
+// POST /api/settings/rebalance-denominations - Adjust safe denominations to exact count
+app.post('/api/settings/rebalance-denominations', async (req, res) => {
+  const { denoms } = req.body;
+  const userRole = req.headers['x-user-role'];
+
+  if (userRole !== 'manager') {
+    return res.status(403).json({ error: 'غير مسموح لغير المدراء بإعادة تعيين فئات الخزينة' });
+  }
+
+  if (!denoms) {
+    return res.status(400).json({ error: 'الفئات النقدية المطلوبة غير صالحة' });
+  }
+
+  try {
+    const pool = getPool();
+    await setExactSafeDenominations(pool, denoms);
+    res.json({ message: 'تم تحديث فئات الخزينة بنجاح' });
+  } catch (error) {
+    console.error('Error rebalancing denominations:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء تعديل فئات الخزينة' });
+  }
+});
+
 // Start Database connection and then Express server
 connectDB()
-  .then(() => {
+  .then(async (pool) => {
+    try {
+      await setExactSafeDenominations(pool, {
+        denom_200: 191,
+        denom_100: 442,
+        denom_50: 181,
+        denom_20: 222,
+        denom_10: 612,
+        denom_5: 455,
+        denom_1: 1901
+      });
+      console.log('Safe denominations rebalanced to exact physical count on startup.');
+    } catch (e) {
+      console.error('Error rebalancing safe denoms on startup:', e);
+    }
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
     });
