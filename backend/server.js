@@ -334,19 +334,21 @@ app.get('/api/dashboard', async (req, res) => {
     // Safe Denominations Breakdown
     const denomsResult = await createFilteredRequest().query(`
       SELECT 
-        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_200 WHEN t.type = 'withdrawal' THEN -t.denom_200 ELSE t.denom_200 END), 0) AS denom_200,
-        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_100 WHEN t.type = 'withdrawal' THEN -t.denom_100 ELSE t.denom_100 END), 0) AS denom_100,
-        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_50 WHEN t.type = 'withdrawal' THEN -t.denom_50 ELSE t.denom_50 END), 0) AS denom_50,
-        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_20 WHEN t.type = 'withdrawal' THEN -t.denom_20 ELSE t.denom_20 END), 0) AS denom_20,
-        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_10 WHEN t.type = 'withdrawal' THEN -t.denom_10 ELSE t.denom_10 END), 0) AS denom_10,
-        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_5 WHEN t.type = 'withdrawal' THEN -t.denom_5 ELSE t.denom_5 END), 0) AS denom_5,
-        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_1 WHEN t.type = 'withdrawal' THEN -t.denom_1 ELSE t.denom_1 END), 0) AS denom_1
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_200 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_200 ELSE t.denom_200 END), 0) AS denom_200,
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_100 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_100 ELSE t.denom_100 END), 0) AS denom_100,
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_50 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_50 ELSE t.denom_50 END), 0) AS denom_50,
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_20 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_20 ELSE t.denom_20 END), 0) AS denom_20,
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_10 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_10 ELSE t.denom_10 END), 0) AS denom_10,
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_5 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_5 ELSE t.denom_5 END), 0) AS denom_5,
+        ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_1 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_1 ELSE t.denom_1 END), 0) AS denom_1
       FROM transactions t
       ${agencyJoin}
       WHERE (
         (t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
         OR 
-        (t.type = 'withdrawal' AND (t.status = 'disbursed' OR t.status IS NULL))
+        (t.type = 'withdrawal' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status = 'disbursed' OR t.status IS NULL))
+        OR
+        (t.type = 'company_transfer' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
         OR
         (t.type = 'exchange' AND (t.status = 'approved' OR t.status IS NULL))
       )
@@ -1765,18 +1767,20 @@ app.post('/api/transactions', async (req, res) => {
           // Fetch sum of all approved denominations
           const denomsResult = await transaction.request().query(`
             SELECT 
-              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_200 WHEN t.type = 'withdrawal' THEN -t.denom_200 ELSE t.denom_200 END), 0) AS denom_200,
-              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_100 WHEN t.type = 'withdrawal' THEN -t.denom_100 ELSE t.denom_100 END), 0) AS denom_100,
-              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_50 WHEN t.type = 'withdrawal' THEN -t.denom_50 ELSE t.denom_50 END), 0) AS denom_50,
-              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_20 WHEN t.type = 'withdrawal' THEN -t.denom_20 ELSE t.denom_20 END), 0) AS denom_20,
-              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_10 WHEN t.type = 'withdrawal' THEN -t.denom_10 ELSE t.denom_10 END), 0) AS denom_10,
-              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_5 WHEN t.type = 'withdrawal' THEN -t.denom_5 ELSE t.denom_5 END), 0) AS denom_5,
-              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_1 WHEN t.type = 'withdrawal' THEN -t.denom_1 ELSE t.denom_1 END), 0) AS denom_1
+              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_200 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_200 ELSE t.denom_200 END), 0) AS denom_200,
+              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_100 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_100 ELSE t.denom_100 END), 0) AS denom_100,
+              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_50 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_50 ELSE t.denom_50 END), 0) AS denom_50,
+              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_20 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_20 ELSE t.denom_20 END), 0) AS denom_20,
+              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_10 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_10 ELSE t.denom_10 END), 0) AS denom_10,
+              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_5 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_5 ELSE t.denom_5 END), 0) AS denom_5,
+              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_1 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_1 ELSE t.denom_1 END), 0) AS denom_1
             FROM transactions t WITH (UPDLOCK, TABLOCKX)
             WHERE (
-              (t.type = 'deposit' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
+              (t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
               OR 
-              (t.type = 'withdrawal' AND (t.status = 'disbursed' OR t.status IS NULL))
+              (t.type = 'withdrawal' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status = 'disbursed' OR t.status IS NULL))
+              OR
+              (t.type = 'company_transfer' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
               OR
               (t.type = 'exchange' AND (t.status = 'approved' OR t.status IS NULL))
             )
@@ -2351,18 +2355,20 @@ app.post('/api/transactions/:id/approve', async (req, res) => {
         // Fetch sum of all approved denominations
         const denomsResult = await transaction.request().query(`
           SELECT 
-            ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_200 WHEN t.type = 'withdrawal' THEN -t.denom_200 ELSE t.denom_200 END), 0) AS denom_200,
-            ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_100 WHEN t.type = 'withdrawal' THEN -t.denom_100 ELSE t.denom_100 END), 0) AS denom_100,
-            ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_50 WHEN t.type = 'withdrawal' THEN -t.denom_50 ELSE t.denom_50 END), 0) AS denom_50,
-            ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_20 WHEN t.type = 'withdrawal' THEN -t.denom_20 ELSE t.denom_20 END), 0) AS denom_20,
-            ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_10 WHEN t.type = 'withdrawal' THEN -t.denom_10 ELSE t.denom_10 END), 0) AS denom_10,
-            ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_5 WHEN t.type = 'withdrawal' THEN -t.denom_5 ELSE t.denom_5 END), 0) AS denom_5,
-            ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_1 WHEN t.type = 'withdrawal' THEN -t.denom_1 ELSE t.denom_1 END), 0) AS denom_1
+            ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_200 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_200 ELSE t.denom_200 END), 0) AS denom_200,
+            ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_100 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_100 ELSE t.denom_100 END), 0) AS denom_100,
+            ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_50 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_50 ELSE t.denom_50 END), 0) AS denom_50,
+            ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_20 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_20 ELSE t.denom_20 END), 0) AS denom_20,
+            ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_10 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_10 ELSE t.denom_10 END), 0) AS denom_10,
+            ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_5 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_5 ELSE t.denom_5 END), 0) AS denom_5,
+            ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.denom_1 WHEN t.type IN ('withdrawal', 'company_transfer') THEN -t.denom_1 ELSE t.denom_1 END), 0) AS denom_1
           FROM transactions t WITH (UPDLOCK, TABLOCKX)
           WHERE (
-            (t.type = 'deposit' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
+            (t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
             OR 
-            (t.type = 'withdrawal' AND (t.status = 'disbursed' OR t.status IS NULL))
+            (t.type = 'withdrawal' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status = 'disbursed' OR t.status IS NULL))
+            OR
+            (t.type = 'company_transfer' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
             OR
             (t.type = 'exchange' AND (t.status = 'approved' OR t.status IS NULL))
           )
