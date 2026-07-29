@@ -288,58 +288,106 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
               لا توجد سيارات مسجلة حتى الآن.
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
-              {cars.map((c) => (
-                <div 
-                  key={c.id} 
-                  style={{ 
-                    background: 'var(--bg-secondary)', 
-                    border: '1px solid var(--border-color)', 
-                    borderRadius: '12px', 
-                    overflow: 'hidden',
-                    textAlign: 'center',
-                    cursor: onCarClick ? 'pointer' : 'default',
-                    transition: 'transform 0.2s'
-                  }}
-                  onClick={() => onCarClick && onCarClick(c)}
-                  onMouseOver={(e) => { if (onCarClick) e.currentTarget.style.transform = 'scale(1.03)'; }}
-                  onMouseOut={(e) => { if (onCarClick) e.currentTarget.style.transform = 'scale(1)'; }}
-                >
-                  {c.image_path && !failedImages[c.id] ? (
-                    <div style={{ height: '120px', width: '100%', overflow: 'hidden', background: 'var(--bg-primary)' }}>
-                      <img 
-                        src={c.image_path.startsWith('http') || c.image_path.startsWith('/') ? c.image_path.replace(/\\/g, '/') : `/${c.image_path.replace(/\\/g, '/')}`} 
-                        alt={c.plate_number} 
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        onError={() => setFailedImages(prev => ({ ...prev, [c.id]: true }))}
-                      />
-                    </div>
-                  ) : (
-                    <div style={{ height: '120px', width: '100%', background: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '3rem' }}>
-                      🚗
-                    </div>
-                  )}
-                  <div style={{ padding: '0.8rem 1rem', fontWeight: 'bold', fontSize: '1.25rem', color: 'var(--text-primary)', direction: 'rtl', letterSpacing: '0.5px' }}>
-                    {c.plate_letters && c.plate_numbers ? (
-                      `${c.plate_letters} - ${c.plate_numbers}`
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1.25rem' }}>
+              {cars.map((c) => {
+                const totalExp = Number(c.total_expenses) || 0;
+                const gasExp = Number(c.gas_total) || 0;
+                const oilExp = Number(c.oil_total) || 0;
+                const otherExp = Number(c.other_total) || 0;
+                const txCount = Number(c.transaction_count) || 0;
+
+                return (
+                  <div 
+                    key={c.id} 
+                    style={{ 
+                      background: 'var(--bg-secondary)', 
+                      border: '1px solid var(--border-color)', 
+                      borderRadius: '16px', 
+                      overflow: 'hidden',
+                      textAlign: 'center',
+                      cursor: onCarClick ? 'pointer' : 'default',
+                      transition: 'all 0.25s ease',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                      position: 'relative'
+                    }}
+                    onClick={() => onCarClick && onCarClick(c)}
+                    onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.12)'; }}
+                    onMouseOut={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.05)'; }}
+                  >
+                    {c.image_path && !failedImages[c.id] ? (
+                      <div style={{ height: '140px', width: '100%', overflow: 'hidden', background: 'var(--bg-primary)', position: 'relative' }}>
+                        <img 
+                          src={c.image_path.startsWith('http') || c.image_path.startsWith('/') ? c.image_path.replace(/\\/g, '/') : `/${c.image_path.replace(/\\/g, '/')}`} 
+                          alt={c.plate_number} 
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          onError={() => setFailedImages(prev => ({ ...prev, [c.id]: true }))}
+                        />
+                        <div style={{ position: 'absolute', top: '8px', right: '8px', background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', padding: '0.2rem 0.6rem', borderRadius: '12px', color: '#fff', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                          {txCount} حركة
+                        </div>
+                      </div>
                     ) : (
-                      c.plate_number
+                      <div style={{ height: '120px', width: '100%', background: 'linear-gradient(135deg, rgba(59,130,246,0.1) 0%, rgba(37,99,235,0.05) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '3rem', position: 'relative' }}>
+                        🚗
+                        <div style={{ position: 'absolute', top: '8px', right: '8px', background: 'rgba(0,0,0,0.15)', padding: '0.2rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                          {txCount} حركة
+                        </div>
+                      </div>
                     )}
+                    
+                    <div style={{ padding: '1rem', direction: 'rtl' }}>
+                      <div style={{ fontWeight: '800', fontSize: '1.3rem', color: 'var(--text-primary)', letterSpacing: '0.5px', marginBottom: '0.5rem' }}>
+                        {c.plate_letters && c.plate_numbers ? (
+                          `${c.plate_letters} - ${c.plate_numbers}`
+                        ) : (
+                          c.plate_number
+                        )}
+                      </div>
+
+                      {/* Expense Metrics Pill */}
+                      <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '10px', padding: '0.5rem', marginBottom: '0.75rem' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.1rem' }}>إجمالي مصاريف السيارة</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: '900', color: '#ef4444' }}>
+                          {totalExp.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} <small style={{ fontSize: '0.75rem' }}>ج.م</small>
+                        </div>
+                      </div>
+
+                      {/* Breakdown badges */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.3rem', fontSize: '0.7rem', marginBottom: '0.5rem' }}>
+                        <div style={{ background: 'rgba(245, 158, 11, 0.1)', padding: '0.3rem 0.2rem', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+                          <span style={{ color: '#f59e0b', display: 'block', fontWeight: 'bold' }}>⛽ جاز</span>
+                          <span style={{ fontWeight: '700' }}>{gasExp.toLocaleString()}</span>
+                        </div>
+                        <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '0.3rem 0.2rem', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                          <span style={{ color: '#10b981', display: 'block', fontWeight: 'bold' }}>🛢️ زيت</span>
+                          <span style={{ fontWeight: '700' }}>{oilExp.toLocaleString()}</span>
+                        </div>
+                        <div style={{ background: 'rgba(124, 58, 237, 0.1)', padding: '0.3rem 0.2rem', borderRadius: '6px', border: '1px solid rgba(124, 58, 237, 0.2)' }}>
+                          <span style={{ color: '#a78bfa', display: 'block', fontWeight: 'bold' }}>🔧 أخرى</span>
+                          <span style={{ fontWeight: '700' }}>{otherExp.toLocaleString()}</span>
+                        </div>
+                      </div>
+
+                      <div style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 'bold', marginTop: '0.4rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem' }}>
+                        📊 انقر لعرض كشف الحساب التفصيلي ⬅️
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', borderTop: '1px solid var(--border-color)', background: 'var(--bg-primary)' }}>
+                      <button 
+                        onClick={(e) => handleEditClick(c, e)} 
+                        style={{ flex: 1, padding: '0.6rem', background: 'transparent', border: 'none', borderLeft: '1px solid var(--border-color)', cursor: 'pointer', color: 'var(--primary)', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                        تعديل ✏️
+                      </button>
+                      <button 
+                        onClick={(e) => handleDeleteClick(c, e)} 
+                        style={{ flex: 1, padding: '0.6rem', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                        حذف 🗑️
+                      </button>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', borderTop: '1px solid var(--border-color)', background: 'var(--bg-primary)' }}>
-                    <button 
-                      onClick={(e) => handleEditClick(c, e)} 
-                      style={{ flex: 1, padding: '0.5rem', background: 'transparent', border: 'none', borderLeft: '1px solid var(--border-color)', cursor: 'pointer', color: 'var(--primary)', fontWeight: 'bold' }}>
-                      تعديل ✏️
-                    </button>
-                    <button 
-                      onClick={(e) => handleDeleteClick(c, e)} 
-                      style={{ flex: 1, padding: '0.5rem', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontWeight: 'bold' }}>
-                      حذف 🗑️
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

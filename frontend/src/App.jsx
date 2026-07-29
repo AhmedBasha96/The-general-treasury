@@ -3586,47 +3586,163 @@ const [showCarModal, setShowCarModal] = useState(false);
           </div>
 
           {selectedCarLedger && (
-            <div className="panel" style={{ border: '2px solid var(--primary)', marginBottom: '2rem', animation: 'fadeIn 0.3s' }}>
-               <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                 <div>
-                   <h2 className="panel-title" style={{ margin: 0 }}>📋 كشف مصاريف السيارة: {selectedCarLedger.plate_number}</h2>
-                 </div>
-                 <button className="btn btn-secondary" onClick={() => setSelectedCarLedger(null)}>العودة للسيارات 🔙</button>
-               </div>
-               {carLedgerLoading ? (
-                 <div style={{ padding: '2rem', textAlign: 'center' }}>جاري التحميل...</div>
-               ) : (
-                 <table style={{ marginTop: '1rem' }}>
-                   <thead>
-                     <tr>
-                       <th>التاريخ</th>
-                       <th>بند الصرف</th>
-                       <th>القيمة</th>
-                       <th>بواسطة</th>
-                       <th>ملاحظات</th>
-                     </tr>
-                   </thead>
-                   <tbody>
-                     {!carLedgerData || carLedgerData.length === 0 ? (
-                       <tr><td colSpan="5" style={{ textAlign: 'center', padding: '2rem' }}>لا يوجد مصاريف مسجلة لهذه السيارة</td></tr>
-                     ) : (
-                       carLedgerData.map(tx => (
-                         <tr key={tx.id}>
-                           <td>{new Date(tx.date).toLocaleString('ar-EG')}</td>
-                           <td>
-                             <span className="badge badge-withdrawal">
-                               {tx.withdrawal_sub_type === 'car_gas' ? 'جاز' : tx.withdrawal_sub_type === 'car_oil' ? 'زيت' : 'مصاريف أخرى'}
-                             </span>
-                           </td>
-                           <td style={{ color: '#ef4444', fontWeight: 'bold' }}>{Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
-                           <td>{tx.creator_name || '—'}</td>
-                           <td>{tx.notes || '—'}</td>
-                         </tr>
-                       ))
-                     )}
-                   </tbody>
-                 </table>
-               )}
+            <div className="panel" style={{ border: '2px solid var(--primary)', marginBottom: '2rem', animation: 'fadeIn 0.3s', borderRadius: '20px', padding: '1.5rem' }}>
+              <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+                <div>
+                  <h2 className="panel-title" style={{ margin: 0, fontSize: '1.5rem', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    📋 كشف الحساب التفصيلي للسيارة: 
+                    <span style={{ background: 'var(--bg-secondary)', padding: '0.2rem 0.8rem', borderRadius: '10px', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
+                      {selectedCarLedger.plate_letters ? `${selectedCarLedger.plate_letters} - ${selectedCarLedger.plate_numbers}` : selectedCarLedger.plate_number}
+                    </span>
+                  </h2>
+                </div>
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <button 
+                    className="btn btn-secondary" 
+                    style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                    onClick={() => {
+                      const printWin = window.open('', '_blank');
+                      const printContent = `
+                        <html dir="rtl">
+                          <head>
+                            <title>كشف حساب سيارة - ${selectedCarLedger.plate_number}</title>
+                            <style>
+                              body { font-family: system-ui, sans-serif; padding: 20px; direction: rtl; }
+                              h2 { text-align: center; color: #1e293b; }
+                              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                              th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: center; }
+                              th { background-color: #f1f5f9; }
+                            </style>
+                          </head>
+                          <body>
+                            <h2>📋 كشف حساب مصاريف السيارة: ${selectedCarLedger.plate_number}</h2>
+                            <p style="text-align:center; color:#64748b;">تاريخ التقرير: ${new Date().toLocaleString('ar-EG')}</p>
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>التاريخ</th>
+                                  <th>بند الصرف</th>
+                                  <th>المبلغ</th>
+                                  <th>المندوب</th>
+                                  <th>التوكيل</th>
+                                  <th>المشرف</th>
+                                  <th>الملاحظات</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                ${(carLedgerData || []).map(tx => `
+                                  <tr>
+                                    <td>${new Date(tx.date).toLocaleString('ar-EG')}</td>
+                                    <td>${tx.withdrawal_sub_type === 'car_gas' ? 'جاز' : tx.withdrawal_sub_type === 'car_oil' ? 'زيت/صيانة' : 'مصاريف أخرى'}</td>
+                                    <td><strong>${Number(tx.amount).toLocaleString('ar-EG')} ج.م</strong></td>
+                                    <td>${tx.rep_name ? `${tx.rep_name} (${tx.rep_code})` : '—'}</td>
+                                    <td>${tx.agency_name || '—'}</td>
+                                    <td>${tx.supervisor_name || '—'}</td>
+                                    <td>${tx.notes || '—'}</td>
+                                  </tr>
+                                `).join('')}
+                              </tbody>
+                            </table>
+                          </body>
+                        </html>
+                      `;
+                      printWin.document.write(printContent);
+                      printWin.document.close();
+                      printWin.focus();
+                      setTimeout(() => printWin.print(), 500);
+                    }}
+                  >
+                    🖨️ طباعة كشف الحساب
+                  </button>
+                  <button className="btn btn-secondary" onClick={() => setSelectedCarLedger(null)} style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}>
+                    العودة للسيارات 🔙
+                  </button>
+                </div>
+              </div>
+
+              {/* Selected Vehicle Analytics Cards */}
+              {(() => {
+                const txs = carLedgerData || [];
+                const totalAmt = txs.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+                const gasAmt = txs.filter(t => t.withdrawal_sub_type === 'car_gas').reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+                const oilAmt = txs.filter(t => t.withdrawal_sub_type === 'car_oil').reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+                const otherAmt = txs.filter(t => t.withdrawal_sub_type !== 'car_gas' && t.withdrawal_sub_type !== 'car_oil').reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+                const avgAmt = txs.length > 0 ? (totalAmt / txs.length) : 0;
+
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
+                    <div style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', padding: '1rem', borderRadius: '14px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.8rem', color: '#f87171', marginBottom: '0.2rem', fontWeight: 'bold' }}>💳 إجمالي المصاريف</div>
+                      <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#ef4444' }}>{totalAmt.toLocaleString('ar-EG')} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
+                    </div>
+                    <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', padding: '1rem', borderRadius: '14px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.8rem', color: '#fbbf24', marginBottom: '0.2rem', fontWeight: 'bold' }}>⛽ إجمالي الجاز</div>
+                      <div style={{ fontSize: '1.4rem', fontWeight 900, color: '#f59e0b' }}>{gasAmt.toLocaleString('ar-EG')} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
+                    </div>
+                    <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', padding: '1rem', borderRadius: '14px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.8rem', color: '#34d399', marginBottom: '0.2rem', fontWeight: 'bold' }}>🛢️ إجمالي الزيت والصيانة</div>
+                      <div style={{ fontSize: '1.4rem', fontWeight 900, color: '#10b981' }}>{oilAmt.toLocaleString('ar-EG')} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
+                    </div>
+                    <div style={{ background: 'rgba(124,58,237,0.06)', border: '1px solid rgba(124,58,237,0.2)', padding: '1rem', borderRadius: '14px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.8rem', color: '#c4b5fd', marginBottom: '0.2rem', fontWeight: 'bold' }}>🔧 مصاريف أخرى</div>
+                      <div style={{ fontSize: '1.4rem', fontWeight 900, color: '#a78bfa' }}>{otherAmt.toLocaleString('ar-EG')} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
+                    </div>
+                    <div style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.2)', padding: '1rem', borderRadius: '14px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.8rem', color: '#60a5fa', marginBottom: '0.2rem', fontWeight: 'bold' }}>📈 متوسط الحركة ({txs.length})</div>
+                      <div style={{ fontSize: '1.4rem', fontWeight 900, color: '#3b82f6' }}>{avgAmt.toLocaleString('ar-EG', { maximumFractionDigits: 0 })} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {carLedgerLoading ? (
+                <div style={{ padding: '3rem', textAlign: 'center', fontSize: '1.1rem', color: 'var(--text-muted)' }}>جاري تحميل كشف مصاريف السيارة... ⏳</div>
+              ) : (
+                <div className="table-container" style={{ margin: 0 }}>
+                  <table style={{ width: '100%' }}>
+                    <thead>
+                      <tr>
+                        <th>رقم المعاملة</th>
+                        <th>التاريخ والوقت</th>
+                        <th>بند الصرف</th>
+                        <th>المبلغ المنصرف</th>
+                        <th>المندوب / السائق</th>
+                        <th>التوكيل التابع له</th>
+                        <th>المشرف المسؤول</th>
+                        <th>مسجل الحركة</th>
+                        <th>بيان الملاحظات</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {!carLedgerData || carLedgerData.length === 0 ? (
+                        <tr><td colSpan="9" style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>لا توجد مصاريف مسجلة لهذه السيارة حتى الآن.</td></tr>
+                      ) : (
+                        carLedgerData.map(tx => (
+                          <tr key={tx.id}>
+                            <td><strong>TX-{String(tx.id).padStart(6, '0')}</strong></td>
+                            <td>{new Date(tx.date).toLocaleString('ar-EG')}</td>
+                            <td>
+                              <span className={`badge ${tx.withdrawal_sub_type === 'car_gas' ? 'badge-warning' : tx.withdrawal_sub_type === 'car_oil' ? 'badge-wholesale' : 'badge-retail'}`} style={{ fontWeight: 'bold' }}>
+                                {tx.withdrawal_sub_type === 'car_gas' ? '⛽ جاز' : tx.withdrawal_sub_type === 'car_oil' ? '🛢️ زيت/صيانة' : '🔧 مصاريف أخرى'}
+                              </span>
+                            </td>
+                            <td style={{ color: '#ef4444', fontWeight: '900', fontSize: '1.1rem' }}>
+                              -{Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                            </td>
+                            <td>{tx.rep_name ? <strong>{tx.rep_name} <small style={{ color: 'var(--text-muted)' }}>({tx.rep_code})</small></strong> : '— (صرف مباشر)'}</td>
+                            <td>{tx.agency_name || '—'}</td>
+                            <td>{tx.supervisor_name || '—'}</td>
+                            <td>{tx.creator_name || '—'}</td>
+                            <td style={{ maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={tx.notes}>
+                              {tx.notes || '—'}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 

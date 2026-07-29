@@ -45,11 +45,27 @@ const fixUtf8String = (str) => {
   }
 };
 
-// GET /api/cars - list all cars
+// GET /api/cars - list all cars with expense aggregations
 router.get('/', async (req, res) => {
   try {
     const pool = getPool();
-    const result = await pool.request().query(`SELECT id, plate_number, plate_letters, plate_numbers, image_path FROM cars ORDER BY id DESC`);
+    const result = await pool.request().query(`
+      SELECT 
+        c.id, 
+        c.plate_number, 
+        c.plate_letters, 
+        c.plate_numbers, 
+        c.image_path,
+        ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS total_expenses,
+        ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND t.withdrawal_sub_type = 'car_gas' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS gas_total,
+        ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND t.withdrawal_sub_type = 'car_oil' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS oil_total,
+        ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND (t.withdrawal_sub_type NOT IN ('car_gas', 'car_oil') OR t.withdrawal_sub_type IS NULL) AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS other_total,
+        COUNT(CASE WHEN t.type = 'withdrawal' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.id ELSE NULL END) AS transaction_count
+      FROM cars c
+      LEFT JOIN transactions t ON t.car_id = c.id
+      GROUP BY c.id, c.plate_number, c.plate_letters, c.plate_numbers, c.image_path
+      ORDER BY c.id DESC
+    `);
     res.json(result.recordset);
   } catch (error) {
     console.error('Error fetching cars:', error);
@@ -102,11 +118,20 @@ router.get('/:id/transactions', async (req, res) => {
     const result = await pool.request()
       .input('car_id', sql.Int, id)
       .query(`
-        SELECT t.*, u.name as creator_name, c.plate_number, c.plate_letters, c.plate_numbers
+        SELECT 
+          t.id, t.type, t.payment_method, t.amount, t.date, t.notes, t.withdrawal_sub_type, t.status,
+          u.username as creator_name,
+          r.name as rep_name, r.code as rep_code,
+          a.name as agency_name, a.code as agency_code,
+          s.name as supervisor_name, s.code as supervisor_code,
+          c.plate_number, c.plate_letters, c.plate_numbers
         FROM transactions t
         LEFT JOIN users u ON t.created_by = u.id
+        LEFT JOIN representatives r ON t.rep_id = r.id
+        LEFT JOIN agencies a ON (r.agency_id = a.id OR t.agency_id = a.id)
+        LEFT JOIN supervisors s ON r.supervisor_id = s.id
         LEFT JOIN cars c ON t.car_id = c.id
-        WHERE t.car_id = @car_id
+        WHERE t.car_id = @car_id AND (t.type = 'withdrawal')
         ORDER BY t.date DESC
       `);
     res.json(result.recordset);
