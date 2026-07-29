@@ -956,6 +956,30 @@ const [showCarModal, setShowCarModal] = useState(false);
     }
   }, [banks]);
 
+  const handleDeleteCarTx = async (tx) => {
+    if (!window.confirm(`هل أنت متأكد من حذف حركة مصاريف السيارة TX-${String(tx.id).padStart(6, '0')} بقيمة ${Number(tx.amount).toLocaleString('en-US')} ج.م؟`)) return;
+    try {
+      const res = await fetch(`/api/transactions/${tx.id}`, {
+        method: 'DELETE',
+        headers: { 'x-user-role': currentUser?.role || 'manager' }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert('تم حذف حركة مصاريف السيارة بنجاح وتحديث رصيد الخزينة الإجمالي');
+        loadDashboard();
+        loadCarExpenses();
+        if (selectedCarLedger) {
+          loadCarLedger(selectedCarLedger);
+        }
+      } else {
+        alert(data.error || 'حدث خطأ أثناء حذف العملية');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('تعذر الاتصال بالسيرفر لحذف العملية');
+    }
+  };
+
   const loadCarExpenses = async () => {
     try {
       const res = await fetch('/api/transactions?type=withdrawal&withdrawal_sub_type=car');
@@ -2714,6 +2738,9 @@ const [showCarModal, setShowCarModal] = useState(false);
                                           loadDashboard();
                                           loadTransactions();
                                           loadCarExpenses();
+                    if (selectedCarLedger) {
+                      loadCarLedger(selectedCarLedger);
+                    }
                                         } else {
                                           const err = await res.json();
                                           alert(err.error || 'حدث خطأ أثناء تأكيد الاستلام');
@@ -3711,11 +3738,12 @@ const [showCarModal, setShowCarModal] = useState(false);
                         <th>المشرف المسؤول</th>
                         <th>مسجل الحركة</th>
                         <th>بيان الملاحظات</th>
+                        <th style={{ textAlign: 'center' }}>الإجراءات والعمليات</th>
                       </tr>
                     </thead>
                     <tbody>
                       {!carLedgerData || carLedgerData.length === 0 ? (
-                        <tr><td colSpan="9" style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>لا توجد مصاريف مسجلة لهذه السيارة حتى الآن.</td></tr>
+                        <tr><td colSpan="10" style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>لا توجد مصاريف مسجلة لهذه السيارة حتى الآن.</td></tr>
                       ) : (
                         carLedgerData.map(tx => (
                           <tr key={tx.id}>
@@ -3735,6 +3763,36 @@ const [showCarModal, setShowCarModal] = useState(false);
                             <td>{tx.creator_name || '—'}</td>
                             <td style={{ maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={tx.notes}>
                               {tx.notes || '—'}
+                            </td>
+                            <td style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
+                              <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'center' }}>
+                                <button 
+                                  className="btn btn-secondary btn-sm" 
+                                  onClick={() => handlePrintReceipt(tx)} 
+                                  title="طباعة إيصال الصرف"
+                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: '#0284c7', color: '#fff', border: 'none' }}
+                                >
+                                  🖨️ طباعة
+                                </button>
+                                <button 
+                                  className="btn btn-secondary btn-sm" 
+                                  onClick={() => setEditingTx(tx)} 
+                                  title="تعديل المعاملة"
+                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: '#3b82f6', color: '#fff', border: 'none' }}
+                                >
+                                  ✏️ تعديل
+                                </button>
+                                {currentUser?.role === 'manager' && (
+                                  <button 
+                                    className="btn btn-secondary btn-sm" 
+                                    onClick={() => handleDeleteCarTx(tx)} 
+                                    title="حذف المعاملة"
+                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: '#ef4444', color: '#fff', border: 'none' }}
+                                  >
+                                    🗑️ حذف
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))
