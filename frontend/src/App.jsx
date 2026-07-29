@@ -3673,23 +3673,23 @@ const [showCarModal, setShowCarModal] = useState(false);
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
                     <div style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', padding: '1rem', borderRadius: '14px', textAlign: 'center' }}>
                       <div style={{ fontSize: '0.8rem', color: '#f87171', marginBottom: '0.2rem', fontWeight: 'bold' }}>💳 إجمالي المصاريف</div>
-                      <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#ef4444' }}>{totalAmt.toLocaleString('ar-EG')} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
+                      <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#ef4444' }}>{totalAmt.toLocaleString('ar-EG')} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
                     </div>
                     <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', padding: '1rem', borderRadius: '14px', textAlign: 'center' }}>
                       <div style={{ fontSize: '0.8rem', color: '#fbbf24', marginBottom: '0.2rem', fontWeight: 'bold' }}>⛽ إجمالي الجاز</div>
-                      <div style={{ fontSize: '1.4rem', fontWeight 900, color: '#f59e0b' }}>{gasAmt.toLocaleString('ar-EG')} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
+                      <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#f59e0b' }}>{gasAmt.toLocaleString('ar-EG')} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
                     </div>
                     <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', padding: '1rem', borderRadius: '14px', textAlign: 'center' }}>
                       <div style={{ fontSize: '0.8rem', color: '#34d399', marginBottom: '0.2rem', fontWeight: 'bold' }}>🛢️ إجمالي الزيت والصيانة</div>
-                      <div style={{ fontSize: '1.4rem', fontWeight 900, color: '#10b981' }}>{oilAmt.toLocaleString('ar-EG')} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
+                      <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#10b981' }}>{oilAmt.toLocaleString('ar-EG')} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
                     </div>
                     <div style={{ background: 'rgba(124,58,237,0.06)', border: '1px solid rgba(124,58,237,0.2)', padding: '1rem', borderRadius: '14px', textAlign: 'center' }}>
                       <div style={{ fontSize: '0.8rem', color: '#c4b5fd', marginBottom: '0.2rem', fontWeight: 'bold' }}>🔧 مصاريف أخرى</div>
-                      <div style={{ fontSize: '1.4rem', fontWeight 900, color: '#a78bfa' }}>{otherAmt.toLocaleString('ar-EG')} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
+                      <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#a78bfa' }}>{otherAmt.toLocaleString('ar-EG')} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
                     </div>
                     <div style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.2)', padding: '1rem', borderRadius: '14px', textAlign: 'center' }}>
                       <div style={{ fontSize: '0.8rem', color: '#60a5fa', marginBottom: '0.2rem', fontWeight: 'bold' }}>📈 متوسط الحركة ({txs.length})</div>
-                      <div style={{ fontSize: '1.4rem', fontWeight 900, color: '#3b82f6' }}>{avgAmt.toLocaleString('ar-EG', { maximumFractionDigits: 0 })} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
+                      <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#3b82f6' }}>{avgAmt.toLocaleString('ar-EG', { maximumFractionDigits: 0 })} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
                     </div>
                   </div>
                 );
