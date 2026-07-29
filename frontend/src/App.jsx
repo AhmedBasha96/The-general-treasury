@@ -136,11 +136,11 @@ export default function App() {
 
   const handlePrintReceipt = (tx) => {
     const id = String(tx.id).padStart(6, '0');
-    const date = new Date(tx.date).toLocaleString('ar-EG');
-    const amount = Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 });
+    const date = new Date(tx.date).toLocaleString('en-US');
+    const amount = Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 });
     const pounds = Math.floor(Number(tx.amount));
     const piasters = Math.round((Number(tx.amount) - pounds) * 100);
-    const amountText = `${pounds.toLocaleString('ar-EG')} جنيه مصري${piasters > 0 ? ` و${piasters.toLocaleString('ar-EG')} قرشاً` : ''} لا غير`;
+    const amountText = `${pounds.toLocaleString('en-US')} جنيه مصري${piasters > 0 ? ` و${piasters.toLocaleString('en-US')} قرشاً` : ''} لا غير`;
 
     const typeLabel = tx.type === 'exchange'
       ? 'إيصال تسوية فئات الخزينة (فك عملة)'
@@ -183,18 +183,18 @@ export default function App() {
         if (val > 0) {
           totalCountExchangeIncoming += val;
           totalValueExchangeIncoming += (d * val);
-          denomRowsExchangeIncoming += `<tr><td>${d} ج.م</td><td>${val}</td><td>${(d * val).toLocaleString('ar-EG')} ج.م</td></tr>`;
+          denomRowsExchangeIncoming += `<tr><td>${d} ج.م</td><td>${val}</td><td>${(d * val).toLocaleString('en-US')} ج.م</td></tr>`;
           hasExchangeDenoms = true;
         } else if (val < 0) {
           const absVal = Math.abs(val);
           totalCountExchangeOutgoing += absVal;
           totalValueExchangeOutgoing += (d * absVal);
-          denomRowsExchangeOutgoing += `<tr><td>${d} ج.م</td><td>${absVal}</td><td>${(d * absVal).toLocaleString('ar-EG')} ج.م</td></tr>`;
+          denomRowsExchangeOutgoing += `<tr><td>${d} ج.م</td><td>${absVal}</td><td>${(d * absVal).toLocaleString('en-US')} ج.م</td></tr>`;
           hasExchangeDenoms = true;
         }
       });
-      denomRowsExchangeIncoming += `<tr style="border-top:2px solid #000;font-weight:900"><td>المجموع الوارد</td><td>${totalCountExchangeIncoming}</td><td>${totalValueExchangeIncoming.toLocaleString('ar-EG')} ج.م</td></tr>`;
-      denomRowsExchangeOutgoing += `<tr style="border-top:2px solid #000;font-weight:900"><td>المجموع المنصرف</td><td>${totalCountExchangeOutgoing}</td><td>${totalValueExchangeOutgoing.toLocaleString('ar-EG')} ج.م</td></tr>`;
+      denomRowsExchangeIncoming += `<tr style="border-top:2px solid #000;font-weight:900"><td>المجموع الوارد</td><td>${totalCountExchangeIncoming}</td><td>${totalValueExchangeIncoming.toLocaleString('en-US')} ج.م</td></tr>`;
+      denomRowsExchangeOutgoing += `<tr style="border-top:2px solid #000;font-weight:900"><td>المجموع المنصرف</td><td>${totalCountExchangeOutgoing}</td><td>${totalValueExchangeOutgoing.toLocaleString('en-US')} ج.م</td></tr>`;
     }
 
     const hasDenoms = !isExchange && tx.payment_method !== 'bank_transfer'
@@ -207,7 +207,7 @@ export default function App() {
         const cnt = tx[`denom_${d}`] || 0;
         if (cnt > 0) {
           totalCount += cnt;
-          denomRows += `<tr><td>${d} ج.م</td><td>${cnt}</td><td>${(d * cnt).toLocaleString('ar-EG')} ج.م</td></tr>`;
+          denomRows += `<tr><td>${d} ج.م</td><td>${cnt}</td><td>${(d * cnt).toLocaleString('en-US')} ج.م</td></tr>`;
         }
       });
       denomRows += `<tr style="border-top:2px solid #000;font-weight:900"><td>الإجمالي</td><td>${totalCount}</td><td>${amount} ج.م</td></tr>`;
@@ -1983,7 +1983,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                 <td>{rep.phone || '—'}</td>
                 <td>
                   <span style={{ fontWeight: 800, color: Number(rep.balance) >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                    {Number(rep.balance).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                    {Number(rep.balance).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                   </span>
                 </td>
                 <td>
@@ -2405,18 +2405,18 @@ const [showCarModal, setShowCarModal] = useState(false);
                   <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#34d399', textTransform: 'uppercase', letterSpacing: '0.08em' }}>الخزنة العامة (رصيد الخزينة النقدي الحالي)</span>
                 </div>
                 <div style={{ fontSize: '2.8rem', fontWeight: 900, color: '#10b981', letterSpacing: '-1px', lineHeight: 1, marginBottom: '0.5rem' }}>
-                  {(dashboardData.summary.cashSafeBalance ?? dashboardData.summary.safeBalance).toLocaleString('ar-EG', { minimumFractionDigits: 2 })}
+                  {(dashboardData.summary.cashSafeBalance ?? dashboardData.summary.safeBalance).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   <span style={{ fontSize: '1rem', fontWeight: 400, color: '#6ee7b7', marginRight: '0.4rem' }}>ج.م</span>
                 </div>
                 <div style={{ display: 'flex', gap: '1.5rem', marginTop: '1rem' }}>
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '0.72rem', color: '#6ee7b7', marginBottom: '0.2rem' }}>إجمالي الوارد نقدي</div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#10b981' }}>{(dashboardData.summary.cashDeposits ?? dashboardData.summary.totalDeposits).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#10b981' }}>{(dashboardData.summary.cashDeposits ?? dashboardData.summary.totalDeposits).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</div>
                   </div>
                   <div style={{ width: '1px', background: 'rgba(16,185,129,0.25)' }} />
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '0.72rem', color: '#fca5a5', marginBottom: '0.2rem' }}>إجمالي المصروف</div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f43f5e' }}>{dashboardData.summary.totalWithdrawals.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f43f5e' }}>{dashboardData.summary.totalWithdrawals.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</div>
                   </div>
                 </div>
                 {dashboardData.summary.safeDenominations && (
@@ -2463,7 +2463,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                   <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>إجمالي أرصدة البنوك الحالية</span>
                 </div>
                 <div style={{ fontSize: '2.8rem', fontWeight: 900, color: '#0ea5e9', letterSpacing: '-1px', lineHeight: 1, marginBottom: '0.5rem' }}>
-                  {banks.reduce((sum, b) => sum + (Number(b.balance) || 0), 0).toLocaleString('ar-EG', { minimumFractionDigits: 2 })}
+                  {banks.reduce((sum, b) => sum + (Number(b.balance) || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   <span style={{ fontSize: '1rem', fontWeight: 400, color: '#7dd3fc', marginRight: '0.4rem' }}>ج.م</span>
                 </div>
                 {banks.length === 0 ? (
@@ -2476,7 +2476,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                         <div key={b.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(14,165,233,0.08)', borderRadius: '8px', padding: '0.35rem 0.7rem', border: '1px solid rgba(14,165,233,0.15)' }}>
                           <span style={{ fontSize: '0.8rem', color: '#bae6fd', fontWeight: 600 }}>🏦 {b.name} <span style={{ color: '#7dd3fc', fontWeight: 400 }}>({b.code})</span></span>
                           <span style={{ fontSize: '0.85rem', fontWeight: 800, color: Number(b.balance) >= 0 ? '#34d399' : '#f87171' }}>
-                            {Number(b.balance || 0).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                            {Number(b.balance || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                           </span>
                         </div>
                       ))}
@@ -2493,14 +2493,14 @@ const [showCarModal, setShowCarModal] = useState(false);
               <span style={{ fontSize: '1.5rem' }}>📥</span>
               <div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>إجمالي الوارد (نقدي + تحويل)</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--success)' }}>{dashboardData.summary.totalDeposits.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--success)' }}>{dashboardData.summary.totalDeposits.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</div>
               </div>
             </div>
             <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', borderRadius: '14px', padding: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
               <span style={{ fontSize: '1.5rem' }}>📤</span>
               <div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>إجمالي الصرف من الخزينة</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--danger)' }}>{dashboardData.summary.totalWithdrawals.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--danger)' }}>{dashboardData.summary.totalWithdrawals.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</div>
               </div>
             </div>
             <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', borderRadius: '14px', padding: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
@@ -2536,7 +2536,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                   <tbody>
                     {dashboardData.recentTransactions.map((tx) => (
                       <tr key={tx.id}>
-                        <td>{new Date(tx.date).toLocaleString('ar-EG')}</td>
+                        <td>{new Date(tx.date).toLocaleString('en-US')}</td>
                         <td>
                           {tx.bank_name ? (
                             <span>🏦 {tx.bank_name} <small style={{ color: 'var(--text-muted)' }}>({tx.bank_code})</small></span>
@@ -2567,7 +2567,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                         <td>
                           <span className={`amount-${tx.type}`}>
                             {tx.type === 'withdrawal' ? '-' : ''}
-                            {Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                            {Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                           </span>
                         </td>
                         <td style={{ maxWidth: '200px', fontSize: '0.82rem' }}>
@@ -2640,7 +2640,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                     <tbody>
                       {unconfirmedTx.map((tx) => (
                         <tr key={tx.id} style={{ background: 'rgba(245, 158, 11, 0.02)' }}>
-                          <td>{new Date(tx.date).toLocaleString('ar-EG')}</td>
+                          <td>{new Date(tx.date).toLocaleString('en-US')}</td>
                           <td>
                             {tx.bank_name ? (
                               <span>🏦 {tx.bank_name}</span>
@@ -2869,7 +2869,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                 <tbody>
                   {transactions.map((tx) => (
                     <tr key={tx.id}>
-                      <td>{new Date(tx.date).toLocaleString('ar-EG')}</td>
+                      <td>{new Date(tx.date).toLocaleString('en-US')}</td>
                       <td>
                         {tx.type === 'company_transfer' && tx.company_code ? (
                           <strong style={{ color: '#22d3ee' }}>{tx.company_code}</strong>
@@ -2944,7 +2944,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                       <td>
                         <span className={`amount-${tx.type}`}>
                           {(tx.type === 'withdrawal' || tx.type === 'company_transfer') ? '-' : ''}
-                          {Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                          {Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                         </span>
                       </td>
                       <td>
@@ -3167,7 +3167,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                       <tbody>
                         {selectedRepLedger.transactions.map((tx) => (
                           <tr key={tx.id}>
-                            <td>{new Date(tx.date).toLocaleString('ar-EG')}</td>
+                            <td>{new Date(tx.date).toLocaleString('en-US')}</td>
                             <td>
                               <span className={`badge badge-${tx.type}`}>
                                 {tx.type === 'exchange' ? '🔄 تسوية فئات' : tx.type === 'deposit' ? '📥 توريد' : '📤 صرف'}
@@ -3189,7 +3189,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                             <td>
                               <span className={`amount-${tx.type}`}>
                                 {tx.type === 'withdrawal' ? '-' : ''}
-                                {Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                                {Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                               </span>
                             </td>
                             <td>
@@ -3285,7 +3285,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                             <td><span className={`badge badge-${r.type}`}>{r.type === 'wholesale' ? '💼 جملة' : '🛍️ تجزئة'}</span></td>
                             <td>
                               <span style={{ fontWeight: 800, color: Number(r.balance) >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                                {Number(r.balance).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                                {Number(r.balance).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                               </span>
                             </td>
                           </tr>
@@ -3329,7 +3329,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                                       <td>{rep.supervisor_name ? `${rep.supervisor_name} (${rep.supervisor_code})` : <em style={{ color: 'var(--text-secondary)' }}>لا يوجد</em>}</td>
                                       <td>{rep.phone || '—'}</td>
                                       <td><span className="badge" style={getClassificationBadgeStyle(rep.classification)}>{getClassificationLabel(rep.classification)}</span></td>
-                                      <td><span style={{ fontWeight: 800, color: Number(rep.balance) >= 0 ? 'var(--success)' : 'var(--danger)' }}>{Number(rep.balance).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</span></td>
+                                      <td><span style={{ fontWeight: 800, color: Number(rep.balance) >= 0 ? 'var(--success)' : 'var(--danger)' }}>{Number(rep.balance).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</span></td>
                                       <td>
                                         <div style={{ display: 'flex', gap: '0.5rem' }}>
                                           <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => handleViewLedger(rep.id)}>📂 كشف حساب</button>
@@ -3358,7 +3358,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                                   {uncategorizedReps.filter(r => r.classification === 'retail_rep' || r.classification === 'wholesale_rep' || !r.classification).map(rep => (
                                     <tr key={rep.id}>
                                       <td><strong>{rep.code}</strong></td><td>{rep.name}</td><td>{rep.phone || '—'}</td>
-                                      <td><span style={{ fontWeight: 800, color: Number(rep.balance) >= 0 ? 'var(--success)' : 'var(--danger)' }}>{Number(rep.balance).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</span></td>
+                                      <td><span style={{ fontWeight: 800, color: Number(rep.balance) >= 0 ? 'var(--success)' : 'var(--danger)' }}>{Number(rep.balance).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</span></td>
                                       <td>
                                         <div style={{ display: 'flex', gap: '0.5rem' }}>
                                           <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => handleViewLedger(rep.id)}>📂 كشف حساب</button>
@@ -3540,7 +3540,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                 <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f87171', textTransform: 'uppercase' }}>إجمالي مصاريف السيارات</span>
               </div>
               <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#ef4444' }}>
-                {totalCarExpenses.toLocaleString('ar-EG', { minimumFractionDigits: 2 })}
+                {totalCarExpenses.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 <span style={{ fontSize: '1rem', fontWeight: 400, color: '#fca5a5', marginRight: '0.3rem' }}>ج.م</span>
               </div>
             </div>
@@ -3556,7 +3556,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                 <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fbbf24' }}>عدد العمليات المسجلة</span>
               </div>
               <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#f59e0b' }}>
-                {carExpensesCount.toLocaleString('ar-EG')}
+                {carExpensesCount.toLocaleString('en-US')}
                 <span style={{ fontSize: '1rem', fontWeight: 400, color: '#fde68a', marginRight: '0.3rem' }}>حركة</span>
               </div>
             </div>
@@ -3572,7 +3572,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                 <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#60a5fa' }}>متوسط الحركة الواحدة</span>
               </div>
               <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#3b82f6' }}>
-                {averageCarExpense.toLocaleString('ar-EG', { minimumFractionDigits: 2 })}
+                {averageCarExpense.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 <span style={{ fontSize: '1rem', fontWeight: 400, color: '#93c5fd', marginRight: '0.3rem' }}>ج.م</span>
               </div>
             </div>
@@ -3616,7 +3616,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                           </head>
                           <body>
                             <h2>📋 كشف حساب مصاريف السيارة: ${selectedCarLedger.plate_number}</h2>
-                            <p style="text-align:center; color:#64748b;">تاريخ التقرير: ${new Date().toLocaleString('ar-EG')}</p>
+                            <p style="text-align:center; color:#64748b;">تاريخ التقرير: ${new Date().toLocaleString('en-US')}</p>
                             <table>
                               <thead>
                                 <tr>
@@ -3632,9 +3632,9 @@ const [showCarModal, setShowCarModal] = useState(false);
                               <tbody>
                                 ${(carLedgerData || []).map(tx => `
                                   <tr>
-                                    <td>${new Date(tx.date).toLocaleString('ar-EG')}</td>
+                                    <td>${new Date(tx.date).toLocaleString('en-US')}</td>
                                     <td>${tx.withdrawal_sub_type === 'car_gas' ? 'جاز' : tx.withdrawal_sub_type === 'car_oil' ? 'زيت/صيانة' : 'مصاريف أخرى'}</td>
-                                    <td><strong>${Number(tx.amount).toLocaleString('ar-EG')} ج.م</strong></td>
+                                    <td><strong>${Number(tx.amount).toLocaleString('en-US')} ج.م</strong></td>
                                     <td>${tx.rep_name ? `${tx.rep_name} (${tx.rep_code})` : '—'}</td>
                                     <td>${tx.agency_name || '—'}</td>
                                     <td>${tx.supervisor_name || '—'}</td>
@@ -3673,23 +3673,23 @@ const [showCarModal, setShowCarModal] = useState(false);
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
                     <div style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', padding: '1rem', borderRadius: '14px', textAlign: 'center' }}>
                       <div style={{ fontSize: '0.8rem', color: '#f87171', marginBottom: '0.2rem', fontWeight: 'bold' }}>💳 إجمالي المصاريف</div>
-                      <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#ef4444' }}>{totalAmt.toLocaleString('ar-EG')} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
+                      <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#ef4444' }}>{totalAmt.toLocaleString('en-US')} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
                     </div>
                     <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', padding: '1rem', borderRadius: '14px', textAlign: 'center' }}>
                       <div style={{ fontSize: '0.8rem', color: '#fbbf24', marginBottom: '0.2rem', fontWeight: 'bold' }}>⛽ إجمالي الجاز</div>
-                      <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#f59e0b' }}>{gasAmt.toLocaleString('ar-EG')} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
+                      <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#f59e0b' }}>{gasAmt.toLocaleString('en-US')} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
                     </div>
                     <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', padding: '1rem', borderRadius: '14px', textAlign: 'center' }}>
                       <div style={{ fontSize: '0.8rem', color: '#34d399', marginBottom: '0.2rem', fontWeight: 'bold' }}>🛢️ إجمالي الزيت والصيانة</div>
-                      <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#10b981' }}>{oilAmt.toLocaleString('ar-EG')} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
+                      <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#10b981' }}>{oilAmt.toLocaleString('en-US')} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
                     </div>
                     <div style={{ background: 'rgba(124,58,237,0.06)', border: '1px solid rgba(124,58,237,0.2)', padding: '1rem', borderRadius: '14px', textAlign: 'center' }}>
                       <div style={{ fontSize: '0.8rem', color: '#c4b5fd', marginBottom: '0.2rem', fontWeight: 'bold' }}>🔧 مصاريف أخرى</div>
-                      <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#a78bfa' }}>{otherAmt.toLocaleString('ar-EG')} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
+                      <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#a78bfa' }}>{otherAmt.toLocaleString('en-US')} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
                     </div>
                     <div style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.2)', padding: '1rem', borderRadius: '14px', textAlign: 'center' }}>
                       <div style={{ fontSize: '0.8rem', color: '#60a5fa', marginBottom: '0.2rem', fontWeight: 'bold' }}>📈 متوسط الحركة ({txs.length})</div>
-                      <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#3b82f6' }}>{avgAmt.toLocaleString('ar-EG', { maximumFractionDigits: 0 })} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
+                      <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#3b82f6' }}>{avgAmt.toLocaleString('en-US', { maximumFractionDigits: 0 })} <small style={{ fontSize: '0.75rem' }}>ج.م</small></div>
                     </div>
                   </div>
                 );
@@ -3720,14 +3720,14 @@ const [showCarModal, setShowCarModal] = useState(false);
                         carLedgerData.map(tx => (
                           <tr key={tx.id}>
                             <td><strong>TX-{String(tx.id).padStart(6, '0')}</strong></td>
-                            <td>{new Date(tx.date).toLocaleString('ar-EG')}</td>
+                            <td>{new Date(tx.date).toLocaleString('en-US')}</td>
                             <td>
                               <span className={`badge ${tx.withdrawal_sub_type === 'car_gas' ? 'badge-warning' : tx.withdrawal_sub_type === 'car_oil' ? 'badge-wholesale' : 'badge-retail'}`} style={{ fontWeight: 'bold' }}>
                                 {tx.withdrawal_sub_type === 'car_gas' ? '⛽ جاز' : tx.withdrawal_sub_type === 'car_oil' ? '🛢️ زيت/صيانة' : '🔧 مصاريف أخرى'}
                               </span>
                             </td>
                             <td style={{ color: '#ef4444', fontWeight: '900', fontSize: '1.1rem' }}>
-                              -{Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                              -{Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                             </td>
                             <td>{tx.rep_name ? <strong>{tx.rep_name} <small style={{ color: 'var(--text-muted)' }}>({tx.rep_code})</small></strong> : '— (صرف مباشر)'}</td>
                             <td>{tx.agency_name || '—'}</td>
@@ -3976,7 +3976,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                       const supervisor = supervisors.find(s => s.id === rep?.supervisor_id);
                       return (
                         <tr key={tx.id}>
-                          <td>{new Date(tx.date).toLocaleString('ar-EG')}</td>
+                          <td>{new Date(tx.date).toLocaleString('en-US')}</td>
                           <td><strong>{rep ? `${rep.name} (${rep.code})` : '—'}</strong></td>
                           <td>{supervisor ? supervisor.name : '—'}</td>
                           <td>{agency ? agency.name : '—'}</td>
@@ -3989,7 +3989,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                             </span>
                           </td>
                           <td style={{ color: 'var(--danger)', fontWeight: 800 }}>
-                            -{Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                            -{Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                           </td>
                           <td style={{ maxWidth: '300px', fontSize: '0.85rem' }}>{tx.notes || '—'}</td>
                         </tr>
@@ -4910,7 +4910,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                     <div>
                       <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.2rem' }}>الرصيد الإجمالي الحالي</div>
                       <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#0ea5e9', letterSpacing: '-1px', lineHeight: 1 }}>
-                        {(repLedgerData.summary.balance ?? 0).toLocaleString('ar-EG', { minimumFractionDigits: 2 })}
+                        {(repLedgerData.summary.balance ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         <span style={{ fontSize: '1rem', fontWeight: 400, color: '#7dd3fc', marginRight: '0.4rem' }}>ج.م</span>
                       </div>
                     </div>
@@ -4925,15 +4925,15 @@ const [showCarModal, setShowCarModal] = useState(false);
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1.5rem' }}>
                     <div style={{ background: 'rgba(16,185,129,0.05)', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid rgba(16,185,129,0.15)' }}>
                       <div style={{ fontSize: '0.75rem', color: '#34d399', marginBottom: '0.1rem' }}>إجمالي التوريدات النقدية</div>
-                      <strong style={{ color: '#10b981', fontSize: '1.1rem' }}>{(repLedgerData.summary.cashDeposits ?? 0).toLocaleString('ar-EG')} ج.م</strong>
+                      <strong style={{ color: '#10b981', fontSize: '1.1rem' }}>{(repLedgerData.summary.cashDeposits ?? 0).toLocaleString('en-US')} ج.م</strong>
                     </div>
                     <div style={{ background: 'rgba(124,58,237,0.05)', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid rgba(124,58,237,0.15)' }}>
                       <div style={{ fontSize: '0.75rem', color: '#c4b5fd', marginBottom: '0.1rem' }}>إجمالي تحويلات البنك</div>
-                      <strong style={{ color: '#a78bfa', fontSize: '1.1rem' }}>{(repLedgerData.summary.bankTransferDeposits ?? 0).toLocaleString('ar-EG')} ج.م</strong>
+                      <strong style={{ color: '#a78bfa', fontSize: '1.1rem' }}>{(repLedgerData.summary.bankTransferDeposits ?? 0).toLocaleString('en-US')} ج.م</strong>
                     </div>
                     <div style={{ background: 'rgba(239,68,68,0.05)', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid rgba(239,68,68,0.15)' }}>
                       <div style={{ fontSize: '0.75rem', color: '#f87171', marginBottom: '0.1rem' }}>إجمالي الصرف الفعلي</div>
-                      <strong style={{ color: '#ef4444', fontSize: '1.1rem' }}>{(repLedgerData.summary.totalWithdrawals ?? 0).toLocaleString('ar-EG')} ج.م</strong>
+                      <strong style={{ color: '#ef4444', fontSize: '1.1rem' }}>{(repLedgerData.summary.totalWithdrawals ?? 0).toLocaleString('en-US')} ج.م</strong>
                     </div>
                   </div>
                 </div>
@@ -4968,7 +4968,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                       <tbody>
                         {repLedgerData.transactions.map((tx) => {
                           const idStr = String(tx.id).padStart(6, '0');
-                          const txDate = new Date(tx.date).toLocaleString('ar-EG');
+                          const txDate = new Date(tx.date).toLocaleString('en-US');
                           
                           let statusLabel = 'مكتمل';
                           let statusClass = 'approved';
@@ -5007,7 +5007,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                               <td>
                                 <span className={`amount-${tx.type}`} style={{ fontWeight: 'bold' }}>
                                   {tx.type === 'withdrawal' ? '-' : ''}
-                                  {Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                                  {Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                                 </span>
                               </td>
                               <td>
@@ -5381,7 +5381,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
                   <div>
                     <h3 style={{ color: 'var(--primary)', fontWeight: 800 }}>{selectedAgencyLedger.agency.name}</h3>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>كود التوكيل: {selectedAgencyLedger.agency.code} | تاريخ التأسيس: {new Date(selectedAgencyLedger.agency.created_at).toLocaleDateString('ar-EG')}</p>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>كود التوكيل: {selectedAgencyLedger.agency.code} | تاريخ التأسيس: {new Date(selectedAgencyLedger.agency.created_at).toLocaleDateString('en-US')}</p>
                   </div>
                   <button className="btn btn-secondary" onClick={() => { setSelectedAgencyLedger(null); localStorage.removeItem('selectedAgencyLedgerId'); }}>العودة للقائمة ⬅</button>
                 </div>
@@ -5427,7 +5427,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                       <tbody>
                         {selectedAgencyLedger.transactions.map((tx) => (
                           <tr key={tx.id}>
-                            <td>{new Date(tx.date).toLocaleString('ar-EG')}</td>
+                            <td>{new Date(tx.date).toLocaleString('en-US')}</td>
                             <td>{tx.rep_name ? `${tx.rep_name} (${tx.rep_code})` : (tx.bank_name ? `إلى بنك: ${tx.bank_name}` : '—')}</td>
                             <td>
                               <span className={`badge badge-${tx.type}`}>
@@ -5455,7 +5455,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                             <td>
                               <span className={`amount-${tx.type}`}>
                                 {tx.type === 'withdrawal' ? '-' : ''}
-                                {Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                                {Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                               </span>
                             </td>
                             <td>
@@ -5493,14 +5493,14 @@ const [showCarModal, setShowCarModal] = useState(false);
                           <td>{agency.name}</td>
                           <td>{agency.reps_count} مناديب</td>
                           <td style={{ color: '#10b981', fontWeight: 700, backgroundColor: 'rgba(16, 185, 129, 0.02)' }}>
-                            {Number(agency.cash_balance ?? 0).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                            {Number(agency.cash_balance ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                           </td>
                           <td style={{ color: '#a78bfa', fontWeight: 700, backgroundColor: 'rgba(124, 58, 237, 0.02)' }}>
-                            {Number(agency.bank_transfer_deposits ?? 0).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                            {Number(agency.bank_transfer_deposits ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                           </td>
                           <td>
                             <span style={{ fontWeight: 800, color: Number(agency.balance ?? 0) >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                              {Number(agency.balance ?? 0).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                              {Number(agency.balance ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                             </span>
                           </td>
                           <td>
@@ -5621,7 +5621,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                       {companyLedgerData.transactions.map((tx) => (
                         <tr key={tx.id}>
                           <td>#{String(tx.id).padStart(6, '0')}</td>
-                          <td>{new Date(tx.date).toLocaleDateString('ar-EG')}</td>
+                          <td>{new Date(tx.date).toLocaleDateString('en-US')}</td>
                           <td>
                             {tx.bank_name} <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>({tx.bank_code})</span>
                           </td>
@@ -5924,9 +5924,9 @@ const [showCarModal, setShowCarModal] = useState(false);
                                 <div style={{ flex: 1 }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.4rem' }}>
                                     <span style={{ color: '#a78bfa', fontWeight: 700, fontSize: '1rem' }}>
-                                      {Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                                      {Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                                     </span>
-                                    <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{new Date(tx.date).toLocaleString('ar-EG')}</span>
+                                    <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{new Date(tx.date).toLocaleString('en-US')}</span>
                                   </div>
                                   {tx.rep_name && (
                                     <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
@@ -5969,7 +5969,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                             <tbody>
                               {selectedBankLedger.transactions.filter(tx => tx.payment_method !== 'bank_transfer').map((tx) => (
                                 <tr key={tx.id}>
-                                  <td>{new Date(tx.date).toLocaleString('ar-EG')}</td>
+                                  <td>{new Date(tx.date).toLocaleString('en-US')}</td>
                                   <td>
                                     <span className={`badge badge-${tx.type}`}>
                                       {tx.type === 'deposit' ? '📥 توريد من البنك' : '📤 صرف للبنك'}
@@ -5983,7 +5983,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                                   <td>
                                     <span className={tx.type === 'withdrawal' ? 'amount-deposit' : 'amount-withdrawal'}>
                                       {tx.type === 'deposit' ? '-' : ''}
-                                      {Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                                      {Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                                     </span>
                                   </td>
                                   <td>{tx.rep_name ? `${tx.rep_name} (${tx.rep_code})` : '—'}</td>
@@ -6028,7 +6028,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                           <td style={{ color: 'var(--danger)', fontWeight: 600 }}>{Number(bank.total_withdrawals).toLocaleString()} ج.م</td>
                           <td>
                             <span style={{ fontWeight: 800, color: Number(bank.balance) >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                              {Number(bank.balance).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                              {Number(bank.balance).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                             </span>
                           </td>
                           <td>
@@ -6163,7 +6163,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                 <tbody>
                   {pendingTx.map((tx) => (
                     <tr key={tx.id}>
-                      <td>{new Date(tx.date).toLocaleString('ar-EG')}</td>
+                      <td>{new Date(tx.date).toLocaleString('en-US')}</td>
                       <td>
                         {tx.type === 'company_transfer' ? (
                           <span>🏦 {tx.bank_name} ➔ 🏢 {tx.company_name}</span>
@@ -6196,7 +6196,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                         )}
                       </td>
                       <td className={tx.type === 'exchange' ? 'amount-exchange' : tx.type === 'company_transfer' ? 'amount-company-transfer' : 'amount-withdrawal'}>
-                        {Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                        {Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                       </td>
                       <td>{tx.notes || '—'}</td>
                       <td>
@@ -6663,7 +6663,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                             <span style={{ color: 'var(--text-muted)' }}>—</span>
                           )}
                         </td>
-                        <td>{new Date(usr.created_at || new Date()).toLocaleDateString('ar-EG')}</td>
+                        <td>{new Date(usr.created_at || new Date()).toLocaleDateString('en-US')}</td>
                         <td>
                           <button
                             className="btn btn-secondary"
@@ -6897,14 +6897,14 @@ const [showCarModal, setShowCarModal] = useState(false);
                 onClick={() => {
                   if (!dailyReportData) return;
                   const d = dailyReportData;
-                  const reportDate = new Date(d.date).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                  const reportDate = new Date(d.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
                   const safeSummaryRows = `
                     <tr>
-                      <td>${d.safeSummary.openingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
-                      <td style="color:green;font-weight:bold">+${d.safeSummary.deposits.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
-                      <td style="color:red;font-weight:bold">-${d.safeSummary.withdrawals.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
-                      <td style="font-weight:bold">${d.safeSummary.closingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                      <td>${d.safeSummary.openingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                      <td style="color:green;font-weight:bold">+${d.safeSummary.deposits.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                      <td style="color:red;font-weight:bold">-${d.safeSummary.withdrawals.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                      <td style="font-weight:bold">${d.safeSummary.closingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
                     </tr>`;
 
                   const bankRows = d.banksSummary.map(bank => `
@@ -6912,10 +6912,10 @@ const [showCarModal, setShowCarModal] = useState(false);
                       <td style="font-weight:bold">${bank.code}</td>
                       <td>${bank.name}</td>
                       <td>${bank.account_number}</td>
-                      <td>${bank.openingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
-                      <td style="color:green">+${bank.deposits.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
-                      <td style="color:red">-${bank.withdrawals.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
-                      <td style="font-weight:bold">${bank.closingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                      <td>${bank.openingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                      <td style="color:green">+${bank.deposits.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                      <td style="color:red">-${bank.withdrawals.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                      <td style="font-weight:bold">${bank.closingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
                     </tr>`).join('');
 
                   const txRows = d.transactions.length === 0
@@ -6938,7 +6938,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                           tx.notes ? `- ${tx.notes}` : ''
                         ].filter(Boolean).join(' ');
                         const payMethod = tx.bank_name ? `بنك: ${tx.bank_name}` : 'نقدي بالخزينة';
-                        const txTime = new Date(tx.date).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+                        const txTime = new Date(tx.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
                         const txColor = tx.type === 'deposit' ? 'color:#166534' : tx.type === 'company_transfer' ? 'color:#0369a1' : 'color:#991b1b';
                         return `<tr>
                           <td>TX-${String(tx.id).padStart(6, '0')}</td>
@@ -6946,7 +6946,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                           <td style="${txColor};font-weight:bold">${typeLabel}</td>
                           <td style="text-align:right">${details || '—'}</td>
                           <td>${payMethod}</td>
-                          <td style="font-weight:bold">${Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                          <td style="font-weight:bold">${Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
                           <td>${tx.creator_name || 'أمين الخزينة'}</td>
                         </tr>`;
                       }).join('');
@@ -7035,7 +7035,7 @@ const [showCarModal, setShowCarModal] = useState(false);
             <div className="report-preview-container" style={{ marginTop: '1.5rem', direction: 'rtl' }}>
               <div style={{ textAlign: 'center', marginBottom: '2rem', borderBottom: '2px double var(--border-color)', paddingBottom: '1.5rem' }}>
                 <h1 style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-primary)', margin: '0.5rem 0' }}>تقرير حركة الخزينة والمصارف اليومي التفصيلي</h1>
-                <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', margin: 0 }}>تاريخ التقرير: <strong>{new Date(dailyReportData.date).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong></p>
+                <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', margin: 0 }}>تاريخ التقرير: <strong>{new Date(dailyReportData.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong></p>
               </div>
 
               <div className="report-section" style={{ marginBottom: '2rem' }}>
@@ -7043,19 +7043,19 @@ const [showCarModal, setShowCarModal] = useState(false);
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
                   <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>الرصيد الافتتاحي (بداية اليوم):</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 800, marginTop: '0.25rem' }}>{dailyReportData.safeSummary.openingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, marginTop: '0.25rem' }}>{dailyReportData.safeSummary.openingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</div>
                   </div>
                   <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>إجمالي الوارد (الإيداعات النقدية):</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--success)', marginTop: '0.25rem' }}>+{dailyReportData.safeSummary.deposits.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--success)', marginTop: '0.25rem' }}>+{dailyReportData.safeSummary.deposits.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</div>
                   </div>
                   <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>إجمالي المنصرف (الصرفيات النقدية):</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--danger)', marginTop: '0.25rem' }}>-{dailyReportData.safeSummary.withdrawals.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--danger)', marginTop: '0.25rem' }}>-{dailyReportData.safeSummary.withdrawals.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</div>
                   </div>
                   <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>الرصيد الختامي (نهاية اليوم):</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--primary)', marginTop: '0.25rem' }}>{dailyReportData.safeSummary.closingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--primary)', marginTop: '0.25rem' }}>{dailyReportData.safeSummary.closingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</div>
                   </div>
                 </div>
               </div>
@@ -7081,10 +7081,10 @@ const [showCarModal, setShowCarModal] = useState(false);
                           <td><strong>{bank.code}</strong></td>
                           <td>{bank.name}</td>
                           <td>{bank.account_number}</td>
-                          <td>{bank.openingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
-                          <td style={{ color: 'var(--success)' }}>+{bank.deposits.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
-                          <td style={{ color: 'var(--danger)' }}>-{bank.withdrawals.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
-                          <td><strong style={{ color: 'var(--info)' }}>{bank.closingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</strong></td>
+                          <td>{bank.openingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                          <td style={{ color: 'var(--success)' }}>+{bank.deposits.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                          <td style={{ color: 'var(--danger)' }}>-{bank.withdrawals.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                          <td><strong style={{ color: 'var(--info)' }}>{bank.closingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</strong></td>
                         </tr>
                       ))}
                     </tbody>
@@ -7115,7 +7115,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                         {dailyReportData.transactions.map(tx => (
                           <tr key={tx.id}>
                             <td><code>TX-{String(tx.id).padStart(6, '0')}</code></td>
-                            <td>{new Date(tx.date).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</td>
+                            <td>{new Date(tx.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</td>
                             <td>
                               <span className={`badge ${
                                 tx.type === 'deposit' ? 'badge-success' : tx.type === 'company_transfer' ? 'badge-company-transfer' : 'badge-danger'
@@ -7147,7 +7147,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                             </td>
                             <td>
                               <strong className={tx.type === 'deposit' ? 'amount-deposit' : tx.type === 'company_transfer' ? 'amount-company-transfer' : 'amount-withdrawal'}>
-                                {tx.amount.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.m
+                                {tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.m
                               </strong>
                             </td>
                             <td>{tx.creator_name || 'أمين الخزينة'}</td>
@@ -7226,7 +7226,7 @@ const [showCarModal, setShowCarModal] = useState(false);
             </div>
             <div className="receipt-meta-row">
               <span className="receipt-meta-label">التاريخ والوقت:</span>
-              <span className="receipt-meta-value">{new Date(printingTx.date).toLocaleString('ar-EG')}</span>
+              <span className="receipt-meta-value">{new Date(printingTx.date).toLocaleString('en-US')}</span>
             </div>
             <div className="receipt-meta-row">
               <span className="receipt-meta-label">نوع العملية:</span>
@@ -7315,13 +7315,13 @@ const [showCarModal, setShowCarModal] = useState(false);
           <div className="receipt-amount-section">
             <div className="receipt-amount-title">إجمالي المبلغ</div>
             <div className="receipt-amount-value">
-              {Number(printingTx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+              {Number(printingTx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
             </div>
             <div className="receipt-amount-text">
               فقط وقدره: {(() => {
                 const pounds = Math.floor(Number(printingTx.amount));
                 const piasters = Math.round((Number(printingTx.amount) - pounds) * 100);
-                return `${pounds.toLocaleString('ar-EG')} جنيه مصري${piasters > 0 ? ` و${piasters.toLocaleString('ar-EG')} قرشاً` : ''} لا غير`;
+                return `${pounds.toLocaleString('en-US')} جنيه مصري${piasters > 0 ? ` و${piasters.toLocaleString('en-US')} قرشاً` : ''} لا غير`;
               })()}
             </div>
           </div>
@@ -7348,8 +7348,8 @@ const [showCarModal, setShowCarModal] = useState(false);
                       return (
                         <tr key={denom}>
                           <td>{denom} ج.م</td>
-                          <td>{count.toLocaleString('ar-EG')}</td>
-                          <td>{(denom * count).toLocaleString('ar-EG')} ج.م</td>
+                          <td>{count.toLocaleString('en-US')}</td>
+                          <td>{(denom * count).toLocaleString('en-US')} ج.م</td>
                         </tr>
                       );
                     }
@@ -7360,10 +7360,10 @@ const [showCarModal, setShowCarModal] = useState(false);
                     <td style={{ fontWeight: 900, borderTop: '2px solid #000' }}>
                       {[200, 100, 50, 20, 10, 5, 1]
                         .reduce((sum, d) => sum + (printingTx[`denom_${d}`] || 0), 0)
-                        .toLocaleString('ar-EG')}
+                        .toLocaleString('en-US')}
                     </td>
                     <td style={{ fontWeight: 900, borderTop: '2px solid #000' }}>
-                      {Number(printingTx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                      {Number(printingTx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                     </td>
                   </tr>
                 </tbody>
@@ -7402,7 +7402,7 @@ const [showCarModal, setShowCarModal] = useState(false);
         <div className="daily-report-print-wrapper">
           <div style={{ textAlign: 'center', marginBottom: '15mm', borderBottom: '3px double #000', paddingBottom: '5mm' }}>
             <h1 style={{ fontSize: '20pt', fontWeight: 900, margin: '2mm 0' }}>تقرير حركة الخزينة والمصارف اليومي التفصيلي</h1>
-            <p style={{ fontSize: '11pt', margin: 0 }}>تاريخ التقرير: <strong>{new Date(dailyReportData.date).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong></p>
+            <p style={{ fontSize: '11pt', margin: 0 }}>تاريخ التقرير: <strong>{new Date(dailyReportData.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong></p>
           </div>
 
           <div style={{ marginBottom: '10mm' }}>
@@ -7418,10 +7418,10 @@ const [showCarModal, setShowCarModal] = useState(false);
               </thead>
               <tbody>
                 <tr style={{ textAlign: 'center' }}>
-                  <td>{dailyReportData.safeSummary.openingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
-                  <td style={{ fontWeight: 'bold' }}>+{dailyReportData.safeSummary.deposits.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
-                  <td style={{ fontWeight: 'bold' }}>-{dailyReportData.safeSummary.withdrawals.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
-                  <td style={{ fontWeight: 'bold' }}>{dailyReportData.safeSummary.closingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                  <td>{dailyReportData.safeSummary.openingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                  <td style={{ fontWeight: 'bold' }}>+{dailyReportData.safeSummary.deposits.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                  <td style={{ fontWeight: 'bold' }}>-{dailyReportData.safeSummary.withdrawals.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                  <td style={{ fontWeight: 'bold' }}>{dailyReportData.safeSummary.closingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
                 </tr>
               </tbody>
             </table>
@@ -7447,10 +7447,10 @@ const [showCarModal, setShowCarModal] = useState(false);
                     <td style={{ fontWeight: 'bold' }}>{bank.code}</td>
                     <td>{bank.name}</td>
                     <td>{bank.account_number}</td>
-                    <td>{bank.openingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
-                    <td>+{bank.deposits.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
-                    <td>-{bank.withdrawals.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
-                    <td style={{ fontWeight: 'bold' }}>{bank.closingBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م</td>
+                    <td>{bank.openingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                    <td>+{bank.deposits.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                    <td>-{bank.withdrawals.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                    <td style={{ fontWeight: 'bold' }}>{bank.closingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
                   </tr>
                 ))}
               </tbody>
@@ -7480,7 +7480,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                   dailyReportData.transactions.map(tx => (
                     <tr key={tx.id} style={{ textAlign: 'center' }}>
                       <td>TX-{String(tx.id).padStart(6, '0')}</td>
-                      <td>{new Date(tx.date).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</td>
+                      <td>{new Date(tx.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</td>
                       <td style={{ fontWeight: 'bold' }}>
                         {tx.type === 'deposit' ? 'وارد' : tx.type === 'company_transfer' ? 'حوالة لشركة' : 'منصرف'}
                       </td>
@@ -7496,7 +7496,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                         {tx.bank_name ? `🏦 ${tx.bank_name}` : '💵 نقدي بالخزينة'}
                       </td>
                       <td style={{ fontWeight: 'bold' }}>
-                        {tx.amount.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                        {tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                       </td>
                       <td>{tx.creator_name || 'أمين الخزينة'}</td>
                     </tr>

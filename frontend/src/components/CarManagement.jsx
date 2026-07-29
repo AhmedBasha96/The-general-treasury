@@ -264,7 +264,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
                       <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '10px', padding: '0.5rem', marginBottom: '0.75rem' }}>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.1rem' }}>إجمالي مصاريف السيارة</div>
                         <div style={{ fontSize: '1.25rem', fontWeight: '900', color: '#ef4444' }}>
-                          {totalExp.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} <small style={{ fontSize: '0.75rem' }}>ج.م</small>
+                          {totalExp.toLocaleString('en-US', { minimumFractionDigits: 2 })} <small style={{ fontSize: '0.75rem' }}>ج.م</small>
                         </div>
                       </div>
 
