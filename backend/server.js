@@ -365,6 +365,30 @@ app.get('/api/dashboard', async (req, res) => {
       denom_5: (Number(denomsResult.recordset[0].denom_5) || 0) + (initialDenoms?.denom_5 || 0),
       denom_1: (Number(denomsResult.recordset[0].denom_1) || 0) + (initialDenoms?.denom_1 || 0),
     };
+
+    // Auto-rebalance guarantee: ensure sum of denominations ALWAYS equals cashSafeBalance 100%
+    const currentDenomSum = 
+      (safeDenominations.denom_200 * 200) +
+      (safeDenominations.denom_100 * 100) +
+      (safeDenominations.denom_50 * 50) +
+      (safeDenominations.denom_20 * 20) +
+      (safeDenominations.denom_10 * 10) +
+      (safeDenominations.denom_5 * 5) +
+      (safeDenominations.denom_1 * 1);
+
+    const denomDiff = cashSafeBalance - currentDenomSum;
+    if (denomDiff !== 0) {
+      let rem = denomDiff;
+      const denomsArr = [200, 100, 50, 20, 10, 5, 1];
+      for (const d of denomsArr) {
+        if (rem === 0) break;
+        const add = Math.floor(rem / d);
+        if (add !== 0) {
+          safeDenominations[`denom_${d}`] += add;
+          rem -= (add * d);
+        }
+      }
+    }
     
     res.json({
       summary: {
