@@ -803,6 +803,8 @@ const [showCarModal, setShowCarModal] = useState(false);
     if (currentUser) {
       if (currentUser.role === 'representative') {
         loadRepLedger();
+        loadBanks();
+        loadCarsList();
       } else {
         loadDashboard();
         loadReps();
@@ -857,6 +859,8 @@ const [showCarModal, setShowCarModal] = useState(false);
     const pollData = () => {
       if (currentUser.role === 'representative') {
         loadRepLedger();
+        loadBanks();
+        loadCarsList();
       } else {
         loadDashboard();
         loadTransactions();
@@ -4053,6 +4057,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                       <th>بند الصرف</th>
                       <th>المبلغ</th>
                       <th>ملاحظات الصرف</th>
+                      {currentUser?.role === 'manager' && <th style={{ textAlign: 'center' }}>الإجراءات</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -4081,6 +4086,44 @@ const [showCarModal, setShowCarModal] = useState(false);
                             -{Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                           </td>
                           <td style={{ maxWidth: '300px', fontSize: '0.85rem' }}>{tx.notes || '—'}</td>
+                          {currentUser?.role === 'manager' && (
+                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                              <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'center' }}>
+                                <button
+                                  className="btn btn-secondary btn-sm"
+                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: '#3b82f6', color: '#fff', border: 'none' }}
+                                  onClick={() => {
+                                    setEditingTx({
+                                      ...tx,
+                                      car_id: tx.car_id || '',
+                                      denominations: {
+                                        denom_200: tx.denom_200 || 0,
+                                        denom_100: tx.denom_100 || 0,
+                                        denom_50: tx.denom_50 || 0,
+                                        denom_20: tx.denom_20 || 0,
+                                        denom_10: tx.denom_10 || 0,
+                                        denom_5: tx.denom_5 || 0,
+                                        denom_1: tx.denom_1 || 0
+                                      }
+                                    });
+                                    setEditError('');
+                                    setEditSuccess('');
+                                  }}
+                                  title="تعديل الحركة وتعيين السيارة"
+                                >
+                                  ✏️ تعديل
+                                </button>
+                                <button
+                                  className="btn btn-secondary btn-sm"
+                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: '#ef4444', color: '#fff', border: 'none' }}
+                                  onClick={() => handleDeleteTransaction(tx)}
+                                  title="حذف الحركة"
+                                >
+                                  🗑️ حذف
+                                </button>
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
@@ -6426,35 +6469,26 @@ const [showCarModal, setShowCarModal] = useState(false);
                     >
                       <option value="">اختر نوع الصرف...</option>
                       {(() => {
+                        const carOpts = [
+                          { value: 'car_gas', label: '🚗 مصاريف سيارات (جاز)' },
+                          { value: 'car_oil', label: '🚗 مصاريف سيارات (زيت)' },
+                          { value: 'car_other', label: '🚗 مصاريف سيارات (مصاريف أخرى)' },
+                          { value: 'car', label: '🚗 مصاريف سيارات (عام)' }
+                        ];
                         if (!editingTx.rep_id) {
                           return [
+                            ...carOpts,
                             { value: 'direct_rent', label: '🏢 الإيجار' },
                             { value: 'direct_operational', label: '🔧 مصاريف تشغيل عامة' },
-                            { value: 'direct_other', label: '📝 مصاريف عامة أخرى' },
-                            { value: 'car', label: '🚗 مصاريف سيارات (عام)' },
-                            { value: 'car_gas', label: '🚗 مصاريف سيارات (جاز)' },
-                            { value: 'car_oil', label: '🚗 مصاريف سيارات (زيت)' },
-                            { value: 'car_other', label: '🚗 مصاريف سيارات (مصاريف أخرى)' }
-                          ];
-                        }
-                        const rep = reps.find(r => r.id === editingTx.rep_id);
-                        if (rep && (rep.classification === 'retail_rep' || rep.classification === 'wholesale_rep')) {
-                          return [
-                            { value: 'car', label: '🚗 مصاريف سيارات (عام)' },
-                            { value: 'car_gas', label: '🚗 مصاريف سيارات (جاز)' },
-                            { value: 'car_oil', label: '🚗 مصاريف سيارات (زيت)' },
-                            { value: 'car_other', label: '🚗 مصاريف سيارات (مصاريف أخرى)' },
-                            { value: 'salary', label: '💵 راتب' },
-                            { value: 'commission', label: '💰 عمولة' },
-                            { value: 'loan', label: '💸 سلفة' },
-                            { value: 'other', label: '📝 أخرى' }
+                            { value: 'direct_other', label: '📝 مصاريف عامة أخرى' }
                           ];
                         }
                         return [
+                          ...carOpts,
                           { value: 'salary', label: '💵 راتب' },
+                          { value: 'commission', label: '💰 عمولة' },
                           { value: 'loan', label: '💸 سلفة' },
-                          { value: 'commission', label: '💰 عمولة / مكافآت' },
-                          { value: 'other', label: '📝 صرف عام / أخرى' }
+                          { value: 'other', label: '📝 أخرى / صرف عام' }
                         ];
                       })().map(opt => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
