@@ -284,8 +284,21 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
                         </div>
                       </div>
 
-                      <div style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 'bold', marginTop: '0.4rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem' }}>
-                        📊 انقر لعرض كشف الحساب التفصيلي ⬅️
+                      <div style={{
+                        marginTop: '0.6rem',
+                        padding: '0.4rem 0.6rem',
+                        background: 'rgba(59, 130, 246, 0.12)',
+                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                        borderRadius: '8px',
+                        fontSize: '0.78rem',
+                        color: '#3b82f6',
+                        fontWeight: '800',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.4rem'
+                      }}>
+                        📂 كشف المعاملات (تعديل / حذف / طباعة) ⬅️
                       </div>
                     </div>
 

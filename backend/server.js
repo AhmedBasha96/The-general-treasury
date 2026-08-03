@@ -1104,7 +1104,12 @@ app.get('/api/supervisors/:id/reps', async (req, res) => {
     const repsResult = await request.query(`
       SELECT r.id, r.code, r.name, r.phone, r.type,
              a.name AS agency_name, a.code AS agency_code,
-             ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.amount WHEN t.type = 'withdrawal' THEN -t.amount ELSE 0 END), 0) AS balance
+             ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.amount WHEN t.type = 'withdrawal' THEN -t.amount ELSE 0 END), 0) AS balance,
+             ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND t.withdrawal_sub_type LIKE 'car%' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS total_car_expenses,
+             ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND t.withdrawal_sub_type = 'car_gas' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS gas_total,
+             ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND t.withdrawal_sub_type = 'car_oil' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS oil_total,
+             ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND (t.withdrawal_sub_type NOT IN ('car_gas', 'car_oil') AND t.withdrawal_sub_type LIKE 'car%') AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS other_total
+      FROM representatives r
       LEFT JOIN agencies a ON r.agency_id = a.id
       LEFT JOIN transactions t ON r.id = t.rep_id AND (
          (t.type = 'deposit' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
@@ -1685,6 +1690,12 @@ app.post('/api/transactions', async (req, res) => {
     const targetRepId = (userRole === 'representative') ? userId : (rep_id || null);
 
     // 1. If targetRepId is provided, verify representative exists
+  // Additional validation: if withdrawal is car-related, ensure car_id is provided
+  if (type === 'withdrawal' && withdrawal_sub_type && withdrawal_sub_type.startsWith('car')) {
+    if (!car_id) {
+      return res.status(400).json({ error: 'يجب تحديد السيارة للمعاملات المتعلقة بالسيارة' });
+    }
+  }
     if (targetRepId) {
       const repCheck = await pool.request()
         .input('repId', sql.Int, targetRepId)
@@ -1848,9 +1859,9 @@ app.post('/api/transactions', async (req, res) => {
           .input('created_by', sql.Int, isNaN(userId) ? null : userId)
           .input('status', sql.VarChar, statusVal)
           .query(`
-            INSERT INTO transactions (rep_id, bank_id, agency_id, type, payment_method, amount, date, notes, status, created_by, denom_200, denom_100, denom_50, denom_20, denom_10, denom_5, denom_1)
+            INSERT INTO transactions (rep_id, bank_id, agency_id, type, payment_method, amount, date, notes, status, created_by, car_id, denom_200, denom_100, denom_50, denom_20, denom_10, denom_5, denom_1)
             OUTPUT INSERTED.id
-            VALUES (@rep_id, @bank_id, @agency_id, @type, @payment_method, @amount, @date, @notes, @status, @created_by, @denom_200, @denom_100, @denom_50, @denom_20, @denom_10, @denom_5, @denom_1)
+            VALUES (@rep_id, @bank_id, @agency_id, @type, @payment_method, @amount, @date, @notes, @status, @created_by, @car_id, @denom_200, @denom_100, @denom_50, @denom_20, @denom_10, @denom_5, @denom_1)
           `);
 
         const exchangeId = insertEx.recordset[0].id;
