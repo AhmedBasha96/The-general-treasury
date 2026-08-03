@@ -757,7 +757,7 @@ const [showCarModal, setShowCarModal] = useState(false);
   
   // New Transaction Form State
   const [newTx, setNewTx] = useState({ type: 'deposit', repId: '', bankId: '', companyId: '', carId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash' });
-  const [txSourceType, setTxSourceType] = useState('rep'); // 'rep' | 'bank' | 'direct' | 'company'
+  const [txSourceType, setTxSourceType] = useState('rep'); // 'rep' or 'bank' // 'rep' | 'bank' | 'direct' | 'company'
   const [denominations, setDenominations] = useState({
     denom_200: 0,
     denom_100: 0,
@@ -1678,6 +1678,13 @@ const [showCarModal, setShowCarModal] = useState(false);
         return;
       }
 
+      if (newTx.type === 'withdrawal' && newTx.withdrawal_sub_type && newTx.withdrawal_sub_type.startsWith('car') && !newTx.carId) {
+        const msg = 'يرجى اختيار السيارة للمعاملات المتعلقة بالسيارة';
+        setTxError(msg);
+        alert(msg);
+        return;
+      }
+
       // If we are doing a deposit from the bank, we need bankId
       if (newTx.type === 'deposit' && txSourceType === 'bank' && !newTx.bankId) {
         setTxError('يرجى اختيار الحساب البنكي المورِّد منه أولاً');
@@ -1710,9 +1717,15 @@ const [showCarModal, setShowCarModal] = useState(false);
           payment_method: 'cash'
         };
         
+        if (newTx.type === 'withdrawal') {
+          requestBody.withdrawal_sub_type = newTx.withdrawal_sub_type || null;
+          if (newTx.withdrawal_sub_type && newTx.withdrawal_sub_type.startsWith('car')) {
+            requestBody.car_id = newTx.carId ? Number(newTx.carId) : null;
+          }
+        }
+
         if (txSourceType === 'rep') {
           requestBody.rep_id = newTx.repId || null;
-          requestBody.withdrawal_sub_type = newTx.withdrawal_sub_type || null;
         } else if (txSourceType === 'bank') {
           requestBody.bank_id = newTx.bankId || null;
           requestBody.agency_id = newTx.agencyId || null;
@@ -1749,7 +1762,7 @@ const [showCarModal, setShowCarModal] = useState(false);
           }
           
           // Reset Form
-          setNewTx({ type: 'deposit', repId: '', bankId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash' });
+          setNewTx({ type: 'deposit', repId: '', bankId: '', companyId: '', carId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash', withdrawal_sub_type: '' });
           setTxSourceType('rep');
           setDenominations({
             denom_200: 0,
@@ -1914,9 +1927,10 @@ const [showCarModal, setShowCarModal] = useState(false);
 
   // Filtered Car Expenses
   const filteredCarExpenses = carExpenses.filter(tx => {
+    if (carFilters.carId && tx.car_id !== Number(carFilters.carId)) return false;
     if (carFilters.repId && tx.rep_id !== Number(carFilters.repId)) return false;
     const rep = reps.find(r => r.id === tx.rep_id);
-    if (carFilters.agencyId && rep?.agency_id !== Number(carFilters.agencyId)) return false;
+    if (carFilters.agencyId && (tx.agency_id || rep?.agency_id) !== Number(carFilters.agencyId)) return false;
     if (carFilters.supervisorId && rep?.supervisor_id !== Number(carFilters.supervisorId)) return false;
     if (carFilters.startDate && new Date(tx.date) < new Date(carFilters.startDate + ' 00:00:00')) return false;
     if (carFilters.endDate && new Date(tx.date) > new Date(carFilters.endDate + ' 23:59:59')) return false;
@@ -3924,7 +3938,20 @@ const [showCarModal, setShowCarModal] = useState(false);
             <div className="panel-header">
               <h3 className="panel-title">🔍 فلترة مصاريف السيارات</h3>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '1rem', marginTop: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1rem', marginTop: '1rem' }}>
+              <div className="form-group">
+                <label>السيارة</label>
+                <select 
+                  value={carFilters.carId || ''}
+                  onChange={(e) => setCarFilters({ ...carFilters, carId: e.target.value })}
+                >
+                  <option value="">كل السيارات</option>
+                  {carsList.map(c => (
+                    <option key={c.id} value={c.id}>{c.plate_letters && c.plate_numbers ? `${c.plate_letters} - ${c.plate_numbers}` : c.plate_number}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="form-group">
                 <label>بند الصرف الفرعي</label>
                 <select 
@@ -3999,7 +4026,7 @@ const [showCarModal, setShowCarModal] = useState(false);
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
               <button 
                 className="btn btn-secondary"
-                onClick={() => setCarFilters({ repId: '', supervisorId: '', agencyId: '', startDate: '', endDate: '', subType: '' })}
+                onClick={() => setCarFilters({ carId: '', repId: '', supervisorId: '', agencyId: '', startDate: '', endDate: '', subType: '' })}
               >
                 إعادة تعيين الفلاتر
               </button>
@@ -4019,7 +4046,8 @@ const [showCarModal, setShowCarModal] = useState(false);
                   <thead>
                     <tr>
                       <th>التاريخ والوقت</th>
-                      <th>المندوب</th>
+                      <th>السيارة</th>
+                      <th>المندوب / جهة الصرف</th>
                       <th>المشرف</th>
                       <th>التوكيل</th>
                       <th>بند الصرف</th>
@@ -4030,12 +4058,15 @@ const [showCarModal, setShowCarModal] = useState(false);
                   <tbody>
                     {filteredCarExpenses.map(tx => {
                       const rep = reps.find(r => r.id === tx.rep_id);
-                      const agency = agencies.find(a => a.id === rep?.agency_id);
+                      const agency = agencies.find(a => a.id === (tx.agency_id || rep?.agency_id));
                       const supervisor = supervisors.find(s => s.id === rep?.supervisor_id);
+                      const car = carsList.find(c => c.id === tx.car_id);
+                      const carDisplay = tx.car_plate_number || (car ? (car.plate_letters && car.plate_numbers ? `${car.plate_letters} - ${car.plate_numbers}` : car.plate_number) : null);
                       return (
                         <tr key={tx.id}>
                           <td>{new Date(tx.date).toLocaleString('en-US')}</td>
-                          <td><strong>{rep ? `${rep.name} (${rep.code})` : '—'}</strong></td>
+                          <td><strong>{carDisplay ? `🚗 ${carDisplay}` : '—'}</strong></td>
+                          <td><strong>{rep ? `${rep.name} (${rep.code})` : '💸 صرف مباشر'}</strong></td>
                           <td>{supervisor ? supervisor.name : '—'}</td>
                           <td>{agency ? agency.name : '—'}</td>
                           <td>
@@ -6340,6 +6371,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                     amount: Number(editingTx.amount),
                     notes: editingTx.notes,
                     withdrawal_sub_type: editingTx.withdrawal_sub_type,
+                    car_id: editingTx.withdrawal_sub_type && editingTx.withdrawal_sub_type.startsWith('car') ? (editingTx.car_id ? Number(editingTx.car_id) : null) : null,
                     ...(editingTx.rep_id ? { rep_id: editingTx.rep_id } : {}),
                     ...(editingTx.bank_id ? { bank_id: editingTx.bank_id } : {}),
                     ...(editingTx.agency_id ? { agency_id: editingTx.agency_id } : {}),
@@ -6459,19 +6491,33 @@ const [showCarModal, setShowCarModal] = useState(false);
 </div>
 
                   {editingTx.withdrawal_sub_type && editingTx.withdrawal_sub_type.startsWith('car') && (
-                    <div className="form-group" style={{ marginBottom: '1rem', paddingRight: '1rem', borderRight: '3px solid var(--primary)' }}>
-                      <label>بند مصروفات السيارة <span style={{ color: 'var(--danger)' }}>*</span></label>
-                      <select
-                        value={editingTx.withdrawal_sub_type}
-                        onChange={(e) => setEditingTx({ ...editingTx, withdrawal_sub_type: e.target.value })}
-                        required
-                        style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
-                      >
-                        <option value="car_gas">جاز</option>
-                        <option value="car_oil">زيت</option>
-                        <option value="car_other">مصاريف أخرى</option>
-                      </select>
-                    </div>
+                    <>
+                      <div className="form-group" style={{ marginBottom: '1rem', paddingRight: '1rem', borderRight: '3px solid var(--primary)' }}>
+                        <label>السيارة <span style={{ color: 'var(--danger)' }}>*</span></label>
+                        <select
+                          value={editingTx.car_id || ''}
+                          onChange={(e) => setEditingTx({ ...editingTx, car_id: e.target.value })}
+                          required
+                          style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                        >
+                          <option value="">اختر السيارة...</option>
+                          {carsList.map(c => <option key={c.id} value={c.id}>{c.plate_letters && c.plate_numbers ? `${c.plate_letters} - ${c.plate_numbers}` : c.plate_number}</option>)}
+                        </select>
+                      </div>
+                      <div className="form-group" style={{ marginBottom: '1rem', paddingRight: '1rem', borderRight: '3px solid var(--primary)' }}>
+                        <label>بند مصروفات السيارة <span style={{ color: 'var(--danger)' }}>*</span></label>
+                        <select
+                          value={editingTx.withdrawal_sub_type}
+                          onChange={(e) => setEditingTx({ ...editingTx, withdrawal_sub_type: e.target.value })}
+                          required
+                          style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                        >
+                          <option value="car_gas">جاز</option>
+                          <option value="car_oil">زيت</option>
+                          <option value="car_other">مصاريف أخرى</option>
+                        </select>
+                      </div>
+                    </>
                   )}
                 </>
               )}

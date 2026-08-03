@@ -1592,11 +1592,12 @@ app.get('/api/transactions', async (req, res) => {
   try {
     const pool = getPool();
     let query = `
-      SELECT t.id, t.rep_id, t.bank_id, t.company_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
+      SELECT t.id, t.rep_id, t.bank_id, t.company_id, t.car_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
              t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
              r.name AS rep_name, r.code AS rep_code,
              b.name AS bank_name, b.code AS bank_code,
              c.name AS company_name, c.code AS company_code,
+             car.plate_number AS car_plate_number, car.plate_letters AS car_plate_letters, car.plate_numbers AS car_plate_numbers,
              a.name AS agency_name, a.code AS agency_code,
              s.name AS supervisor_name, s.code AS supervisor_code,
              u.username AS creator_name, u2.username AS approver_name
@@ -1604,6 +1605,7 @@ app.get('/api/transactions', async (req, res) => {
       LEFT JOIN representatives r ON t.rep_id = r.id
       LEFT JOIN banks b ON t.bank_id = b.id
       LEFT JOIN companies c ON t.company_id = c.id
+      LEFT JOIN cars car ON t.car_id = car.id
       LEFT JOIN agencies a ON (r.agency_id = a.id OR t.agency_id = a.id)
       LEFT JOIN supervisors s ON r.supervisor_id = s.id
       LEFT JOIN users u ON t.created_by = u.id
@@ -2739,7 +2741,7 @@ app.post('/api/transactions/:id/disburse', async (req, res) => {
 // PUT /api/transactions/:id - Edit transaction details - Manager only
 app.put('/api/transactions/:id', async (req, res) => {
   const txId = req.params.id;
-  const { amount, notes, denominations, rep_id, bank_id, agency_id, withdrawal_sub_type } = req.body;
+  const { amount, notes, denominations, rep_id, bank_id, agency_id, withdrawal_sub_type, car_id } = req.body;
   
   if (!amount || isNaN(amount) || Number(amount) <= 0) {
     return res.status(400).json({ error: 'المبلغ يجب أن يكون قيمة موجبة' });
@@ -2767,6 +2769,14 @@ app.put('/api/transactions/:id', async (req, res) => {
         if (Number(amount) !== Number(tx.amount)) {
           await transaction.rollback();
           return res.status(400).json({ error: 'لا يمكن تعديل قيمة مبلغ عملية تسوية الخزينة' });
+        }
+      }
+
+      // Additional validation: if withdrawal is car-related, ensure car_id is provided
+      if (tx.type === 'withdrawal' && withdrawal_sub_type && withdrawal_sub_type.startsWith('car')) {
+        if (!car_id) {
+          await transaction.rollback();
+          return res.status(400).json({ error: 'يجب تحديد السيارة للمعاملات المتعلقة بالسيارة' });
         }
       }
       
@@ -2848,6 +2858,7 @@ app.put('/api/transactions/:id', async (req, res) => {
         .input('bank_id', sql.Int, bank_id || null)
         .input('agency_id', sql.Int, resolvedAgencyId)
         .input('withdrawal_sub_type', sql.NVarChar, withdrawal_sub_type || null)
+        .input('car_id', sql.Int, car_id || null)
         .input('denom_200', sql.Int, d200)
         .input('denom_100', sql.Int, d100)
         .input('denom_50', sql.Int, d50)
@@ -2863,6 +2874,7 @@ app.put('/api/transactions/:id', async (req, res) => {
               bank_id = @bank_id,
               agency_id = @agency_id,
               withdrawal_sub_type = @withdrawal_sub_type,
+              car_id = @car_id,
               denom_200 = @denom_200,
               denom_100 = @denom_100,
               denom_50 = @denom_50,
