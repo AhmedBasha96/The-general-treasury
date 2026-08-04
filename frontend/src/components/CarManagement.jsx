@@ -6,6 +6,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
   const [plateL2, setPlateL2] = useState('');
   const [plateL3, setPlateL3] = useState('');
   const [plateNum, setPlateNum] = useState('');
+  const [driverName, setDriverName] = useState('');
   const [image, setImage] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -45,16 +46,17 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
         reqBody.append('plate_letters', lettersStr);
         reqBody.append('plate_numbers', numbersStr);
         reqBody.append('plate_number', combinedPlate);
+        reqBody.append('driver_name', driverName.trim());
         reqBody.append('image', image);
       } else {
-        reqBody = JSON.stringify({ plate_letters: lettersStr, plate_numbers: numbersStr, plate_number: combinedPlate });
+        reqBody = JSON.stringify({ plate_letters: lettersStr, plate_numbers: numbersStr, plate_number: combinedPlate, driver_name: driverName.trim() });
         headers = { 'Content-Type': 'application/json' };
       }
 
       const res = await fetch(url, { method, headers, body: reqBody });
       const data = await res.json();
       if (res.ok) {
-        setPlateL1(''); setPlateL2(''); setPlateL3(''); setPlateNum('');
+        setPlateL1(''); setPlateL2(''); setPlateL3(''); setPlateNum(''); setDriverName('');
         setImage(null);
         setEditingCar(null);
         loadCars();
@@ -73,6 +75,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
   const handleEditClick = (c, e) => {
     e.stopPropagation();
     setEditingCar(c);
+    setDriverName(c.driver_name || '');
     
     if (c.plate_letters || c.plate_numbers) {
       const letters = (c.plate_letters || '').split(' ');
@@ -106,7 +109,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
       if (res.ok) {
         if (editingCar && editingCar.id === c.id) {
           setEditingCar(null);
-          setPlateL1(''); setPlateL2(''); setPlateL3(''); setPlateNum('');
+          setPlateL1(''); setPlateL2(''); setPlateL3(''); setPlateNum(''); setDriverName('');
           setImage(null);
           setError('');
         }
@@ -169,6 +172,18 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
                 />
               </div>
             </div>
+
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>اسم السائق / المندوب (اختياري):</label>
+              <input 
+                type="text" 
+                className="input-field"
+                placeholder="أدخل اسم سائق السيارة..." 
+                value={driverName} 
+                onChange={(e) => setDriverName(e.target.value)} 
+              />
+            </div>
+
             <div>
               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>صورة السيارة (اختياري):</label>
               <input 
@@ -188,7 +203,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
               <button 
                 type="button" 
                 className="btn btn-secondary" 
-                onClick={() => { setEditingCar(null); setPlateL1(''); setPlateL2(''); setPlateL3(''); setPlateNum(''); setImage(null); setError(''); }} 
+                onClick={() => { setEditingCar(null); setPlateL1(''); setPlateL2(''); setPlateL3(''); setPlateNum(''); setDriverName(''); setImage(null); setError(''); }} 
                 style={{ marginTop: '0.5rem' }}>
                 إلغاء التعديل
               </button>
@@ -252,13 +267,19 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
                     )}
                     
                     <div style={{ padding: '1rem', direction: 'rtl' }}>
-                      <div style={{ fontWeight: '800', fontSize: '1.3rem', color: 'var(--text-primary)', letterSpacing: '0.5px', marginBottom: '0.5rem' }}>
+                      <div style={{ fontWeight: '800', fontSize: '1.3rem', color: 'var(--text-primary)', letterSpacing: '0.5px', marginBottom: '0.25rem' }}>
                         {c.plate_letters && c.plate_numbers ? (
                           `${c.plate_letters} - ${c.plate_numbers}`
                         ) : (
                           c.plate_number
                         )}
                       </div>
+
+                      {c.driver_name && (
+                        <div style={{ fontSize: '0.85rem', color: '#3b82f6', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+                          👤 السائق: {c.driver_name}
+                        </div>
+                      )}
 
                       {/* Expense Metrics Pill */}
                       <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '10px', padding: '0.5rem', marginBottom: '0.75rem' }}>

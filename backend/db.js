@@ -405,7 +405,7 @@ async function createTables() {
       END
     `);
 
-    // Ensure plate_letters and plate_numbers columns exist in cars table
+    // Ensure plate_letters, plate_numbers and driver_name columns exist in cars table
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('cars') AND name = 'plate_letters')
       BEGIN
@@ -414,6 +414,10 @@ async function createTables() {
       IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('cars') AND name = 'plate_numbers')
       BEGIN
         ALTER TABLE cars ADD plate_numbers NVARCHAR(50) NULL;
+      END
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('cars') AND name = 'driver_name')
+      BEGIN
+        ALTER TABLE cars ADD driver_name NVARCHAR(255) NULL;
       END
     `);
 

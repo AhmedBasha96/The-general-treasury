@@ -3638,6 +3638,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                     📋 كشف الحساب التفصيلي للسيارة: 
                     <span style={{ background: 'var(--bg-secondary)', padding: '0.2rem 0.8rem', borderRadius: '10px', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
                       {selectedCarLedger.plate_letters ? `${selectedCarLedger.plate_letters} - ${selectedCarLedger.plate_numbers}` : selectedCarLedger.plate_number}
+                      {selectedCarLedger.driver_name ? ` (👤 السائق: ${selectedCarLedger.driver_name})` : ''}
                     </span>
                   </h2>
                 </div>
@@ -3660,7 +3661,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                             </style>
                           </head>
                           <body>
-                            <h2>📋 كشف حساب مصاريف السيارة: ${selectedCarLedger.plate_number}</h2>
+                            <h2>📋 كشف حساب مصاريف السيارة: ${selectedCarLedger.plate_number} ${selectedCarLedger.driver_name ? `(السائق: ${selectedCarLedger.driver_name})` : ''}</h2>
                             <p style="text-align:center; color:#64748b;">تاريخ التقرير: ${new Date().toLocaleString('en-US')}</p>
                             <table>
                               <thead>
@@ -3951,7 +3952,10 @@ const [showCarModal, setShowCarModal] = useState(false);
                 >
                   <option value="">كل السيارات</option>
                   {carsList.map(c => (
-                    <option key={c.id} value={c.id}>{c.plate_letters && c.plate_numbers ? `${c.plate_letters} - ${c.plate_numbers}` : c.plate_number}</option>
+                    <option key={c.id} value={c.id}>
+                      {c.plate_letters && c.plate_numbers ? `${c.plate_letters} - ${c.plate_numbers}` : c.plate_number}
+                      {c.driver_name ? ` — 👤 ${c.driver_name}` : ''}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -4645,7 +4649,12 @@ const [showCarModal, setShowCarModal] = useState(false);
                               required
                             >
                               <option value="">اختر السيارة...</option>
-                              {carsList.map(c => <option key={c.id} value={c.id}>{c.plate_letters && c.plate_numbers ? `${c.plate_letters} - ${c.plate_numbers}` : c.plate_number}</option>)}
+                              {carsList.map(c => (
+                                <option key={c.id} value={c.id}>
+                                  {c.plate_letters && c.plate_numbers ? `${c.plate_letters} - ${c.plate_numbers}` : c.plate_number}
+                                  {c.driver_name ? ` — 👤 ${c.driver_name}` : ''}
+                                </option>
+                              ))}
                             </select>
                           </div>
                           <div className="form-group" style={{ marginBottom: '1.5rem', paddingRight: '1rem', borderRight: '3px solid var(--primary)' }}>
@@ -6535,7 +6544,12 @@ const [showCarModal, setShowCarModal] = useState(false);
                           style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
                         >
                           <option value="">اختر السيارة...</option>
-                          {carsList.map(c => <option key={c.id} value={c.id}>{c.plate_letters && c.plate_numbers ? `${c.plate_letters} - ${c.plate_numbers}` : c.plate_number}</option>)}
+                          {carsList.map(c => (
+                            <option key={c.id} value={c.id}>
+                              {c.plate_letters && c.plate_numbers ? `${c.plate_letters} - ${c.plate_numbers}` : c.plate_number}
+                              {c.driver_name ? ` — 👤 ${c.driver_name}` : ''}
+                            </option>
+                          ))}
                         </select>
                       </div>
                       <div className="form-group" style={{ marginBottom: '1rem', paddingRight: '1rem', borderRight: '3px solid var(--primary)' }}>
