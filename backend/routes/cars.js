@@ -56,6 +56,8 @@ router.get('/', async (req, res) => {
         c.plate_letters, 
         c.plate_numbers, 
         c.driver_name,
+        c.vehicle_type,
+        c.model,
         c.image_path,
         ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS total_expenses,
         ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND t.withdrawal_sub_type = 'car_gas' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS gas_total,
@@ -64,7 +66,7 @@ router.get('/', async (req, res) => {
         COUNT(CASE WHEN t.type = 'withdrawal' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.id ELSE NULL END) AS transaction_count
       FROM cars c
       LEFT JOIN transactions t ON t.car_id = c.id
-      GROUP BY c.id, c.plate_number, c.plate_letters, c.plate_numbers, c.driver_name, c.image_path
+      GROUP BY c.id, c.plate_number, c.plate_letters, c.plate_numbers, c.driver_name, c.vehicle_type, c.model, c.image_path
       ORDER BY c.id DESC
     `);
     res.json(result.recordset);
@@ -80,6 +82,8 @@ router.post('/', upload.single('image'), async (req, res) => {
   let plate_numbers = fixUtf8String(req.body?.plate_numbers).trim();
   let plate_number = fixUtf8String(req.body?.plate_number).trim();
   let driver_name = fixUtf8String(req.body?.driver_name).trim();
+  let vehicle_type = fixUtf8String(req.body?.vehicle_type).trim();
+  let model = fixUtf8String(req.body?.model).trim();
 
   if (!plate_number && (plate_letters || plate_numbers)) {
     plate_number = [plate_letters, plate_numbers].filter(Boolean).join(' ');
@@ -104,8 +108,10 @@ router.post('/', upload.single('image'), async (req, res) => {
       .input('letters', sql.NVarChar(50), plate_letters || null)
       .input('numbers', sql.NVarChar(50), plate_numbers || null)
       .input('driver', sql.NVarChar(255), driver_name || null)
+      .input('vtype', sql.NVarChar(100), vehicle_type || 'نقل')
+      .input('model', sql.NVarChar(100), model || 'سوزوكي')
       .input('img', sql.NVarChar(sql.MAX), imagePath)
-      .query(`INSERT INTO cars (plate_number, plate_letters, plate_numbers, driver_name, image_path) VALUES (@plate, @letters, @numbers, @driver, @img)`);
+      .query(`INSERT INTO cars (plate_number, plate_letters, plate_numbers, driver_name, vehicle_type, model, image_path) VALUES (@plate, @letters, @numbers, @driver, @vtype, @model, @img)`);
     res.status(201).json({ message: 'تم إضافة السيارة بنجاح' });
   } catch (error) {
     console.error('Error adding car:', error);
@@ -127,7 +133,7 @@ router.get('/:id/transactions', async (req, res) => {
           r.name as rep_name, r.code as rep_code,
           a.name as agency_name, a.code as agency_code,
           s.name as supervisor_name, s.code as supervisor_code,
-          c.plate_number, c.plate_letters, c.plate_numbers, c.driver_name
+          c.plate_number, c.plate_letters, c.plate_numbers, c.driver_name, c.vehicle_type, c.model
         FROM transactions t
         LEFT JOIN users u ON t.created_by = u.id
         LEFT JOIN representatives r ON t.rep_id = r.id
@@ -151,6 +157,8 @@ router.put('/:id', upload.single('image'), async (req, res) => {
   let plate_numbers = fixUtf8String(req.body?.plate_numbers).trim();
   let plate_number = fixUtf8String(req.body?.plate_number).trim();
   let driver_name = fixUtf8String(req.body?.driver_name).trim();
+  let vehicle_type = fixUtf8String(req.body?.vehicle_type).trim();
+  let model = fixUtf8String(req.body?.model).trim();
 
   if (!plate_number && (plate_letters || plate_numbers)) {
     plate_number = [plate_letters, plate_numbers].filter(Boolean).join(' ');
@@ -180,8 +188,10 @@ router.put('/:id', upload.single('image'), async (req, res) => {
         .input('letters', sql.NVarChar(50), plate_letters || null)
         .input('numbers', sql.NVarChar(50), plate_numbers || null)
         .input('driver', sql.NVarChar(255), driver_name || null)
+        .input('vtype', sql.NVarChar(100), vehicle_type || 'نقل')
+        .input('model', sql.NVarChar(100), model || 'سوزوكي')
         .input('img', sql.NVarChar(sql.MAX), imagePath)
-        .query(`UPDATE cars SET plate_number = @plate, plate_letters = @letters, plate_numbers = @numbers, driver_name = @driver, image_path = @img WHERE id = @id`);
+        .query(`UPDATE cars SET plate_number = @plate, plate_letters = @letters, plate_numbers = @numbers, driver_name = @driver, vehicle_type = @vtype, model = @model, image_path = @img WHERE id = @id`);
     } else {
       await pool.request()
         .input('id', sql.Int, id)
@@ -189,7 +199,9 @@ router.put('/:id', upload.single('image'), async (req, res) => {
         .input('letters', sql.NVarChar(50), plate_letters || null)
         .input('numbers', sql.NVarChar(50), plate_numbers || null)
         .input('driver', sql.NVarChar(255), driver_name || null)
-        .query(`UPDATE cars SET plate_number = @plate, plate_letters = @letters, plate_numbers = @numbers, driver_name = @driver WHERE id = @id`);
+        .input('vtype', sql.NVarChar(100), vehicle_type || 'نقل')
+        .input('model', sql.NVarChar(100), model || 'سوزوكي')
+        .query(`UPDATE cars SET plate_number = @plate, plate_letters = @letters, plate_numbers = @numbers, driver_name = @driver, vehicle_type = @vtype, model = @model WHERE id = @id`);
     }
     res.json({ message: 'تم تحديث بيانات السيارة بنجاح' });
   } catch (error) {
