@@ -3382,8 +3382,8 @@ async function applyInitialBalanceMigration(pool) {
       if (r.key_name === 'safe_initial_balance') currentRaw = parseFloat(r.val);
     });
 
-    // تطبيق الـ migration فقط لو الرصيد = 0 أو غير محدد
-    if (currentRaw === null || currentRaw === 0) {
+    // تطبيق الـ migration إذا كان الرصيد غير محدد أو لا يساوي 7741
+    if (currentRaw === null || currentRaw !== CORRECT_INITIAL_BALANCE) {
       const allKeys = [
         { key: 'safe_initial_balance', val: String(CORRECT_INITIAL_BALANCE) },
         ...Object.entries(CORRECT_DENOMS).map(([k, v]) => ({ key: k, val: v }))
@@ -3407,7 +3407,7 @@ async function applyInitialBalanceMigration(pool) {
       }
       console.log(`✅ [Migration] safe_initial_balance → ${CORRECT_INITIAL_BALANCE} EGP | denoms: 200×140, 100×633, 50×497, 20×309, 10×1124, 5×943, 1×250`);
     } else {
-      console.log(`ℹ️ [Migration] safe_initial_balance already = ${currentRaw} – skipped`);
+      console.log(`ℹ️ [Migration] safe_initial_balance already set to ${currentRaw} EGP – skipped`);
     }
   } catch (err) {
     console.error('⚠️ [Migration] Failed to apply initial balance migration:', err.message);
