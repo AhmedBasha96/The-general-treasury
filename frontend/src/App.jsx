@@ -594,55 +594,23 @@ const [showCarModal, setShowCarModal] = useState(false);
     recentTransactions: []
   });
 
-  const [initialDenominations, setInitialDenominations] = useState({
-    denom_200: 0,
-    denom_100: 0,
-    denom_50: 0,
-    denom_20: 0,
-    denom_10: 0,
-    denom_5: 0,
-    denom_1: 0
-  });
+  const [autoInitResult, setAutoInitResult] = useState(null);
   const [initialBalanceLoading, setInitialBalanceLoading] = useState(false);
   const [initialBalanceError, setInitialBalanceError] = useState('');
 
-  const totalInitialBalance = 
-    (Number(initialDenominations.denom_200 || 0) * 200) +
-    (Number(initialDenominations.denom_100 || 0) * 100) +
-    (Number(initialDenominations.denom_50 || 0) * 50) +
-    (Number(initialDenominations.denom_20 || 0) * 20) +
-    (Number(initialDenominations.denom_10 || 0) * 10) +
-    (Number(initialDenominations.denom_5 || 0) * 5) +
-    (Number(initialDenominations.denom_1 || 0) * 1);
-
-  const handleSaveInitialBalance = async (e) => {
-    e.preventDefault();
+  // الحساب التلقائي للفئات النقدية من مجموع جميع الحركات
+  const handleAutoInitializeSafe = async () => {
     setInitialBalanceError('');
     setInitialBalanceLoading(true);
-    
-    const settingsPayload = [
-      { key: 'safe_initial_balance', value: totalInitialBalance },
-      { key: 'safe_initial_denom_200', value: Number(initialDenominations.denom_200 || 0) },
-      { key: 'safe_initial_denom_100', value: Number(initialDenominations.denom_100 || 0) },
-      { key: 'safe_initial_denom_50', value: Number(initialDenominations.denom_50 || 0) },
-      { key: 'safe_initial_denom_20', value: Number(initialDenominations.denom_20 || 0) },
-      { key: 'safe_initial_denom_10', value: Number(initialDenominations.denom_10 || 0) },
-      { key: 'safe_initial_denom_5', value: Number(initialDenominations.denom_5 || 0) },
-      { key: 'safe_initial_denom_1', value: Number(initialDenominations.denom_1 || 0) }
-    ];
-
     try {
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settings: settingsPayload })
-      });
+      const res = await fetch('/api/safe/auto-initialize', { method: 'POST' });
       const data = await res.json();
-      if (res.ok) {
-        alert('تم حفظ رصيد أول المدة بالفئات بنجاح!');
+      if (res.ok && data.success) {
+        setAutoInitResult(data);
+        // أعد تحميل لوحة التحكم لتحديث حالة الخزنة
         loadDashboard();
       } else {
-        setInitialBalanceError(data.error || 'حدث خطأ أثناء حفظ رصيد أول المدة');
+        setInitialBalanceError(data.error || 'حدث خطأ أثناء الحساب التلقائي');
       }
     } catch (err) {
       setInitialBalanceError('تعذر الاتصال بالسيرفر');
@@ -2355,7 +2323,7 @@ const [showCarModal, setShowCarModal] = useState(false);
       {/* DASHBOARD TAB */}
       {activeTab === 'dashboard' && (
         <>
-          {/* INITIAL BALANCE BANNER */}
+          {/* INITIAL BALANCE BANNER - AUTO CALCULATION */}
           {currentUser.role === 'manager' && !dashboardData.summary.safeInitialBalanceSet && (
             <div style={{
               background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.08) 100%)',
@@ -2368,67 +2336,91 @@ const [showCarModal, setShowCarModal] = useState(false);
             }}>
               <div style={{ position: 'relative', zIndex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem' }}>
-                  <span style={{ fontSize: '1.8rem' }}>💰</span>
-                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#f59e0b', margin: 0 }}>تحديد فئات رصيد أول المدة للخزنة العامة</h3>
+                  <span style={{ fontSize: '1.8rem' }}>🔢</span>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#f59e0b', margin: 0 }}>تهيئة الخزنة العامة تلقائياً من الحركات</h3>
                 </div>
-                <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '1.25rem', lineHeight: '1.6' }}>
-                  يرجى إدخال الرصيد الافتتاحي (رصيد أول المدة) مفصلاً بالفئات النقدية المتوفرة بالخزينة. سيظهر هذا الإجراء مرة واحدة فقط ولن تتمكن من تعديله لاحقاً.
+                <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', lineHeight: '1.7' }}>
+                  النظام سيقوم بحساب <strong style={{color:'#fbbf24'}}>رصيد الخزنة الحالي والفئات النقدية تلقائياً</strong> من خلال جمع وطرح جميع عمليات الإيداع والصرف المسجلة بالنظام مع فئاتها النقدية — بدون أي إدخال يدوي.
                 </p>
 
-                <form onSubmit={handleSaveInitialBalance}>
-                  <div className="denom-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
-                    {[200, 100, 50, 20, 10, 5, 1].map((denom) => (
-                      <div className="denom-input-group" key={denom} style={{ border: '1px solid rgba(245, 158, 11, 0.25)' }}>
-                        <span className="denom-label" style={{ background: 'rgba(245, 158, 11, 0.08)', color: '#fbbf24', borderBottom: '1px solid rgba(245, 158, 11, 0.25)' }}>{denom} ج.م</span>
-                        <div className="denom-input-row">
-                          <input 
-                            type="number" 
-                            min="0"
-                            placeholder="0"
-                            value={initialDenominations[`denom_${denom}`] || ''}
-                            onChange={(e) => {
-                              const val = Math.max(0, parseInt(e.target.value) || 0);
-                              setInitialDenominations(prev => ({ ...prev, [`denom_${denom}`]: val }));
-                            }}
-                            style={{ color: '#fff', textAlign: 'center', padding: '0.5rem' }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', paddingTop: '1rem', borderTop: '1px dashed rgba(245, 158, 11, 0.2)' }}>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#f59e0b' }}>
-                      إجمالي رصيد أول المدة: <span style={{ color: '#fff', fontSize: '1.4rem' }}>{totalInitialBalance.toLocaleString()}</span> ج.م
-                    </div>
-                    
+                {/* زر الحساب التلقائي */}
+                {!autoInitResult && (
+                  <div style={{ textAlign: 'center', padding: '1rem 0' }}>
                     <button
-                      type="submit"
-                      disabled={initialBalanceLoading || totalInitialBalance <= 0}
-                      className="btn btn-primary"
+                      onClick={handleAutoInitializeSafe}
+                      disabled={initialBalanceLoading}
                       style={{
-                        background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                        background: initialBalanceLoading ? 'rgba(245,158,11,0.4)' : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
                         border: 'none',
-                        borderRadius: '10px',
-                        padding: '0.75rem 1.5rem',
+                        borderRadius: '14px',
+                        padding: '1rem 2.5rem',
                         color: '#fff',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        fontSize: '0.95rem',
+                        fontWeight: 800,
+                        cursor: initialBalanceLoading ? 'not-allowed' : 'pointer',
+                        fontSize: '1.05rem',
+                        letterSpacing: '0.03em',
+                        boxShadow: '0 4px 20px rgba(245,158,11,0.35)',
                         transition: 'all 0.2s ease',
-                        opacity: (initialBalanceLoading || totalInitialBalance <= 0) ? 0.6 : 1
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.6rem'
                       }}
                     >
-                      {initialBalanceLoading ? 'جاري الحفظ...' : 'حفظ الرصيد الافتتاحي'}
+                      {initialBalanceLoading ? (
+                        <><span style={{fontSize:'1.3rem', animation:'spin 1s linear infinite'}}>⚙️</span> جاري الحساب التلقائي...</>
+                      ) : (
+                        <><span style={{fontSize:'1.3rem'}}>🔄</span> احسب وهيئ الخزنة تلقائياً من الحركات</>
+                      )}
                     </button>
+                    <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      ⚡ سيتم حساب كل فئة نقدية (200، 100، 50...) من مجموع جميع الحركات المسجلة
+                    </div>
                   </div>
-                </form>
+                )}
+
+                {/* نتيجة الحساب التلقائي */}
+                {autoInitResult && (
+                  <div style={{
+                    background: 'rgba(16,185,129,0.1)',
+                    border: '1px solid rgba(16,185,129,0.35)',
+                    borderRadius: '12px',
+                    padding: '1.25rem'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', color: '#34d399', fontWeight: 800, fontSize: '1rem' }}>
+                      <span>✅</span>
+                      <span>تم تهيئة الخزنة بنجاح — الفئات النقدية الحالية محتسبة من الحركات:</span>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', marginBottom: '1rem' }}>
+                      {[200, 100, 50, 20, 10, 5, 1].map(d => {
+                        const count = autoInitResult.currentDenoms[`denom_${d}`] || 0;
+                        return (
+                          <div key={d} style={{
+                            background: count > 0 ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.04)',
+                            border: count > 0 ? '1px solid rgba(16,185,129,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                            borderRadius: '10px',
+                            padding: '0.5rem 0.9rem',
+                            textAlign: 'center',
+                            opacity: count > 0 ? 1 : 0.5
+                          }}>
+                            <div style={{ fontSize: '0.75rem', color: '#6ee7b7', marginBottom: '0.2rem' }}>{d} ج.م</div>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fff' }}>{count.toLocaleString()}</div>
+                            <div style={{ fontSize: '0.7rem', color: '#a7f3d0' }}>{(count * d).toLocaleString()} ج.م</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{ fontSize: '1rem', fontWeight: 800, color: '#f59e0b' }}>
+                      💰 إجمالي الرصيد النقدي الحالي: <span style={{ color: '#fff', fontSize: '1.3rem' }}>{(autoInitResult.netBalanceFromTransactions || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span> ج.م
+                    </div>
+                  </div>
+                )}
+
+                {initialBalanceError && (
+                  <div style={{ marginTop: '0.75rem', color: '#ef4444', fontSize: '0.85rem', fontWeight: 600 }}>
+                    ⚠️ {initialBalanceError}
+                  </div>
+                )}
               </div>
-              {initialBalanceError && (
-                <div style={{ marginTop: '0.75rem', color: '#ef4444', fontSize: '0.85rem', fontWeight: 600 }}>
-                  ⚠️ {initialBalanceError}
-                </div>
-              )}
             </div>
           )}
           {/* ===== TWO MAIN BALANCE HEROES ===== */}

@@ -495,6 +495,110 @@ app.get('/api/safe/audit-check', async (req, res) => {
   }
 });
 
+// POST /api/safe/auto-initialize - Auto-calculate initial denominations from all transactions
+// يحسب الفئات النقدية تلقائياً من مجموع جميع حركات الخزنة بدون إدخال يدوي
+app.post('/api/safe/auto-initialize', async (req, res) => {
+  try {
+    const pool = getPool();
+
+    // جمع صافي الفئات من جميع الحركات (إيداعات موجبة - صرف سالب)
+    const denomsResult = await pool.request().query(`
+      SELECT
+        ISNULL(SUM(CASE WHEN type = 'deposit' THEN denom_200 WHEN type IN ('withdrawal','company_transfer') THEN -denom_200 ELSE 0 END), 0) AS denom_200,
+        ISNULL(SUM(CASE WHEN type = 'deposit' THEN denom_100 WHEN type IN ('withdrawal','company_transfer') THEN -denom_100 ELSE 0 END), 0) AS denom_100,
+        ISNULL(SUM(CASE WHEN type = 'deposit' THEN denom_50  WHEN type IN ('withdrawal','company_transfer') THEN -denom_50  ELSE 0 END), 0) AS denom_50,
+        ISNULL(SUM(CASE WHEN type = 'deposit' THEN denom_20  WHEN type IN ('withdrawal','company_transfer') THEN -denom_20  ELSE 0 END), 0) AS denom_20,
+        ISNULL(SUM(CASE WHEN type = 'deposit' THEN denom_10  WHEN type IN ('withdrawal','company_transfer') THEN -denom_10  ELSE 0 END), 0) AS denom_10,
+        ISNULL(SUM(CASE WHEN type = 'deposit' THEN denom_5   WHEN type IN ('withdrawal','company_transfer') THEN -denom_5   ELSE 0 END), 0) AS denom_5,
+        ISNULL(SUM(CASE WHEN type = 'deposit' THEN denom_1   WHEN type IN ('withdrawal','company_transfer') THEN -denom_1   ELSE 0 END), 0) AS denom_1
+      FROM transactions
+      WHERE (
+        (type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved','disbursed') OR status IS NULL))
+        OR
+        (type = 'withdrawal' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status = 'disbursed' OR status IS NULL))
+        OR
+        (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved','disbursed') OR status IS NULL))
+      )
+    `);
+
+    const netDenoms = denomsResult.recordset[0];
+
+    // حساب الرصيد الكلي من الحركات فقط (بدون رصيد افتتاحي)
+    const cashDepRes = await pool.request().query(`
+      SELECT ISNULL(SUM(amount), 0) AS total FROM transactions
+      WHERE type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL)
+        AND (status IN ('approved','disbursed') OR status IS NULL)
+    `);
+    const withRes = await pool.request().query(`
+      SELECT ISNULL(SUM(amount), 0) AS total FROM transactions
+      WHERE ((type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+        OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved','disbursed') OR status IS NULL)))
+    `);
+
+    const cashDeposits = Number(cashDepRes.recordset[0].total) || 0;
+    const totalWithdrawals = Number(withRes.recordset[0].total) || 0;
+    const netBalance = cashDeposits - totalWithdrawals;
+
+    // حفظ الرصيد الافتتاحي = 0 والفئات الافتتاحية = 0 (كل شيء من الحركات)
+    const settingsToSave = [
+      { key: 'safe_initial_balance', value: 0 },
+      { key: 'safe_initial_denom_200', value: 0 },
+      { key: 'safe_initial_denom_100', value: 0 },
+      { key: 'safe_initial_denom_50', value: 0 },
+      { key: 'safe_initial_denom_20', value: 0 },
+      { key: 'safe_initial_denom_10', value: 0 },
+      { key: 'safe_initial_denom_5', value: 0 },
+      { key: 'safe_initial_denom_1', value: 0 }
+    ];
+
+    for (const s of settingsToSave) {
+      const check = await pool.request()
+        .input('k', sql.NVarChar, s.key)
+        .query(`SELECT COUNT(*) AS cnt FROM settings WHERE key_name = @k`);
+      if (check.recordset[0].cnt > 0) {
+        await pool.request()
+          .input('k', sql.NVarChar, s.key)
+          .input('v', sql.NVarChar, String(s.value))
+          .query(`UPDATE settings SET val = @v WHERE key_name = @k`);
+      } else {
+        await pool.request()
+          .input('k', sql.NVarChar, s.key)
+          .input('v', sql.NVarChar, String(s.value))
+          .query(`INSERT INTO settings (key_name, val) VALUES (@k, @v)`);
+      }
+    }
+
+    // الفئات الحالية الفعلية = صافي حركات الفئات مباشرة
+    const currentDenoms = {
+      denom_200: Math.max(0, Number(netDenoms.denom_200) || 0),
+      denom_100: Math.max(0, Number(netDenoms.denom_100) || 0),
+      denom_50:  Math.max(0, Number(netDenoms.denom_50)  || 0),
+      denom_20:  Math.max(0, Number(netDenoms.denom_20)  || 0),
+      denom_10:  Math.max(0, Number(netDenoms.denom_10)  || 0),
+      denom_5:   Math.max(0, Number(netDenoms.denom_5)   || 0),
+      denom_1:   Math.max(0, Number(netDenoms.denom_1)   || 0),
+    };
+
+    const physicalTotal =
+      (currentDenoms.denom_200 * 200) + (currentDenoms.denom_100 * 100) +
+      (currentDenoms.denom_50 * 50)   + (currentDenoms.denom_20 * 20)   +
+      (currentDenoms.denom_10 * 10)   + (currentDenoms.denom_5 * 5)     +
+      (currentDenoms.denom_1 * 1);
+
+    res.json({
+      success: true,
+      message: 'تم احتساب الرصيد الافتتاحي تلقائياً من مجموع الحركات',
+      netBalanceFromTransactions: netBalance,
+      physicalDenominationsTotal: physicalTotal,
+      currentDenoms
+    });
+
+  } catch (error) {
+    console.error('Error in auto-initialize safe:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء الحساب التلقائي للرصيد الافتتاحي' });
+  }
+});
+
 // 1.5 GET /api/agencies (List all agencies with accounts summary)
 app.get('/api/agencies', async (req, res) => {
   const userRole = req.headers['x-user-role'];
