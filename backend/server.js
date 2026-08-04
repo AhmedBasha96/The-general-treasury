@@ -602,6 +602,79 @@ app.post('/api/safe/auto-initialize', async (req, res) => {
   }
 });
 
+// POST /api/safe/set-initial-balance - Manager sets initial balance directly
+// يضبط المدير الرصيد الافتتاحي مباشرة بدون الحاجة لقاعدة البيانات
+app.post('/api/safe/set-initial-balance', async (req, res) => {
+  try {
+    const pool = getPool();
+    const { initialBalance } = req.body;
+
+    if (initialBalance === undefined || isNaN(Number(initialBalance)) || Number(initialBalance) < 0) {
+      return res.status(400).json({ error: 'قيمة الرصيد الافتتاحي غير صالحة' });
+    }
+
+    const balance = Number(initialBalance);
+
+    // حفظ الرصيد الافتتاحي وتصفير الفئات حتى يُستخدم الرقم المباشر
+    const keys = [
+      { key: 'safe_initial_balance', val: String(balance) },
+      { key: 'safe_initial_denom_200', val: '0' },
+      { key: 'safe_initial_denom_100', val: '0' },
+      { key: 'safe_initial_denom_50',  val: '0' },
+      { key: 'safe_initial_denom_20',  val: '0' },
+      { key: 'safe_initial_denom_10',  val: '0' },
+      { key: 'safe_initial_denom_5',   val: '0' },
+      { key: 'safe_initial_denom_1',   val: '0' },
+    ];
+
+    for (const k of keys) {
+      const check = await pool.request()
+        .input('kk', sql.NVarChar, k.key)
+        .query('SELECT COUNT(*) AS cnt FROM settings WHERE key_name = @kk');
+      if (check.recordset[0].cnt > 0) {
+        await pool.request()
+          .input('kk', sql.NVarChar, k.key)
+          .input('vv', sql.NVarChar, k.val)
+          .query('UPDATE settings SET val = @vv WHERE key_name = @kk');
+      } else {
+        await pool.request()
+          .input('kk', sql.NVarChar, k.key)
+          .input('vv', sql.NVarChar, k.val)
+          .query('INSERT INTO settings (key_name, val) VALUES (@kk, @vv)');
+      }
+    }
+
+    // حساب الرصيد الجديد للتحقق
+    const dep = await pool.request().query(`
+      SELECT ISNULL(SUM(amount),0) AS total FROM transactions
+      WHERE type='deposit' AND (payment_method='cash' OR payment_method IS NULL)
+        AND (status IN ('approved','disbursed') OR status IS NULL)
+    `);
+    const with1 = await pool.request().query(`
+      SELECT ISNULL(SUM(amount),0) AS total FROM transactions
+      WHERE (type='withdrawal' AND (status='disbursed' OR status IS NULL))
+         OR (type='company_transfer' AND (payment_method='cash' OR payment_method IS NULL) AND (status='approved' OR status IS NULL))
+    `);
+
+    const cashDep = Number(dep.recordset[0].total);
+    const totalWith = Number(with1.recordset[0].total);
+    const newBalance = balance + cashDep - totalWith;
+
+    res.json({
+      success: true,
+      message: 'تم تحديث الرصيد الافتتاحي بنجاح',
+      initialBalanceSaved: balance,
+      cashDeposits: cashDep,
+      totalWithdrawals: totalWith,
+      newCashSafeBalance: newBalance
+    });
+
+  } catch (error) {
+    console.error('Error setting initial balance:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء تحديث الرصيد الافتتاحي' });
+  }
+});
+
 // 1.5 GET /api/agencies (List all agencies with accounts summary)
 app.get('/api/agencies', async (req, res) => {
   const userRole = req.headers['x-user-role'];
@@ -3287,9 +3360,82 @@ app.post('/api/settings/reset-safe-initial', async (req, res) => {
   }
 });
 
+// ======================================================
+// تصحيح تلقائي للرصيد الافتتاحي عند بدء تشغيل السيرفر
+// يضبط safe_initial_balance = 1886 إذا كان فارغاً أو صفر
+// ويصفّر الفئات الافتتاحية لضمان استخدام الرقم المباشر
+// ======================================================
+async function applyInitialBalanceMigration(pool) {
+  try {
+    const CORRECT_INITIAL_BALANCE = 1886;
+
+    // قراءة كل إعدادات الرصيد الافتتاحي
+    const check = await pool.request().query(`
+      SELECT key_name, val FROM settings WHERE key_name LIKE 'safe_initial%'
+    `);
+
+    let currentRaw = null;
+    let denomsSum = 0;
+    const denomMap = { 200: 0, 100: 0, 50: 0, 20: 0, 10: 0, 5: 0, 1: 0 };
+
+    check.recordset.forEach(r => {
+      if (r.key_name === 'safe_initial_balance') currentRaw = parseFloat(r.val);
+      const m = r.key_name.match(/^safe_initial_denom_(\d+)$/);
+      if (m) {
+        const d = parseInt(m[1]);
+        const v = parseInt(r.val) || 0;
+        denomMap[d] = v;
+        denomsSum += v * d;
+      }
+    });
+
+    // الرصيد الافتتاحي الفعلي الذي يستخدمه النظام
+    const effectiveInitial = denomsSum > 0 ? denomsSum : (currentRaw || 0);
+
+    // تطبيق الـ migration فقط لو الرصيد الافتتاحي الفعلي = 0
+    if (effectiveInitial === 0) {
+      const keys = [
+        { key: 'safe_initial_balance', val: String(CORRECT_INITIAL_BALANCE) },
+        { key: 'safe_initial_denom_200', val: '0' },
+        { key: 'safe_initial_denom_100', val: '0' },
+        { key: 'safe_initial_denom_50',  val: '0' },
+        { key: 'safe_initial_denom_20',  val: '0' },
+        { key: 'safe_initial_denom_10',  val: '0' },
+        { key: 'safe_initial_denom_5',   val: '0' },
+        { key: 'safe_initial_denom_1',   val: '0' },
+      ];
+
+      for (const k of keys) {
+        const exists = await pool.request()
+          .input('kk', sql.NVarChar, k.key)
+          .query('SELECT COUNT(*) AS cnt FROM settings WHERE key_name = @kk');
+        if (exists.recordset[0].cnt > 0) {
+          await pool.request()
+            .input('kk', sql.NVarChar, k.key)
+            .input('vv', sql.NVarChar, k.val)
+            .query('UPDATE settings SET val = @vv WHERE key_name = @kk');
+        } else {
+          await pool.request()
+            .input('kk', sql.NVarChar, k.key)
+            .input('vv', sql.NVarChar, k.val)
+            .query('INSERT INTO settings (key_name, val) VALUES (@kk, @vv)');
+        }
+      }
+      console.log(`✅ [Migration] safe_initial_balance → ${CORRECT_INITIAL_BALANCE} EGP (was 0)`);
+    } else {
+      console.log(`ℹ️ [Migration] safe_initial_balance already = ${effectiveInitial} – skipped`);
+    }
+  } catch (err) {
+    console.error('⚠️ [Migration] Failed to apply initial balance migration:', err.message);
+  }
+}
+
 // Start Database connection and then Express server
 connectDB()
   .then(async (pool) => {
+    // تطبيق migration الرصيد الافتتاحي تلقائياً
+    await applyInitialBalanceMigration(pool);
+
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
     });
