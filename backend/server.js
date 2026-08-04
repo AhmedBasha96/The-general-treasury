@@ -219,17 +219,8 @@ async function getSafeInitialData(txOrPool) {
     }
   });
 
-  const denomsSum = 
-    (initialDenoms.denom_200 * 200) +
-    (initialDenoms.denom_100 * 100) +
-    (initialDenoms.denom_50 * 50) +
-    (initialDenoms.denom_20 * 20) +
-    (initialDenoms.denom_10 * 10) +
-    (initialDenoms.denom_5 * 5) +
-    (initialDenoms.denom_1 * 1);
-
-  const safeInitialBalance = denomsSum > 0 ? denomsSum : (rawInitialBalanceSetting || 0);
-  // تم التهيئة = الـ key موجود في قاعدة البيانات بغض النظر عن قيمته
+  // الرصيد الافتتاحي دايماً من safe_initial_balance المباشر - الفئات منفصلة للعرض فقط
+  const safeInitialBalance = rawInitialBalanceSetting || 0;
   const safeInitialBalanceSet = keyExistsInSettings;
 
   return { safeInitialBalance, initialDenoms, safeInitialBalanceSet };
@@ -3367,45 +3358,38 @@ app.post('/api/settings/reset-safe-initial', async (req, res) => {
 // ======================================================
 async function applyInitialBalanceMigration(pool) {
   try {
-    const CORRECT_INITIAL_BALANCE = 1886;
+    // الرصيد الافتتاحي الصحيح = 138535 - (8749634.99 - 8618840.99) = 7741
+    const CORRECT_INITIAL_BALANCE = 7741;
 
-    // قراءة كل إعدادات الرصيد الافتتاحي
+    // الفئات الافتتاحية الصحيحة (العد الفعلي بالخزنة)
+    const CORRECT_DENOMS = {
+      'safe_initial_denom_200': '140',
+      'safe_initial_denom_100': '633',
+      'safe_initial_denom_50':  '497',
+      'safe_initial_denom_20':  '309',
+      'safe_initial_denom_10':  '1124',
+      'safe_initial_denom_5':   '943',
+      'safe_initial_denom_1':   '250',
+    };
+
+    // قراءة الرصيد الحالي
     const check = await pool.request().query(`
       SELECT key_name, val FROM settings WHERE key_name LIKE 'safe_initial%'
     `);
 
     let currentRaw = null;
-    let denomsSum = 0;
-    const denomMap = { 200: 0, 100: 0, 50: 0, 20: 0, 10: 0, 5: 0, 1: 0 };
-
     check.recordset.forEach(r => {
       if (r.key_name === 'safe_initial_balance') currentRaw = parseFloat(r.val);
-      const m = r.key_name.match(/^safe_initial_denom_(\d+)$/);
-      if (m) {
-        const d = parseInt(m[1]);
-        const v = parseInt(r.val) || 0;
-        denomMap[d] = v;
-        denomsSum += v * d;
-      }
     });
 
-    // الرصيد الافتتاحي الفعلي الذي يستخدمه النظام
-    const effectiveInitial = denomsSum > 0 ? denomsSum : (currentRaw || 0);
-
-    // تطبيق الـ migration فقط لو الرصيد الافتتاحي الفعلي = 0
-    if (effectiveInitial === 0) {
-      const keys = [
+    // تطبيق الـ migration فقط لو الرصيد = 0 أو غير محدد
+    if (currentRaw === null || currentRaw === 0) {
+      const allKeys = [
         { key: 'safe_initial_balance', val: String(CORRECT_INITIAL_BALANCE) },
-        { key: 'safe_initial_denom_200', val: '0' },
-        { key: 'safe_initial_denom_100', val: '0' },
-        { key: 'safe_initial_denom_50',  val: '0' },
-        { key: 'safe_initial_denom_20',  val: '0' },
-        { key: 'safe_initial_denom_10',  val: '0' },
-        { key: 'safe_initial_denom_5',   val: '0' },
-        { key: 'safe_initial_denom_1',   val: '0' },
+        ...Object.entries(CORRECT_DENOMS).map(([k, v]) => ({ key: k, val: v }))
       ];
 
-      for (const k of keys) {
+      for (const k of allKeys) {
         const exists = await pool.request()
           .input('kk', sql.NVarChar, k.key)
           .query('SELECT COUNT(*) AS cnt FROM settings WHERE key_name = @kk');
@@ -3421,9 +3405,9 @@ async function applyInitialBalanceMigration(pool) {
             .query('INSERT INTO settings (key_name, val) VALUES (@kk, @vv)');
         }
       }
-      console.log(`✅ [Migration] safe_initial_balance → ${CORRECT_INITIAL_BALANCE} EGP (was 0)`);
+      console.log(`✅ [Migration] safe_initial_balance → ${CORRECT_INITIAL_BALANCE} EGP | denoms: 200×140, 100×633, 50×497, 20×309, 10×1124, 5×943, 1×250`);
     } else {
-      console.log(`ℹ️ [Migration] safe_initial_balance already = ${effectiveInitial} – skipped`);
+      console.log(`ℹ️ [Migration] safe_initial_balance already = ${currentRaw} – skipped`);
     }
   } catch (err) {
     console.error('⚠️ [Migration] Failed to apply initial balance migration:', err.message);
