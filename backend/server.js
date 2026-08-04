@@ -203,10 +203,13 @@ async function getSafeInitialData(txOrPool) {
     denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0
   };
   let rawInitialBalanceSetting = null;
+  // الـ key موجود في الـ settings = تم التهيئة سواء كانت القيمة 0 أو أكبر
+  let keyExistsInSettings = false;
 
   initialBalanceResult.recordset.forEach(row => {
     if (row.key_name === 'safe_initial_balance') {
       rawInitialBalanceSetting = parseFloat(row.val);
+      keyExistsInSettings = true; // الـ key موجود = تم التهيئة
     }
     const match = row.key_name.match(/^safe_initial_denom_(\d+)$/);
     if (match) {
@@ -225,13 +228,9 @@ async function getSafeInitialData(txOrPool) {
     (initialDenoms.denom_5 * 5) +
     (initialDenoms.denom_1 * 1);
 
-  let safeInitialBalance = denomsSum;
-  let safeInitialBalanceSet = denomsSum > 0;
-
-  if (!safeInitialBalanceSet && rawInitialBalanceSetting !== null && !isNaN(rawInitialBalanceSetting) && rawInitialBalanceSetting > 0) {
-    safeInitialBalance = rawInitialBalanceSetting;
-    safeInitialBalanceSet = true;
-  }
+  const safeInitialBalance = denomsSum > 0 ? denomsSum : (rawInitialBalanceSetting || 0);
+  // تم التهيئة = الـ key موجود في قاعدة البيانات بغض النظر عن قيمته
+  const safeInitialBalanceSet = keyExistsInSettings;
 
   return { safeInitialBalance, initialDenoms, safeInitialBalanceSet };
 }
@@ -399,7 +398,11 @@ app.get('/api/dashboard', async (req, res) => {
         physicalDenomSum,
         netTransactionBalance,
         auditDiscrepancy,
-        isAuditMatched
+        isAuditMatched,
+        // هل الفئات المسجلة في الحركات بتطابق الرصيد الحقيقي؟
+        denomsMatchBalance: Math.abs(auditDiscrepancy) < 0.01,
+        // نسبة تغطية الفئات للرصيد الحقيقي
+        denomsCoveragePercent: cashSafeBalance > 0 ? Math.min(100, Math.round((physicalDenomSum / cashSafeBalance) * 100)) : 0
       },
       recentTransactions: recentTxResult.recordset
     });

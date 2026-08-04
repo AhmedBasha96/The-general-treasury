@@ -2455,7 +2455,14 @@ const [showCarModal, setShowCarModal] = useState(false);
                 </div>
                 {dashboardData.summary.safeDenominations && (
                   <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px dashed rgba(16,185,129,0.25)' }}>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#6ee7b7', marginBottom: '0.6rem' }}>💵 تفاصيل الفئات النقدية بالخزينة:</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#6ee7b7' }}>💵 تفاصيل الفئات النقدية بالخزينة:</div>
+                      {!dashboardData.summary.denomsMatchBalance && (
+                        <div style={{ fontSize: '0.7rem', color: '#fbbf24', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: '6px', padding: '0.2rem 0.5rem' }}>
+                          ⚠️ جزء من الحركات بدون فئات
+                        </div>
+                      )}
+                    </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                       {[200, 100, 50, 20, 10, 5, 1].map(denom => {
                         const count = dashboardData.summary.safeDenominations[`denom_${denom}`] || 0;
@@ -2478,6 +2485,11 @@ const [showCarModal, setShowCarModal] = useState(false);
                         );
                       })}
                     </div>
+                    {!dashboardData.summary.denomsMatchBalance && (
+                      <div style={{ marginTop: '0.5rem', fontSize: '0.72rem', color: '#9ca3af', fontStyle: 'italic' }}>
+                        * الأعداد أعلاه من الحركات المسجلة بفئات فقط — الرصيد الصحيح هو {(dashboardData.summary.cashSafeBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
+                      </div>
+                    )}
                   </div>
                 )}
 
