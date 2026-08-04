@@ -351,14 +351,33 @@ app.get('/api/dashboard', async (req, res) => {
       ${agencyFilter}
     `);
 
-    const safeDenominations = {
-      denom_200: Math.max(0, (Number(denomsResult.recordset[0].denom_200) || 0) + (initialDenoms?.denom_200 || 0)),
-      denom_100: Math.max(0, (Number(denomsResult.recordset[0].denom_100) || 0) + (initialDenoms?.denom_100 || 0)),
-      denom_50: Math.max(0, (Number(denomsResult.recordset[0].denom_50) || 0) + (initialDenoms?.denom_50 || 0)),
-      denom_20: Math.max(0, (Number(denomsResult.recordset[0].denom_20) || 0) + (initialDenoms?.denom_20 || 0)),
-      denom_10: Math.max(0, (Number(denomsResult.recordset[0].denom_10) || 0) + (initialDenoms?.denom_10 || 0)),
-      denom_5: Math.max(0, (Number(denomsResult.recordset[0].denom_5) || 0) + (initialDenoms?.denom_5 || 0)),
-      denom_1: Math.max(0, (Number(denomsResult.recordset[0].denom_1) || 0) + (initialDenoms?.denom_1 || 0)),
+    // هل تم تحديد فئات افتتاحية في الإعدادات؟
+    const hasInitialDenoms = (
+      (initialDenoms?.denom_200 || 0) +
+      (initialDenoms?.denom_100 || 0) +
+      (initialDenoms?.denom_50 || 0) +
+      (initialDenoms?.denom_20 || 0) +
+      (initialDenoms?.denom_10 || 0) +
+      (initialDenoms?.denom_5 || 0) +
+      (initialDenoms?.denom_1 || 0)
+    ) > 0;
+
+    const safeDenominations = hasInitialDenoms ? {
+      denom_200: initialDenoms.denom_200 || 0,
+      denom_100: initialDenoms.denom_100 || 0,
+      denom_50: initialDenoms.denom_50 || 0,
+      denom_20: initialDenoms.denom_20 || 0,
+      denom_10: initialDenoms.denom_10 || 0,
+      denom_5: initialDenoms.denom_5 || 0,
+      denom_1: initialDenoms.denom_1 || 0,
+    } : {
+      denom_200: Math.max(0, Number(denomsResult.recordset[0].denom_200) || 0),
+      denom_100: Math.max(0, Number(denomsResult.recordset[0].denom_100) || 0),
+      denom_50: Math.max(0, Number(denomsResult.recordset[0].denom_50) || 0),
+      denom_20: Math.max(0, Number(denomsResult.recordset[0].denom_20) || 0),
+      denom_10: Math.max(0, Number(denomsResult.recordset[0].denom_10) || 0),
+      denom_5: Math.max(0, Number(denomsResult.recordset[0].denom_5) || 0),
+      denom_1: Math.max(0, Number(denomsResult.recordset[0].denom_1) || 0),
     };
     
     const physicalDenomSum = 
@@ -3386,39 +3405,15 @@ async function applyInitialBalanceMigration(pool) {
 
     const requiredInitialBalance = TARGET_SAFE_BALANCE - netTxBalance;
 
-    // 2. حساب مجموع الفئات المسجلة بالحركات
-    const denomsTxRes = await pool.request().query(`
-      SELECT 
-        ISNULL(SUM(t.denom_200), 0) AS denom_200,
-        ISNULL(SUM(t.denom_100), 0) AS denom_100,
-        ISNULL(SUM(t.denom_50), 0) AS denom_50,
-        ISNULL(SUM(t.denom_20), 0) AS denom_20,
-        ISNULL(SUM(t.denom_10), 0) AS denom_10,
-        ISNULL(SUM(t.denom_5), 0) AS denom_5,
-        ISNULL(SUM(t.denom_1), 0) AS denom_1
-      FROM transactions t
-      WHERE (
-        (t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
-        OR 
-        (t.type = 'withdrawal' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status = 'disbursed' OR t.status IS NULL))
-        OR
-        (t.type = 'company_transfer' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
-        OR
-        (t.type = 'exchange' AND (t.status = 'approved' OR t.status IS NULL))
-      )
-    `);
-
-    const txDenoms = denomsTxRes.recordset[0];
-
     const keysToSet = [
       { key: 'safe_initial_balance', val: String(requiredInitialBalance) },
-      { key: 'safe_initial_denom_200', val: String(TARGET_DENOMS[200] - (Number(txDenoms.denom_200) || 0)) },
-      { key: 'safe_initial_denom_100', val: String(TARGET_DENOMS[100] - (Number(txDenoms.denom_100) || 0)) },
-      { key: 'safe_initial_denom_50',  val: String(TARGET_DENOMS[50]  - (Number(txDenoms.denom_50)  || 0)) },
-      { key: 'safe_initial_denom_20',  val: String(TARGET_DENOMS[20]  - (Number(txDenoms.denom_20)  || 0)) },
-      { key: 'safe_initial_denom_10',  val: String(TARGET_DENOMS[10]  - (Number(txDenoms.denom_10)  || 0)) },
-      { key: 'safe_initial_denom_5',   val: String(TARGET_DENOMS[5]   - (Number(txDenoms.denom_5)   || 0)) },
-      { key: 'safe_initial_denom_1',   val: String(TARGET_DENOMS[1]   - (Number(txDenoms.denom_1)   || 0)) },
+      { key: 'safe_initial_denom_200', val: String(TARGET_DENOMS[200]) },
+      { key: 'safe_initial_denom_100', val: String(TARGET_DENOMS[100]) },
+      { key: 'safe_initial_denom_50',  val: String(TARGET_DENOMS[50]) },
+      { key: 'safe_initial_denom_20',  val: String(TARGET_DENOMS[20]) },
+      { key: 'safe_initial_denom_10',  val: String(TARGET_DENOMS[10]) },
+      { key: 'safe_initial_denom_5',   val: String(TARGET_DENOMS[5]) },
+      { key: 'safe_initial_denom_1',   val: String(TARGET_DENOMS[250] || 250) },
     ];
 
     for (const k of keysToSet) {
@@ -3438,7 +3433,7 @@ async function applyInitialBalanceMigration(pool) {
       }
     }
 
-    console.log(`✅ [Migration] Safe Reconciled! Target Balance: ${TARGET_SAFE_BALANCE} EGP | Net Tx Balance: ${netTxBalance} EGP | Initial Balance set to ${requiredInitialBalance} EGP`);
+    console.log(`✅ [Migration] Safe Reconciled! Target Balance: ${TARGET_SAFE_BALANCE} EGP | Initial Balance set to ${requiredInitialBalance} EGP`);
   } catch (err) {
     console.error('⚠️ [Migration] Failed to apply initial balance migration:', err.message);
   }
