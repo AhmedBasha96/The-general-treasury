@@ -202,13 +202,11 @@ async function getSafeInitialData(txOrPool) {
   const initialDenoms = {
     denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0
   };
-  let safeInitialBalance = 0;
-  let safeInitialBalanceSet = false;
+  let rawInitialBalanceSetting = null;
 
   initialBalanceResult.recordset.forEach(row => {
     if (row.key_name === 'safe_initial_balance') {
-      safeInitialBalanceSet = true;
-      safeInitialBalance = parseFloat(row.val) || 0;
+      rawInitialBalanceSetting = parseFloat(row.val);
     }
     const match = row.key_name.match(/^safe_initial_denom_(\d+)$/);
     if (match) {
@@ -218,16 +216,23 @@ async function getSafeInitialData(txOrPool) {
     }
   });
 
-  if (!safeInitialBalanceSet) {
-    safeInitialBalance = 
-      (initialDenoms.denom_200 * 200) +
-      (initialDenoms.denom_100 * 100) +
-      (initialDenoms.denom_50 * 50) +
-      (initialDenoms.denom_20 * 20) +
-      (initialDenoms.denom_10 * 10) +
-      (initialDenoms.denom_5 * 5) +
-      (initialDenoms.denom_1 * 1);
+  const denomsSum = 
+    (initialDenoms.denom_200 * 200) +
+    (initialDenoms.denom_100 * 100) +
+    (initialDenoms.denom_50 * 50) +
+    (initialDenoms.denom_20 * 20) +
+    (initialDenoms.denom_10 * 10) +
+    (initialDenoms.denom_5 * 5) +
+    (initialDenoms.denom_1 * 1);
+
+  let safeInitialBalance = denomsSum;
+  let safeInitialBalanceSet = denomsSum > 0;
+
+  if (!safeInitialBalanceSet && rawInitialBalanceSetting !== null && !isNaN(rawInitialBalanceSetting) && rawInitialBalanceSetting > 0) {
+    safeInitialBalance = rawInitialBalanceSetting;
+    safeInitialBalanceSet = true;
   }
+
   return { safeInitialBalance, initialDenoms, safeInitialBalanceSet };
 }
 
@@ -357,17 +362,16 @@ app.get('/api/dashboard', async (req, res) => {
     `);
 
     const safeDenominations = {
-      denom_200: (Number(denomsResult.recordset[0].denom_200) || 0) + (initialDenoms?.denom_200 || 0),
-      denom_100: (Number(denomsResult.recordset[0].denom_100) || 0) + (initialDenoms?.denom_100 || 0),
-      denom_50: (Number(denomsResult.recordset[0].denom_50) || 0) + (initialDenoms?.denom_50 || 0),
-      denom_20: (Number(denomsResult.recordset[0].denom_20) || 0) + (initialDenoms?.denom_20 || 0),
-      denom_10: (Number(denomsResult.recordset[0].denom_10) || 0) + (initialDenoms?.denom_10 || 0),
-      denom_5: (Number(denomsResult.recordset[0].denom_5) || 0) + (initialDenoms?.denom_5 || 0),
-      denom_1: (Number(denomsResult.recordset[0].denom_1) || 0) + (initialDenoms?.denom_1 || 0),
+      denom_200: Math.max(0, (Number(denomsResult.recordset[0].denom_200) || 0) + (initialDenoms?.denom_200 || 0)),
+      denom_100: Math.max(0, (Number(denomsResult.recordset[0].denom_100) || 0) + (initialDenoms?.denom_100 || 0)),
+      denom_50: Math.max(0, (Number(denomsResult.recordset[0].denom_50) || 0) + (initialDenoms?.denom_50 || 0)),
+      denom_20: Math.max(0, (Number(denomsResult.recordset[0].denom_20) || 0) + (initialDenoms?.denom_20 || 0)),
+      denom_10: Math.max(0, (Number(denomsResult.recordset[0].denom_10) || 0) + (initialDenoms?.denom_10 || 0)),
+      denom_5: Math.max(0, (Number(denomsResult.recordset[0].denom_5) || 0) + (initialDenoms?.denom_5 || 0)),
+      denom_1: Math.max(0, (Number(denomsResult.recordset[0].denom_1) || 0) + (initialDenoms?.denom_1 || 0)),
     };
-
-    // Auto-rebalance guarantee: ensure sum of denominations ALWAYS equals cashSafeBalance 100%
-    const currentDenomSum = 
+    
+    const physicalDenomSum = 
       (safeDenominations.denom_200 * 200) +
       (safeDenominations.denom_100 * 100) +
       (safeDenominations.denom_50 * 50) +
@@ -376,19 +380,9 @@ app.get('/api/dashboard', async (req, res) => {
       (safeDenominations.denom_5 * 5) +
       (safeDenominations.denom_1 * 1);
 
-    const denomDiff = cashSafeBalance - currentDenomSum;
-    if (denomDiff !== 0) {
-      let rem = denomDiff;
-      const denomsArr = [200, 100, 50, 20, 10, 5, 1];
-      for (const d of denomsArr) {
-        if (rem === 0) break;
-        const add = Math.floor(rem / d);
-        if (add !== 0) {
-          safeDenominations[`denom_${d}`] += add;
-          rem -= (add * d);
-        }
-      }
-    }
+    const netTransactionBalance = cashDeposits - totalWithdrawals;
+    const auditDiscrepancy = cashSafeBalance - physicalDenomSum;
+    const isAuditMatched = Math.abs(auditDiscrepancy) < 0.01;
     
     res.json({
       summary: {
@@ -401,13 +395,103 @@ app.get('/api/dashboard', async (req, res) => {
         repsCount: repsCountResult.recordset[0].count,
         safeDenominations,
         safeInitialBalance,
-        safeInitialBalanceSet
+        safeInitialBalanceSet,
+        physicalDenomSum,
+        netTransactionBalance,
+        auditDiscrepancy,
+        isAuditMatched
       },
       recentTransactions: recentTxResult.recordset
     });
   } catch (error) {
     console.error('Error fetching dashboard stats:', error);
     res.status(500).json({ error: 'حدث خطأ أثناء جلب بيانات لوحة التحكم' });
+  }
+});
+
+// GET /api/safe/audit-check - Permanent Real-time Safe Balance Audit
+app.get('/api/safe/audit-check', async (req, res) => {
+  try {
+    const pool = getPool();
+    const { safeInitialBalance, initialDenoms, safeInitialBalanceSet } = await getSafeInitialData(pool);
+
+    const cashDepRes = await pool.request().query(`
+      SELECT ISNULL(SUM(amount), 0) AS total 
+      FROM transactions 
+      WHERE type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL)
+        AND (status IN ('approved', 'disbursed') OR status IS NULL)
+    `);
+
+    const withRes = await pool.request().query(`
+      SELECT ISNULL(SUM(amount), 0) AS total 
+      FROM transactions 
+      WHERE ((type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+        OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved', 'disbursed') OR status IS NULL)))
+    `);
+
+    const denomsResult = await pool.request().query(`
+      SELECT 
+        ISNULL(SUM(CASE WHEN type = 'deposit' THEN denom_200 WHEN type IN ('withdrawal', 'company_transfer') THEN -denom_200 ELSE denom_200 END), 0) AS denom_200,
+        ISNULL(SUM(CASE WHEN type = 'deposit' THEN denom_100 WHEN type IN ('withdrawal', 'company_transfer') THEN -denom_100 ELSE denom_100 END), 0) AS denom_100,
+        ISNULL(SUM(CASE WHEN type = 'deposit' THEN denom_50 WHEN type IN ('withdrawal', 'company_transfer') THEN -denom_50 ELSE denom_50 END), 0) AS denom_50,
+        ISNULL(SUM(CASE WHEN type = 'deposit' THEN denom_20 WHEN type IN ('withdrawal', 'company_transfer') THEN -denom_20 ELSE denom_20 END), 0) AS denom_20,
+        ISNULL(SUM(CASE WHEN type = 'deposit' THEN denom_10 WHEN type IN ('withdrawal', 'company_transfer') THEN -denom_10 ELSE denom_10 END), 0) AS denom_10,
+        ISNULL(SUM(CASE WHEN type = 'deposit' THEN denom_5 WHEN type IN ('withdrawal', 'company_transfer') THEN -denom_5 ELSE denom_5 END), 0) AS denom_5,
+        ISNULL(SUM(CASE WHEN type = 'deposit' THEN denom_1 WHEN type IN ('withdrawal', 'company_transfer') THEN -denom_1 ELSE denom_1 END), 0) AS denom_1
+      FROM transactions
+      WHERE (
+        (type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved', 'disbursed') OR status IS NULL))
+        OR 
+        (type = 'withdrawal' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status = 'disbursed' OR status IS NULL))
+        OR
+        (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved', 'disbursed') OR status IS NULL))
+        OR
+        (type = 'exchange' AND (status = 'approved' OR status IS NULL))
+      )
+    `);
+
+    const cashDeposits = Number(cashDepRes.recordset[0].total) || 0;
+    const totalWithdrawals = Number(withRes.recordset[0].total) || 0;
+    const netTransactionsBalance = cashDeposits - totalWithdrawals;
+    const calculatedTotalBalance = safeInitialBalance + netTransactionsBalance;
+
+    const currentDenoms = {
+      denom_200: Math.max(0, (Number(denomsResult.recordset[0].denom_200) || 0) + (initialDenoms?.denom_200 || 0)),
+      denom_100: Math.max(0, (Number(denomsResult.recordset[0].denom_100) || 0) + (initialDenoms?.denom_100 || 0)),
+      denom_50: Math.max(0, (Number(denomsResult.recordset[0].denom_50) || 0) + (initialDenoms?.denom_50 || 0)),
+      denom_20: Math.max(0, (Number(denomsResult.recordset[0].denom_20) || 0) + (initialDenoms?.denom_20 || 0)),
+      denom_10: Math.max(0, (Number(denomsResult.recordset[0].denom_10) || 0) + (initialDenoms?.denom_10 || 0)),
+      denom_5: Math.max(0, (Number(denomsResult.recordset[0].denom_5) || 0) + (initialDenoms?.denom_5 || 0)),
+      denom_1: Math.max(0, (Number(denomsResult.recordset[0].denom_1) || 0) + (initialDenoms?.denom_1 || 0)),
+    };
+
+    const physicalDenominationsTotal = 
+      (currentDenoms.denom_200 * 200) +
+      (currentDenoms.denom_100 * 100) +
+      (currentDenoms.denom_50 * 50) +
+      (currentDenoms.denom_20 * 20) +
+      (currentDenoms.denom_10 * 10) +
+      (currentDenoms.denom_5 * 5) +
+      (currentDenoms.denom_1 * 1);
+
+    const auditDiscrepancy = calculatedTotalBalance - physicalDenominationsTotal;
+    const isAuditMatched = Math.abs(auditDiscrepancy) < 0.01;
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      auditStatus: isAuditMatched ? 'MATCHED' : 'DISCREPANCY',
+      initialBalance: safeInitialBalance,
+      cashDepositsTotal: cashDeposits,
+      cashWithdrawalsTotal: totalWithdrawals,
+      netTransactionsBalance,
+      calculatedTotalBalance,
+      physicalDenominationsTotal,
+      currentDenoms,
+      auditDiscrepancy
+    });
+  } catch (error) {
+    console.error('Error running safe audit check:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء تنفيذ الفحص المالي للخزنة' });
   }
 });
 
@@ -3012,11 +3096,14 @@ async function setExactSafeDenominations(pool, targets) {
   const netDenoms = denomsResult.recordset[0];
   const denoms = [200, 100, 50, 20, 10, 5, 1];
 
+  // Calculate total initial balance required to achieve exact physical counts
+  let reqInitialBalance = 0;
   for (const d of denoms) {
     const desired = targets[`denom_${d}`] !== undefined ? targets[`denom_${d}`] : targets[d];
     if (desired !== undefined) {
       const netVal = Number(netDenoms[`denom_${d}`]) || 0;
-      const initialNeeded = desired - netVal;
+      const initialNeeded = Math.max(0, desired - netVal);
+      reqInitialBalance += (initialNeeded * d);
 
       const checkKey = await pool.request()
         .input('key', sql.VarChar, `safe_initial_denom_${d}`)
@@ -3035,13 +3122,6 @@ async function setExactSafeDenominations(pool, targets) {
       }
     }
   }
-
-  // Calculate net cash deposits and withdrawals to keep total cashSafeBalance strictly at 106,186.00
-  const cashDepRes = await pool.request().query("SELECT ISNULL(SUM(amount), 0) AS total FROM transactions WHERE type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved', 'disbursed') OR status IS NULL)");
-  const withRes = await pool.request().query("SELECT ISNULL(SUM(amount), 0) AS total FROM transactions WHERE ((type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL)) OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status = 'approved' OR status IS NULL)))");
-  const netCashTx = (Number(cashDepRes.recordset[0].total) || 0) - (Number(withRes.recordset[0].total) || 0);
-  const targetTotalBalance = 106186.00;
-  const reqInitialBalance = targetTotalBalance - netCashTx;
 
   const initBalKey = await pool.request()
     .input('key', sql.VarChar, 'safe_initial_balance')
@@ -3083,23 +3163,26 @@ app.post('/api/settings/rebalance-denominations', async (req, res) => {
   }
 });
 
+// POST /api/settings/reset-safe-initial - Reset safe initial balance and denoms to zero
+app.post('/api/settings/reset-safe-initial', async (req, res) => {
+  const userRole = req.headers['x-user-role'];
+  if (userRole !== 'manager') {
+    return res.status(403).json({ error: 'غير مسموح لغير المدراء بإعادة ضبط رصيد الخزنة' });
+  }
+
+  try {
+    const pool = getPool();
+    await pool.request().query("DELETE FROM settings WHERE key_name LIKE 'safe_initial_%'");
+    res.json({ message: 'تم تصفير الرصيد الافتتاحي للخزنة بنجاح' });
+  } catch (error) {
+    console.error('Error resetting safe initial balance:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء إعادة ضبط الرصيد الافتتاحي' });
+  }
+});
+
 // Start Database connection and then Express server
 connectDB()
   .then(async (pool) => {
-    try {
-      await setExactSafeDenominations(pool, {
-        denom_200: 191,
-        denom_100: 442,
-        denom_50: 181,
-        denom_20: 222,
-        denom_10: 612,
-        denom_5: 455,
-        denom_1: 1901
-      });
-      console.log('Safe denominations rebalanced to exact physical count on startup.');
-    } catch (e) {
-      console.error('Error rebalancing safe denoms on startup:', e);
-    }
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
     });

@@ -2488,6 +2488,28 @@ const [showCarModal, setShowCarModal] = useState(false);
                     </div>
                   </div>
                 )}
+
+                {/* PERMANENT REAL-TIME AUDIT CHECK BADGE */}
+                <div style={{
+                  marginTop: '1rem',
+                  padding: '0.6rem 0.8rem',
+                  borderRadius: '10px',
+                  background: dashboardData.summary.isAuditMatched ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
+                  border: dashboardData.summary.isAuditMatched ? '1px solid rgba(16,185,129,0.35)' : '1px solid rgba(245,158,11,0.35)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: '0.8rem'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: dashboardData.summary.isAuditMatched ? '#34d399' : '#fbbf24', fontWeight: 'bold' }}>
+                    <span>{dashboardData.summary.isAuditMatched ? '✅' : '🔍'}</span>
+                    <span>
+                      {dashboardData.summary.isAuditMatched 
+                        ? 'فحص ودورة التدقيق: الرصيد الحسابي مطابق 100% للعد الفعلي بالخزنة'
+                        : `تدقيق ومطابقة الخزنة: صافي حركات الوارد والمنصرف (${(dashboardData.summary.netTransactionBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م)`}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 
