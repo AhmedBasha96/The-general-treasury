@@ -3352,63 +3352,93 @@ app.post('/api/settings/reset-safe-initial', async (req, res) => {
 });
 
 // ======================================================
-// تصحيح تلقائي للرصيد الافتتاحي عند بدء تشغيل السيرفر
-// يضبط safe_initial_balance = 1886 إذا كان فارغاً أو صفر
-// ويصفّر الفئات الافتتاحية لضمان استخدام الرقم المباشر
+// تصحيح وتدقيق تلقائي للرصيد الافتتاحي والفئات عند بدء تشغيل السيرفر
+// يضمن أن رصيد الخزنة النهائي = 138,535 ج.م وأن الفئات المعروضة تطابق العد الفعلي بالكامل
 // ======================================================
 async function applyInitialBalanceMigration(pool) {
   try {
-    // الرصيد الافتتاحي الصحيح = 138535 - (8749634.99 - 8618840.99) = 7741
-    const CORRECT_INITIAL_BALANCE = 7741;
-
-    // الفئات الافتتاحية الصحيحة (العد الفعلي بالخزنة)
-    const CORRECT_DENOMS = {
-      'safe_initial_denom_200': '140',
-      'safe_initial_denom_100': '633',
-      'safe_initial_denom_50':  '497',
-      'safe_initial_denom_20':  '309',
-      'safe_initial_denom_10':  '1124',
-      'safe_initial_denom_5':   '943',
-      'safe_initial_denom_1':   '250',
+    const TARGET_SAFE_BALANCE = 138535;
+    const TARGET_DENOMS = {
+      200: 140,
+      100: 633,
+      50: 497,
+      20: 309,
+      10: 1124,
+      5: 943,
+      1: 250
     };
 
-    // قراءة الرصيد الحالي
-    const check = await pool.request().query(`
-      SELECT key_name, val FROM settings WHERE key_name LIKE 'safe_initial%'
+    // 1. حساب صافي حركات الخزنة النقدية من قاعدة البيانات
+    const cashDepRes = await pool.request().query(`
+      SELECT ISNULL(SUM(t.amount), 0) AS total FROM transactions t
+      WHERE t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL)
+        AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL)
+    `);
+    const withdrawalsRes = await pool.request().query(`
+      SELECT ISNULL(SUM(t.amount), 0) AS total FROM transactions t
+      WHERE ((t.type = 'withdrawal' AND (t.status = 'disbursed' OR t.status IS NULL))
+         OR (t.type = 'company_transfer' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status = 'approved' OR t.status IS NULL)))
     `);
 
-    let currentRaw = null;
-    check.recordset.forEach(r => {
-      if (r.key_name === 'safe_initial_balance') currentRaw = parseFloat(r.val);
-    });
+    const cashDeposits = Number(cashDepRes.recordset[0].total);
+    const totalWithdrawals = Number(withdrawalsRes.recordset[0].total);
+    const netTxBalance = cashDeposits - totalWithdrawals;
 
-    // تطبيق الـ migration إذا كان الرصيد غير محدد أو لا يساوي 7741
-    if (currentRaw === null || currentRaw !== CORRECT_INITIAL_BALANCE) {
-      const allKeys = [
-        { key: 'safe_initial_balance', val: String(CORRECT_INITIAL_BALANCE) },
-        ...Object.entries(CORRECT_DENOMS).map(([k, v]) => ({ key: k, val: v }))
-      ];
+    const requiredInitialBalance = TARGET_SAFE_BALANCE - netTxBalance;
 
-      for (const k of allKeys) {
-        const exists = await pool.request()
+    // 2. حساب مجموع الفئات المسجلة بالحركات
+    const denomsTxRes = await pool.request().query(`
+      SELECT 
+        ISNULL(SUM(t.denom_200), 0) AS denom_200,
+        ISNULL(SUM(t.denom_100), 0) AS denom_100,
+        ISNULL(SUM(t.denom_50), 0) AS denom_50,
+        ISNULL(SUM(t.denom_20), 0) AS denom_20,
+        ISNULL(SUM(t.denom_10), 0) AS denom_10,
+        ISNULL(SUM(t.denom_5), 0) AS denom_5,
+        ISNULL(SUM(t.denom_1), 0) AS denom_1
+      FROM transactions t
+      WHERE (
+        (t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
+        OR 
+        (t.type = 'withdrawal' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status = 'disbursed' OR t.status IS NULL))
+        OR
+        (t.type = 'company_transfer' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
+        OR
+        (t.type = 'exchange' AND (t.status = 'approved' OR t.status IS NULL))
+      )
+    `);
+
+    const txDenoms = denomsTxRes.recordset[0];
+
+    const keysToSet = [
+      { key: 'safe_initial_balance', val: String(requiredInitialBalance) },
+      { key: 'safe_initial_denom_200', val: String(TARGET_DENOMS[200] - (Number(txDenoms.denom_200) || 0)) },
+      { key: 'safe_initial_denom_100', val: String(TARGET_DENOMS[100] - (Number(txDenoms.denom_100) || 0)) },
+      { key: 'safe_initial_denom_50',  val: String(TARGET_DENOMS[50]  - (Number(txDenoms.denom_50)  || 0)) },
+      { key: 'safe_initial_denom_20',  val: String(TARGET_DENOMS[20]  - (Number(txDenoms.denom_20)  || 0)) },
+      { key: 'safe_initial_denom_10',  val: String(TARGET_DENOMS[10]  - (Number(txDenoms.denom_10)  || 0)) },
+      { key: 'safe_initial_denom_5',   val: String(TARGET_DENOMS[5]   - (Number(txDenoms.denom_5)   || 0)) },
+      { key: 'safe_initial_denom_1',   val: String(TARGET_DENOMS[1]   - (Number(txDenoms.denom_1)   || 0)) },
+    ];
+
+    for (const k of keysToSet) {
+      const exists = await pool.request()
+        .input('kk', sql.NVarChar, k.key)
+        .query('SELECT COUNT(*) AS cnt FROM settings WHERE key_name = @kk');
+      if (exists.recordset[0].cnt > 0) {
+        await pool.request()
           .input('kk', sql.NVarChar, k.key)
-          .query('SELECT COUNT(*) AS cnt FROM settings WHERE key_name = @kk');
-        if (exists.recordset[0].cnt > 0) {
-          await pool.request()
-            .input('kk', sql.NVarChar, k.key)
-            .input('vv', sql.NVarChar, k.val)
-            .query('UPDATE settings SET val = @vv WHERE key_name = @kk');
-        } else {
-          await pool.request()
-            .input('kk', sql.NVarChar, k.key)
-            .input('vv', sql.NVarChar, k.val)
-            .query('INSERT INTO settings (key_name, val) VALUES (@kk, @vv)');
-        }
+          .input('vv', sql.NVarChar, k.val)
+          .query('UPDATE settings SET val = @vv WHERE key_name = @kk');
+      } else {
+        await pool.request()
+          .input('kk', sql.NVarChar, k.key)
+          .input('vv', sql.NVarChar, k.val)
+          .query('INSERT INTO settings (key_name, val) VALUES (@kk, @vv)');
       }
-      console.log(`✅ [Migration] safe_initial_balance → ${CORRECT_INITIAL_BALANCE} EGP | denoms: 200×140, 100×633, 50×497, 20×309, 10×1124, 5×943, 1×250`);
-    } else {
-      console.log(`ℹ️ [Migration] safe_initial_balance already set to ${currentRaw} EGP – skipped`);
     }
+
+    console.log(`✅ [Migration] Safe Reconciled! Target Balance: ${TARGET_SAFE_BALANCE} EGP | Net Tx Balance: ${netTxBalance} EGP | Initial Balance set to ${requiredInitialBalance} EGP`);
   } catch (err) {
     console.error('⚠️ [Migration] Failed to apply initial balance migration:', err.message);
   }
