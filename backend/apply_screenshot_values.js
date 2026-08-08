@@ -12,15 +12,15 @@ const config = {
 async function main() {
   const pool = await sql.connect(config);
 
-  const CORRECT_INITIAL_BALANCE = 7741;
+  const CORRECT_INITIAL_BALANCE = 0;
   const CORRECT_DENOMS = {
-    'safe_initial_denom_200': '140',
-    'safe_initial_denom_100': '633',
-    'safe_initial_denom_50':  '497',
-    'safe_initial_denom_20':  '309',
-    'safe_initial_denom_10':  '1124',
-    'safe_initial_denom_5':   '943',
-    'safe_initial_denom_1':   '250',
+    'safe_initial_denom_200': '0',
+    'safe_initial_denom_100': '0',
+    'safe_initial_denom_50':  '0',
+    'safe_initial_denom_20':  '0',
+    'safe_initial_denom_10':  '0',
+    'safe_initial_denom_5':   '0',
+    'safe_initial_denom_1':   '0',
   };
 
   const allKeys = [
