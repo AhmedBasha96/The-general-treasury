@@ -351,33 +351,15 @@ app.get('/api/dashboard', async (req, res) => {
       ${agencyFilter}
     `);
 
-    // هل تم تحديد فئات افتتاحية في الإعدادات؟
-    const hasInitialDenoms = (
-      (initialDenoms?.denom_200 || 0) +
-      (initialDenoms?.denom_100 || 0) +
-      (initialDenoms?.denom_50 || 0) +
-      (initialDenoms?.denom_20 || 0) +
-      (initialDenoms?.denom_10 || 0) +
-      (initialDenoms?.denom_5 || 0) +
-      (initialDenoms?.denom_1 || 0)
-    ) > 0;
-
-    const safeDenominations = hasInitialDenoms ? {
-      denom_200: initialDenoms.denom_200 || 0,
-      denom_100: initialDenoms.denom_100 || 0,
-      denom_50: initialDenoms.denom_50 || 0,
-      denom_20: initialDenoms.denom_20 || 0,
-      denom_10: initialDenoms.denom_10 || 0,
-      denom_5: initialDenoms.denom_5 || 0,
-      denom_1: initialDenoms.denom_1 || 0,
-    } : {
-      denom_200: Math.max(0, Number(denomsResult.recordset[0].denom_200) || 0),
-      denom_100: Math.max(0, Number(denomsResult.recordset[0].denom_100) || 0),
-      denom_50: Math.max(0, Number(denomsResult.recordset[0].denom_50) || 0),
-      denom_20: Math.max(0, Number(denomsResult.recordset[0].denom_20) || 0),
-      denom_10: Math.max(0, Number(denomsResult.recordset[0].denom_10) || 0),
-      denom_5: Math.max(0, Number(denomsResult.recordset[0].denom_5) || 0),
-      denom_1: Math.max(0, Number(denomsResult.recordset[0].denom_1) || 0),
+    // حساب الفئات النقدية الفعلية بالخزينة من مجموع الحركات + الفئات الافتتاحية إن وجدت
+    const safeDenominations = {
+      denom_200: Math.max(0, (Number(denomsResult.recordset[0].denom_200) || 0) + (initialDenoms?.denom_200 || 0)),
+      denom_100: Math.max(0, (Number(denomsResult.recordset[0].denom_100) || 0) + (initialDenoms?.denom_100 || 0)),
+      denom_50: Math.max(0, (Number(denomsResult.recordset[0].denom_50) || 0) + (initialDenoms?.denom_50 || 0)),
+      denom_20: Math.max(0, (Number(denomsResult.recordset[0].denom_20) || 0) + (initialDenoms?.denom_20 || 0)),
+      denom_10: Math.max(0, (Number(denomsResult.recordset[0].denom_10) || 0) + (initialDenoms?.denom_10 || 0)),
+      denom_5: Math.max(0, (Number(denomsResult.recordset[0].denom_5) || 0) + (initialDenoms?.denom_5 || 0)),
+      denom_1: Math.max(0, (Number(denomsResult.recordset[0].denom_1) || 0) + (initialDenoms?.denom_1 || 0)),
     };
     
     const physicalDenomSum = 
