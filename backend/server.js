@@ -3442,9 +3442,6 @@ async function applyInitialBalanceMigration(pool) {
 // Start Database connection and then Express server
 connectDB()
   .then(async (pool) => {
-    // تطبيق migration الرصيد الافتتاحي تلقائياً
-    await applyInitialBalanceMigration(pool);
-
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
     });
