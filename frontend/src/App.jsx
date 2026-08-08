@@ -2513,44 +2513,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                         : `تدقيق ومطابقة الخزنة: صافي حركات الوارد والمنصرف (${(dashboardData.summary.netTransactionBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م)`}
                     </span>
                   </div>
-                  {currentUser.role === 'manager' && (
-                    <button
-                      onClick={() => {
-                        const val = prompt('أدخل الرصيد الافتتاحي الصحيح (ج.م):');
-                        if (val === null) return;
-                        const num = parseFloat(val);
-                        if (isNaN(num) || num < 0) { alert('قيمة غير صالحة'); return; }
-                        fetch('/api/safe/set-initial-balance', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ initialBalance: num })
-                        })
-                          .then(r => r.json())
-                          .then(d => {
-                            if (d.success) {
-                              alert(`✅ تم تحديث الرصيد الافتتاحي بنجاح!\nالرصيد الجديد = ${d.newCashSafeBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م`);
-                              loadDashboard();
-                            } else {
-                              alert('❌ خطأ: ' + (d.error || 'حدث خطأ'));
-                            }
-                          })
-                          .catch(() => alert('❌ تعذر الاتصال بالسيرفر'));
-                      }}
-                      style={{
-                        background: 'rgba(245,158,11,0.15)',
-                        border: '1px solid rgba(245,158,11,0.4)',
-                        borderRadius: '7px',
-                        padding: '0.3rem 0.7rem',
-                        color: '#fbbf24',
-                        fontSize: '0.72rem',
-                        cursor: 'pointer',
-                        fontWeight: 700,
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      ⚙️ تعديل الرصيد الافتتاحي
-                    </button>
-                  )}
+                  {/* Manual balance edit button removed to prevent manual tampering */}
                 </div>
               </div>
             </div>
