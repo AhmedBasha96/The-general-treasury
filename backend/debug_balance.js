@@ -1,17 +1,17 @@
-require('dotenv').config();
+try { require('dotenv').config(); } catch (e) {}
 const sql = require('mssql');
 
 const config = {
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  server: process.env.DB_SERVER,
-  database: process.env.DB_NAME,
+  user: process.env.DB_USER || 'sa',
+  password: process.env.DB_PASSWORD || 'CashSafePassword123!',
+  server: process.env.DB_SERVER || 'localhost',
+  database: process.env.DB_NAME || 'cash_safe_db',
   options: { encrypt: false, trustServerCertificate: true }
 };
 
 async function main() {
   const pool = await sql.connect(config);
-  console.log('Connected to DB:', process.env.DB_NAME, 'on', process.env.DB_SERVER);
+  console.log('Connected to DB:', config.database, 'on', config.server);
 
   // إجمالي الإيداعات النقدية
   const dep = await pool.request().query(`
