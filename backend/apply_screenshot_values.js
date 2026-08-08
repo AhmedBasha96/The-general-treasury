@@ -16,11 +16,11 @@ async function main() {
   const CORRECT_DENOMS = {
     'safe_initial_denom_200': '0',
     'safe_initial_denom_100': '0',
-    'safe_initial_denom_50':  '0',
-    'safe_initial_denom_20':  '0',
-    'safe_initial_denom_10':  '0',
-    'safe_initial_denom_5':   '0',
-    'safe_initial_denom_1':   '0',
+    'safe_initial_denom_50': '0',
+    'safe_initial_denom_20': '0',
+    'safe_initial_denom_10': '0',
+    'safe_initial_denom_5': '0',
+    'safe_initial_denom_1': '0',
   };
 
   const allKeys = [

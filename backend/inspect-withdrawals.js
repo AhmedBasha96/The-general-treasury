@@ -29,7 +29,7 @@ async function run() {
       const countRes = await pool.request().query(`SELECT COUNT(*) AS cnt FROM ${tableName}`);
       console.log('Rows count:', countRes.recordset[0].cnt);
 
-      // Check numeric columns for values or sums near 138535
+      // Check numeric columns for values or sums
       for (const col of colNames) {
         if (['amount', 'balance', 'total', 'val', 'price', 'cost'].some(k => col.toLowerCase().includes(k))) {
           const sumRes = await pool.request().query(`SELECT SUM(TRY_CAST(${col} AS float)) AS sum_val, MAX(TRY_CAST(${col} AS float)) AS max_val FROM ${tableName}`);
