@@ -1677,37 +1677,8 @@ app.get('/api/reports/daily', async (req, res) => {
   try {
     const pool = getPool();
     
-    // 1. Fetch safe initial settings
-    const initialSettings = await pool.request()
-      .query("SELECT key_name, val FROM settings WHERE key_name LIKE 'safe_initial_%'");
-    
-    const initialDenoms = {
-      denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0
-    };
-    let safeInitialBalance = 0;
-    let safeInitialBalanceSet = false;
-
-    initialSettings.recordset.forEach(row => {
-      if (row.key_name === 'safe_initial_balance') {
-        safeInitialBalanceSet = true;
-      }
-      const match = row.key_name.match(/^safe_initial_denom_(\d+)$/);
-      if (match) {
-        const denom = parseInt(match[1]);
-        initialDenoms[`denom_${denom}`] = parseInt(row.val) || 0;
-      }
-    });
-
-    if (safeInitialBalanceSet) {
-      safeInitialBalance = 
-        (initialDenoms.denom_200 * 200) +
-        (initialDenoms.denom_100 * 100) +
-        (initialDenoms.denom_50 * 50) +
-        (initialDenoms.denom_20 * 20) +
-        (initialDenoms.denom_10 * 10) +
-        (initialDenoms.denom_5 * 5) +
-        (initialDenoms.denom_1 * 1);
-    }
+    // 1. Fetch safe initial balance using unified helper
+    const { safeInitialBalance } = await getSafeInitialData(pool);
 
     // 2. Calculate safe balance BEFORE this date (Opening Safe Cash Balance)
     const safeBefore = await pool.request()
@@ -1715,11 +1686,15 @@ app.get('/api/reports/daily', async (req, res) => {
       .query(`
         SELECT 
           ISNULL(SUM(CASE WHEN type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount ELSE 0 END), 0) AS total_deposits,
-          ISNULL(SUM(CASE WHEN type = 'withdrawal' THEN amount ELSE 0 END), 0) AS total_withdrawals
+          ISNULL(SUM(CASE 
+            WHEN (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+              OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved', 'disbursed') OR status IS NULL))
+            THEN amount ELSE 0 END), 0) AS total_withdrawals
         FROM transactions
         WHERE CAST(date AS DATE) < CAST(@date AS DATE) AND (
           (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
           OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+          OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved', 'disbursed') OR status IS NULL))
         )
       `);
     const openingSafeBalance = safeInitialBalance + Number(safeBefore.recordset[0].total_deposits) - Number(safeBefore.recordset[0].total_withdrawals);
