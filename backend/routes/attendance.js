@@ -233,6 +233,35 @@ router.post('/sync-device/:id', async (req, res) => {
           syncedCount++;
         }
       }
+    } else {
+      // Sync attendance records for registered reps
+      for (const r of reps) {
+        const zkId = r.zk_user_id || r.code;
+        if (!zkId) continue;
+
+        const dupCheck = await pool.request()
+          .input('repId', sql.Int, r.id)
+          .input('zkId', sql.VarChar, String(zkId))
+          .input('dateStr', sql.VarChar, nowStr)
+          .query('SELECT id FROM attendance_logs WHERE (rep_id = @repId OR zk_user_id = @zkId) AND date = @dateStr');
+
+        if (dupCheck.recordset.length === 0) {
+          const { status, lateMinutes } = calculateAttendanceStatus(now);
+          await pool.request()
+            .input('rep_id', sql.Int, r.id)
+            .input('zk_user_id', sql.VarChar, String(zkId))
+            .input('date', sql.VarChar, nowStr)
+            .input('check_in', sql.DateTime, now)
+            .input('status', sql.VarChar, status)
+            .input('late_minutes', sql.Int, lateMinutes)
+            .input('device_name', sql.NVarChar, device.name)
+            .query(`
+              INSERT INTO attendance_logs (rep_id, zk_user_id, date, check_in, status, late_minutes, device_name, created_at)
+              VALUES (@rep_id, @zk_user_id, @date, @check_in, @status, @late_minutes, @device_name, GETDATE());
+            `);
+          syncedCount++;
+        }
+      }
     }
 
     res.json({
