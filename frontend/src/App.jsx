@@ -91,26 +91,39 @@ export default function App() {
   const [companyLedgerLoading, setCompanyLedgerLoading] = useState(false);
   const [selectedCompanyForLedger, setSelectedCompanyForLedger] = useState(null);
 
-  // Daily Report States
+  // Daily & Period Report States
+  const [reportMode, setReportMode] = useState('single'); // 'single' or 'range'
   const [dailyReportDate, setDailyReportDate] = useState(new Date().toISOString().split('T')[0]);
+  const [reportStartDate, setReportStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [reportEndDate, setReportEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [dailyReportData, setDailyReportData] = useState(null);
   const [dailyReportLoading, setDailyReportLoading] = useState(false);
   const [dailyReportError, setDailyReportError] = useState('');
 
-  const handleFetchDailyReport = async (targetDate = dailyReportDate) => {
-    if (!targetDate) return;
+  const handleFetchDailyReport = async (overrideParams = {}) => {
+    const mode = overrideParams.mode || reportMode;
+    const singleDate = overrideParams.date || dailyReportDate;
+    const startD = overrideParams.startDate || reportStartDate;
+    const endD = overrideParams.endDate || reportEndDate;
+
     setDailyReportLoading(true);
     setDailyReportError('');
     try {
-      const res = await fetch(`/api/reports/daily?date=${targetDate}`);
+      let url = '';
+      if (mode === 'range') {
+        url = `/api/reports/daily?startDate=${startD}&endDate=${endD}`;
+      } else {
+        url = `/api/reports/daily?date=${singleDate}`;
+      }
+      const res = await fetch(url);
       const data = await res.json();
       if (res.ok) {
         setDailyReportData(data);
       } else {
-        setDailyReportError(data.error || 'حدث خطأ أثناء تحميل التقرير اليومي');
+        setDailyReportError(data.error || 'حدث خطأ أثناء تحميل التقرير');
       }
     } catch (err) {
-      console.error('Failed to load daily report:', err);
+      console.error('Failed to load report:', err);
       setDailyReportError('فشل الاتصال بالخادم');
     } finally {
       setDailyReportLoading(false);
@@ -7064,31 +7077,101 @@ const [showCarModal, setShowCarModal] = useState(false);
         </div>
       )}
 
-      {/* DAILY REPORT TAB */}
+      {/* DAILY & PERIOD REPORT TAB */}
       {activeTab === 'daily-report' && currentUser.role === 'manager' && (
         <div className="panel" style={{ width: '100%' }}>
           <div className="panel-header no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
-            <h2 className="panel-title">📋 تقرير حركة الخزينة والمصارف اليومي</h2>
+            <h2 className="panel-title">📋 تقرير حركة الخزينة والمصارف</h2>
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              <div className="form-group" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <label style={{ whiteSpace: 'nowrap' }}>اختر التاريخ:</label>
-                <input 
-                  type="date" 
-                  value={dailyReportDate} 
-                  onChange={(e) => {
-                    setDailyReportDate(e.target.value);
-                    handleFetchDailyReport(e.target.value);
+              
+              {/* Report Mode Selector Switch */}
+              <div style={{ display: 'flex', gap: '0.25rem', background: 'var(--bg-secondary)', padding: '0.25rem', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                <button
+                  type="button"
+                  style={{
+                    padding: '0.4rem 0.85rem',
+                    borderRadius: '8px',
+                    border: 'none',
+                    fontSize: '0.85rem',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    background: reportMode === 'single' ? 'var(--primary)' : 'transparent',
+                    color: reportMode === 'single' ? '#ffffff' : 'var(--text-secondary)'
                   }}
-                  style={{ padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontFamily: 'var(--font-cairo)' }}
-                />
+                  onClick={() => {
+                    setReportMode('single');
+                    handleFetchDailyReport({ mode: 'single', date: dailyReportDate });
+                  }}
+                >
+                  📅 يوم محدد
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    padding: '0.4rem 0.85rem',
+                    borderRadius: '8px',
+                    border: 'none',
+                    fontSize: '0.85rem',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    background: reportMode === 'range' ? 'var(--primary)' : 'transparent',
+                    color: reportMode === 'range' ? '#ffffff' : 'var(--text-secondary)'
+                  }}
+                  onClick={() => {
+                    setReportMode('range');
+                    handleFetchDailyReport({ mode: 'range', startDate: reportStartDate, endDate: reportEndDate });
+                  }}
+                >
+                  🗓️ فترة زمنيـة (من - إلى)
+                </button>
               </div>
+
+              {/* Date Inputs based on selected mode */}
+              {reportMode === 'single' ? (
+                <div className="form-group" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <label style={{ whiteSpace: 'nowrap', fontWeight: 'bold' }}>اختر التاريخ:</label>
+                  <input 
+                    type="date" 
+                    value={dailyReportDate} 
+                    onChange={(e) => {
+                      setDailyReportDate(e.target.value);
+                      handleFetchDailyReport({ mode: 'single', date: e.target.value });
+                    }}
+                    style={{ padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontFamily: 'var(--font-cairo)' }}
+                  />
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <label style={{ whiteSpace: 'nowrap', fontWeight: 'bold' }}>من:</label>
+                  <input 
+                    type="date" 
+                    value={reportStartDate} 
+                    onChange={(e) => {
+                      setReportStartDate(e.target.value);
+                      handleFetchDailyReport({ mode: 'range', startDate: e.target.value, endDate: reportEndDate });
+                    }}
+                    style={{ padding: '0.4rem 0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontFamily: 'var(--font-cairo)' }}
+                  />
+                  <label style={{ whiteSpace: 'nowrap', fontWeight: 'bold' }}>إلى:</label>
+                  <input 
+                    type="date" 
+                    value={reportEndDate} 
+                    onChange={(e) => {
+                      setReportEndDate(e.target.value);
+                      handleFetchDailyReport({ mode: 'range', startDate: reportStartDate, endDate: e.target.value });
+                    }}
+                    style={{ padding: '0.4rem 0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontFamily: 'var(--font-cairo)' }}
+                  />
+                </div>
+              )}
+
               <button className="btn btn-secondary" onClick={() => handleFetchDailyReport()} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>🔄 تحديث</button>
               <button 
                 className="btn btn-primary" 
                 onClick={() => {
                   if (!dailyReportData) return;
                   const d = dailyReportData;
-                  const reportDate = new Date(d.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                  const reportDateStr = d.isRange ? `الفترة من ${d.startDate} إلى ${d.endDate}` : d.date;
 
                   const safeSummaryRows = `
                     <tr>
@@ -7225,8 +7308,12 @@ const [showCarModal, setShowCarModal] = useState(false);
           {!dailyReportLoading && !dailyReportError && dailyReportData && (
             <div className="report-preview-container" style={{ marginTop: '1.5rem', direction: 'rtl' }}>
               <div style={{ textAlign: 'center', marginBottom: '2rem', borderBottom: '2px double var(--border-color)', paddingBottom: '1.5rem' }}>
-                <h1 style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-primary)', margin: '0.5rem 0' }}>تقرير حركة الخزينة والمصارف اليومي التفصيلي</h1>
-                <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', margin: 0 }}>تاريخ التقرير: <strong>{new Date(dailyReportData.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong></p>
+                <h1 style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-primary)', margin: '0.5rem 0' }}>
+                  {dailyReportData.isRange ? '📊 تقرير حركة الخزينة والمصارف التفصيلي (فترة زمنية)' : '📋 تقرير حركة الخزينة والمصارف التفصيلي'}
+                </h1>
+                <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', margin: 0 }}>
+                  تاريخ التقرير: <strong>{dailyReportData.isRange ? `من ${dailyReportData.startDate} إلى ${dailyReportData.endDate}` : dailyReportData.date}</strong>
+                </p>
               </div>
 
               <div className="report-section" style={{ marginBottom: '2rem' }}>
@@ -7592,8 +7679,12 @@ const [showCarModal, setShowCarModal] = useState(false);
       {dailyReportData && (
         <div className="daily-report-print-wrapper">
           <div style={{ textAlign: 'center', marginBottom: '15mm', borderBottom: '3px double #000', paddingBottom: '5mm' }}>
-            <h1 style={{ fontSize: '20pt', fontWeight: 900, margin: '2mm 0' }}>تقرير حركة الخزينة والمصارف اليومي التفصيلي</h1>
-            <p style={{ fontSize: '11pt', margin: 0 }}>تاريخ التقرير: <strong>{new Date(dailyReportData.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong></p>
+            <h1 style={{ fontSize: '20pt', fontWeight: 900, margin: '2mm 0' }}>
+              {dailyReportData.isRange ? 'تقرير حركة الخزينة والمصارف التفصيلي (فترة زمنية)' : 'تقرير حركة الخزينة والمصارف اليومي التفصيلي'}
+            </h1>
+            <p style={{ fontSize: '11pt', margin: 0 }}>
+              تاريخ التقرير: <strong>{dailyReportData.isRange ? `من ${dailyReportData.startDate} إلى ${dailyReportData.endDate}` : dailyReportData.date}</strong>
+            </p>
           </div>
 
           <div style={{ marginBottom: '10mm' }}>

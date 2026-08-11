@@ -1667,12 +1667,17 @@ app.get('/api/reps/:id/transactions', async (req, res) => {
     res.status(500).json({ error: 'حدث خطأ أثناء جلب كشف حساب المندوب' });
   }
 });
-// GET /api/reports/daily (Detailed daily report for manager)
+// GET /api/reports/daily (Detailed report for manager by single date or date range)
 app.get('/api/reports/daily', async (req, res) => {
-  const { date } = req.query; // YYYY-MM-DD
-  if (!date) {
-    return res.status(400).json({ error: 'التاريخ مطلوب لتوليد التقرير اليومي' });
+  const dateParam = req.query.date;
+  const startDate = (req.query.startDate || req.query.start_date || dateParam || '').trim();
+  const endDate = (req.query.endDate || req.query.end_date || dateParam || startDate).trim();
+
+  if (!startDate) {
+    return res.status(400).json({ error: 'التاريخ مطلوب لتوليد التقرير' });
   }
+
+  const isRange = startDate !== endDate;
 
   try {
     const pool = getPool();
@@ -1680,9 +1685,9 @@ app.get('/api/reports/daily', async (req, res) => {
     // 1. Fetch safe initial balance using unified helper
     const { safeInitialBalance } = await getSafeInitialData(pool);
 
-    // 2. Calculate safe balance BEFORE this date (Opening Safe Cash Balance)
+    // 2. Calculate safe balance BEFORE startDate (Opening Safe Cash Balance)
     const safeBefore = await pool.request()
-      .input('date', sql.VarChar, date)
+      .input('startDate', sql.VarChar, startDate)
       .query(`
         SELECT 
           ISNULL(SUM(CASE WHEN type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount ELSE 0 END), 0) AS total_deposits,
@@ -1691,7 +1696,7 @@ app.get('/api/reports/daily', async (req, res) => {
               OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved', 'disbursed') OR status IS NULL))
             THEN amount ELSE 0 END), 0) AS total_withdrawals
         FROM transactions
-        WHERE CAST(date AS DATE) < CAST(@date AS DATE) AND (
+        WHERE CAST(date AS DATE) < CAST(@startDate AS DATE) AND (
           (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
           OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
           OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved', 'disbursed') OR status IS NULL))
@@ -1699,9 +1704,10 @@ app.get('/api/reports/daily', async (req, res) => {
       `);
     const openingSafeBalance = safeInitialBalance + Number(safeBefore.recordset[0].total_deposits) - Number(safeBefore.recordset[0].total_withdrawals);
 
-    // 3. Fetch all transaction operations of the selected day
+    // 3. Fetch all transaction operations between startDate and endDate
     const dayTransactions = await pool.request()
-      .input('date', sql.VarChar, date)
+      .input('startDate', sql.VarChar, startDate)
+      .input('endDate', sql.VarChar, endDate)
       .query(`
         SELECT 
           t.id, t.rep_id, t.bank_id, t.company_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
@@ -1715,47 +1721,49 @@ app.get('/api/reports/daily', async (req, res) => {
         LEFT JOIN companies c ON t.company_id = c.id
         LEFT JOIN users u ON t.created_by = u.id
         LEFT JOIN users u2 ON t.approved_by = u2.id
-        WHERE CAST(t.date AS DATE) = CAST(@date AS DATE) AND (t.status IS NULL OR t.status != 'rejected')
+        WHERE CAST(t.date AS DATE) >= CAST(@startDate AS DATE) 
+          AND CAST(t.date AS DATE) <= CAST(@endDate AS DATE) 
+          AND (t.status IS NULL OR t.status != 'rejected')
         ORDER BY t.date ASC
       `);
 
-    // 4. Fetch list of banks and compute their opening and closing balances for this day
+    // 4. Fetch list of banks and compute their opening and closing balances for this period
     const banksList = await pool.request().query('SELECT id, name, code, initial_balance, account_number FROM banks ORDER BY name');
     
     const banksSummary = [];
     for (const bank of banksList.recordset) {
-      // Calculate bank balance BEFORE this date (Opening Bank Balance)
+      // Calculate bank balance BEFORE startDate (Opening Bank Balance)
       const bankBeforeDep = await pool.request()
         .input('bankId', sql.Int, bank.id)
-        .input('date', sql.VarChar, date)
+        .input('startDate', sql.VarChar, startDate)
         .query(`
           SELECT ISNULL(SUM(CASE
             WHEN type = 'withdrawal' THEN amount
             WHEN type = 'deposit' AND payment_method = 'bank_transfer' THEN amount
             ELSE 0 END), 0) AS total
           FROM transactions
-          WHERE bank_id = @bankId AND CAST(date AS DATE) < CAST(@date AS DATE) AND (
+          WHERE bank_id = @bankId AND CAST(date AS DATE) < CAST(@startDate AS DATE) AND (
             (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
             OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
           )
         `);
       const bankBeforeWd = await pool.request()
         .input('bankId', sql.Int, bank.id)
-        .input('date', sql.VarChar, date)
+        .input('startDate', sql.VarChar, startDate)
         .query(`
           SELECT ISNULL(SUM(CASE
             WHEN type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount
             WHEN type = 'company_transfer' THEN amount
             ELSE 0 END), 0) AS total
           FROM transactions
-          WHERE bank_id = @bankId AND CAST(date AS DATE) < CAST(@date AS DATE) AND (
+          WHERE bank_id = @bankId AND CAST(date AS DATE) < CAST(@startDate AS DATE) AND (
             (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
             OR (type = 'company_transfer' AND (status = 'approved' OR status IS NULL))
           )
         `);
       const openingBankBalance = Number(bank.initial_balance) + Number(bankBeforeDep.recordset[0].total) - Number(bankBeforeWd.recordset[0].total);
 
-      // Fetch transfers of this bank on this day
+      // Fetch transfers of this bank during this period
       const dayBankDep = dayTransactions.recordset
         .filter(t => t.bank_id === bank.id && t.type === 'deposit' && t.payment_method === 'bank_transfer' && (t.status === 'approved' || t.status === 'disbursed' || t.status === null))
         .reduce((sum, t) => sum + Number(t.amount), 0);
@@ -1788,7 +1796,7 @@ app.get('/api/reports/daily', async (req, res) => {
       });
     }
 
-    // 5. Calculate safe metrics during this day
+    // 5. Calculate safe metrics during this period
     const dayCashDeposits = dayTransactions.recordset
       .filter(t => t.type === 'deposit' && (t.payment_method === 'cash' || t.payment_method === null) && (t.status === 'approved' || t.status === 'disbursed' || t.status === null))
       .reduce((sum, t) => sum + Number(t.amount), 0);
@@ -1797,8 +1805,13 @@ app.get('/api/reports/daily', async (req, res) => {
       .reduce((sum, t) => sum + Number(t.amount), 0);
     const closingSafeBalance = openingSafeBalance + dayCashDeposits - dayCashWithdrawals;
 
+    const reportDateLabel = isRange ? `${startDate} إلى ${endDate}` : startDate;
+
     res.json({
-      date,
+      date: reportDateLabel,
+      startDate,
+      endDate,
+      isRange,
       safeSummary: {
         openingBalance: openingSafeBalance,
         deposits: dayCashDeposits,
@@ -1809,8 +1822,8 @@ app.get('/api/reports/daily', async (req, res) => {
       transactions: dayTransactions.recordset
     });
   } catch (error) {
-    console.error('Error generating daily report:', error);
-    res.status(500).json({ error: 'حدث خطأ أثناء إعداد التقرير اليومي' });
+    console.error('Error generating report:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء إعداد التقرير' });
   }
 });
 
