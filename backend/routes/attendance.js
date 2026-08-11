@@ -24,6 +24,15 @@ function calculateAttendanceStatus(checkInDate) {
   }
 }
 
+// GET /api/attendance/download-tool - Direct download of ZK Sync agent
+router.get('/download-tool', (req, res) => {
+  const path = require('path');
+  const filePath = path.join(__dirname, '..', 'uploads', 'zk_sync_agent.js');
+  res.setHeader('Content-Type', 'application/javascript');
+  res.setHeader('Content-Disposition', 'attachment; filename="zk_sync_agent.js"');
+  res.sendFile(filePath);
+});
+
 // 1. GET /api/attendance - List attendance logs with filters
 router.get('/', async (req, res) => {
   const { date, startDate, endDate, repId, status, search } = req.query;

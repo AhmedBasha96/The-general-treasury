@@ -16,9 +16,11 @@ app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ limit: '5mb', extended: true }));
 
 // Direct Download Route for ZKTeco MB20 Sync Tool
-app.get('/download-sync-tool', (req, res) => {
-  const filePath = path.join(__dirname, '..', 'zk_sync_agent.js');
-  res.download(filePath, 'zk_sync_agent.js');
+app.get('/api/download-sync-tool', (req, res) => {
+  const filePath = path.join(__dirname, 'zk_sync_agent.js');
+  res.setHeader('Content-Type', 'application/javascript');
+  res.setHeader('Content-Disposition', 'attachment; filename="zk_sync_agent.js"');
+  res.sendFile(filePath);
 });
 
 // API Status endpoint
