@@ -314,6 +314,24 @@ export default function AttendanceManagement() {
     }
   };
 
+  const handleFetchAllOnline = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/attendance/sync-device/1?fetch_all=true');
+      const data = await res.json();
+      if (res.ok) {
+        setSuccessMsg(data.message || 'تم استدعاء وتفريغ البصمات أونلاين بنجاح');
+        loadAttendance();
+      } else {
+        setError(data.error || 'فشل استدعاء البصمات أونلاين');
+      }
+    } catch (err) {
+      setError('حدث خطأ أثناء استدعاء البصمات أونلاين');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div style={{ padding: '1rem', direction: 'rtl' }}>
       
@@ -330,6 +348,12 @@ export default function AttendanceManagement() {
         </div>
 
         <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <button 
+            onClick={handleFetchAllOnline}
+            style={{ padding: '0.65rem 1.1rem', background: '#059669', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '0.88rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', boxShadow: '0 4px 12px rgba(5,150,105,0.25)' }}
+          >
+            📥 استدعاء بصمات الذاكرة أونلاين
+          </button>
           <button 
             onClick={handleLivePing}
             style={{ padding: '0.65rem 1.1rem', background: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '0.88rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', boxShadow: '0 4px 12px rgba(2,132,199,0.25)' }}
