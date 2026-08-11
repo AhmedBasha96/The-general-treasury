@@ -135,11 +135,18 @@ router.post('/sync-device/:id', async (req, res) => {
       .input('id', sql.Int, parseInt(id))
       .query('SELECT * FROM zk_devices WHERE id = @id');
 
+    let device;
     if (deviceRes.recordset.length === 0) {
-      return res.status(404).json({ error: 'جهاز البصمة غير موجود' });
+      // Auto-create default ZKTeco MB20 device if missing
+      const insertDev = await pool.request().query(`
+        INSERT INTO zk_devices (name, ip_address, port, status, created_at)
+        VALUES (N'جهاز بصمة ZKTeco MB20', '192.168.1.201', 4370, 'online', GETDATE());
+        SELECT SCOPE_IDENTITY() AS id;
+      `);
+      device = { id: insertDev.recordset[0].id, name: 'جهاز بصمة ZKTeco MB20', ip_address: '192.168.1.201', port: 4370 };
+    } else {
+      device = deviceRes.recordset[0];
     }
-
-    const device = deviceRes.recordset[0];
     const targetIp = device.ip_address;
     const targetPort = device.port || 4370;
 
