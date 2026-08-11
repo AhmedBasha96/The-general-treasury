@@ -405,7 +405,7 @@ async function createTables() {
       END
     `);
 
-    // Ensure plate_letters, plate_numbers, driver_name, vehicle_type and model columns exist in cars table
+    // Ensure plate_letters, plate_numbers, driver_name, vehicle_type, model, odometer_km, license_expiry_date, status, fuel_type, notes exist
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('cars') AND name = 'plate_letters')
       BEGIN
@@ -426,6 +426,26 @@ async function createTables() {
       IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('cars') AND name = 'model')
       BEGIN
         ALTER TABLE cars ADD model NVARCHAR(100) NULL;
+      END
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('cars') AND name = 'odometer_km')
+      BEGIN
+        ALTER TABLE cars ADD odometer_km INT NULL DEFAULT 0;
+      END
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('cars') AND name = 'license_expiry_date')
+      BEGIN
+        ALTER TABLE cars ADD license_expiry_date DATE NULL;
+      END
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('cars') AND name = 'status')
+      BEGIN
+        ALTER TABLE cars ADD status NVARCHAR(50) NULL DEFAULT N'نشطة';
+      END
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('cars') AND name = 'fuel_type')
+      BEGIN
+        ALTER TABLE cars ADD fuel_type NVARCHAR(50) NULL DEFAULT N'سولار';
+      END
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('cars') AND name = 'notes')
+      BEGIN
+        ALTER TABLE cars ADD notes NVARCHAR(MAX) NULL;
       END
     `);
 

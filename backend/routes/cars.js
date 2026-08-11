@@ -59,6 +59,11 @@ router.get('/', async (req, res) => {
         c.vehicle_type,
         c.model,
         c.image_path,
+        ISNULL(c.odometer_km, 0) AS odometer_km,
+        CONVERT(VARCHAR(10), c.license_expiry_date, 120) AS license_expiry_date,
+        ISNULL(c.status, N'نشطة') AS status,
+        ISNULL(c.fuel_type, N'سولار') AS fuel_type,
+        c.notes,
         ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS total_expenses,
         ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND t.withdrawal_sub_type = 'car_gas' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS gas_total,
         ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND t.withdrawal_sub_type = 'car_oil' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS oil_total,
@@ -66,7 +71,7 @@ router.get('/', async (req, res) => {
         COUNT(CASE WHEN t.type = 'withdrawal' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.id ELSE NULL END) AS transaction_count
       FROM cars c
       LEFT JOIN transactions t ON t.car_id = c.id
-      GROUP BY c.id, c.plate_number, c.plate_letters, c.plate_numbers, c.driver_name, c.vehicle_type, c.model, c.image_path
+      GROUP BY c.id, c.plate_number, c.plate_letters, c.plate_numbers, c.driver_name, c.vehicle_type, c.model, c.image_path, c.odometer_km, c.license_expiry_date, c.status, c.fuel_type, c.notes
       ORDER BY c.id DESC
     `);
     res.json(result.recordset);
@@ -84,6 +89,11 @@ router.post('/', upload.single('image'), async (req, res) => {
   let driver_name = fixUtf8String(req.body?.driver_name).trim();
   let vehicle_type = fixUtf8String(req.body?.vehicle_type).trim();
   let model = fixUtf8String(req.body?.model).trim();
+  let odometer_km = req.body?.odometer_km !== undefined && req.body?.odometer_km !== '' ? parseInt(req.body.odometer_km, 10) : 0;
+  let license_expiry_date = req.body?.license_expiry_date ? req.body.license_expiry_date.trim() : null;
+  let status = fixUtf8String(req.body?.status).trim() || 'نشطة';
+  let fuel_type = fixUtf8String(req.body?.fuel_type).trim() || 'سولار';
+  let notes = fixUtf8String(req.body?.notes).trim();
 
   if (!plate_number && (plate_letters || plate_numbers)) {
     plate_number = [plate_letters, plate_numbers].filter(Boolean).join(' ');
@@ -111,7 +121,12 @@ router.post('/', upload.single('image'), async (req, res) => {
       .input('vtype', sql.NVarChar(100), vehicle_type || 'نقل')
       .input('model', sql.NVarChar(100), model || 'سوزوكي')
       .input('img', sql.NVarChar(sql.MAX), imagePath)
-      .query(`INSERT INTO cars (plate_number, plate_letters, plate_numbers, driver_name, vehicle_type, model, image_path) VALUES (@plate, @letters, @numbers, @driver, @vtype, @model, @img)`);
+      .input('odo', sql.Int, isNaN(odometer_km) ? 0 : odometer_km)
+      .input('expiry', sql.Date, license_expiry_date || null)
+      .input('status', sql.NVarChar(50), status)
+      .input('ftype', sql.NVarChar(50), fuel_type)
+      .input('notes', sql.NVarChar(sql.MAX), notes || null)
+      .query(`INSERT INTO cars (plate_number, plate_letters, plate_numbers, driver_name, vehicle_type, model, image_path, odometer_km, license_expiry_date, status, fuel_type, notes) VALUES (@plate, @letters, @numbers, @driver, @vtype, @model, @img, @odo, @expiry, @status, @ftype, @notes)`);
     res.status(201).json({ message: 'تم إضافة السيارة بنجاح' });
   } catch (error) {
     console.error('Error adding car:', error);
@@ -159,6 +174,11 @@ router.put('/:id', upload.single('image'), async (req, res) => {
   let driver_name = fixUtf8String(req.body?.driver_name).trim();
   let vehicle_type = fixUtf8String(req.body?.vehicle_type).trim();
   let model = fixUtf8String(req.body?.model).trim();
+  let odometer_km = req.body?.odometer_km !== undefined && req.body?.odometer_km !== '' ? parseInt(req.body.odometer_km, 10) : 0;
+  let license_expiry_date = req.body?.license_expiry_date ? req.body.license_expiry_date.trim() : null;
+  let status = fixUtf8String(req.body?.status).trim() || 'نشطة';
+  let fuel_type = fixUtf8String(req.body?.fuel_type).trim() || 'سولار';
+  let notes = fixUtf8String(req.body?.notes).trim();
 
   if (!plate_number && (plate_letters || plate_numbers)) {
     plate_number = [plate_letters, plate_numbers].filter(Boolean).join(' ');
@@ -191,7 +211,12 @@ router.put('/:id', upload.single('image'), async (req, res) => {
         .input('vtype', sql.NVarChar(100), vehicle_type || 'نقل')
         .input('model', sql.NVarChar(100), model || 'سوزوكي')
         .input('img', sql.NVarChar(sql.MAX), imagePath)
-        .query(`UPDATE cars SET plate_number = @plate, plate_letters = @letters, plate_numbers = @numbers, driver_name = @driver, vehicle_type = @vtype, model = @model, image_path = @img WHERE id = @id`);
+        .input('odo', sql.Int, isNaN(odometer_km) ? 0 : odometer_km)
+        .input('expiry', sql.Date, license_expiry_date || null)
+        .input('status', sql.NVarChar(50), status)
+        .input('ftype', sql.NVarChar(50), fuel_type)
+        .input('notes', sql.NVarChar(sql.MAX), notes || null)
+        .query(`UPDATE cars SET plate_number = @plate, plate_letters = @letters, plate_numbers = @numbers, driver_name = @driver, vehicle_type = @vtype, model = @model, image_path = @img, odometer_km = @odo, license_expiry_date = @expiry, status = @status, fuel_type = @ftype, notes = @notes WHERE id = @id`);
     } else {
       await pool.request()
         .input('id', sql.Int, id)
@@ -201,7 +226,12 @@ router.put('/:id', upload.single('image'), async (req, res) => {
         .input('driver', sql.NVarChar(255), driver_name || null)
         .input('vtype', sql.NVarChar(100), vehicle_type || 'نقل')
         .input('model', sql.NVarChar(100), model || 'سوزوكي')
-        .query(`UPDATE cars SET plate_number = @plate, plate_letters = @letters, plate_numbers = @numbers, driver_name = @driver, vehicle_type = @vtype, model = @model WHERE id = @id`);
+        .input('odo', sql.Int, isNaN(odometer_km) ? 0 : odometer_km)
+        .input('expiry', sql.Date, license_expiry_date || null)
+        .input('status', sql.NVarChar(50), status)
+        .input('ftype', sql.NVarChar(50), fuel_type)
+        .input('notes', sql.NVarChar(sql.MAX), notes || null)
+        .query(`UPDATE cars SET plate_number = @plate, plate_letters = @letters, plate_numbers = @numbers, driver_name = @driver, vehicle_type = @vtype, model = @model, odometer_km = @odo, license_expiry_date = @expiry, status = @status, fuel_type = @ftype, notes = @notes WHERE id = @id`);
     }
     res.json({ message: 'تم تحديث بيانات السيارة بنجاح' });
   } catch (error) {
