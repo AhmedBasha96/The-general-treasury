@@ -1386,8 +1386,8 @@ app.get('/api/supervisors/:id/reps', async (req, res) => {
   }
 });
 
-// 2. GET /api/reps (List all representatives with balances and agency info)
-app.get('/api/reps', async (req, res) => {
+// 2. GET /api/reps & /api/representatives (List all representatives with balances and agency info)
+const handleGetReps = async (req, res) => {
   const userRole = req.headers['x-user-role'];
   const userAgencyId = parseInt(req.headers['x-user-agency-id']);
   
@@ -1422,7 +1422,10 @@ app.get('/api/reps', async (req, res) => {
     console.error('Error fetching representatives:', error);
     res.status(500).json({ error: 'حدث خطأ أثناء جلب بيانات المناديب' });
   }
-});
+};
+
+app.get('/api/reps', handleGetReps);
+app.get('/api/representatives', handleGetReps);
 
 // 3. POST /api/reps (Add new representative mapped to agency)
 app.post('/api/reps', async (req, res) => {

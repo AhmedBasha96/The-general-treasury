@@ -1121,6 +1121,31 @@ const [showCarModal, setShowCarModal] = useState(false);
     }
   };
 
+  const loadCarLedger = async (car) => {
+    if (!car) return;
+    setSelectedCarLedger(car);
+    setCarLedgerLoading(true);
+    try {
+      const res = await fetch('/api/transactions');
+      if (res.ok) {
+        const data = await res.json();
+        const carTxs = data.filter(t => {
+          if (t.car_id && Number(t.car_id) === Number(car.id)) return true;
+          if (t.withdrawal_sub_type && (t.withdrawal_sub_type === 'car' || t.withdrawal_sub_type === 'car_gas' || t.withdrawal_sub_type === 'car_oil' || t.withdrawal_sub_type === 'car_other')) {
+            if (car.driver_name && t.rep_name && t.rep_name.trim() === car.driver_name.trim()) return true;
+            if (car.driver_rep_id && t.rep_id && Number(t.rep_id) === Number(car.driver_rep_id)) return true;
+          }
+          return false;
+        });
+        setCarLedgerData(carTxs);
+      }
+    } catch (err) {
+      console.error('Failed to load car ledger:', err);
+    } finally {
+      setCarLedgerLoading(false);
+    }
+  };
+
   const loadCarsList = async () => {
     setCarsLoaded(false);
     try {
