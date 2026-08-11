@@ -130,6 +130,149 @@ export default function App() {
     }
   };
 
+  const handleExportReportToExcel = (d = dailyReportData) => {
+    if (!d) return alert('لا توجد بيانات تقرير لتصديرها');
+
+    const titleStr = d.isRange ? `تقرير حركة الخزينة والمصارف من ${d.startDate} إلى ${d.endDate}` : `تقرير حركة الخزينة والمصارف بتاريخ ${d.date}`;
+
+    const safeSummaryRows = `
+      <tr>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center">${d.safeSummary.openingBalance.toFixed(2)}</td>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center;color:green;font-weight:bold">+${d.safeSummary.deposits.toFixed(2)}</td>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center;color:red;font-weight:bold">-${d.safeSummary.withdrawals.toFixed(2)}</td>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center;font-weight:bold">${d.safeSummary.closingBalance.toFixed(2)}</td>
+      </tr>`;
+
+    const bankRows = d.banksSummary.map(b => `
+      <tr>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center;font-weight:bold">${b.code}</td>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:right">${b.name}</td>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center">${b.account_number || ''}</td>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center">${b.openingBalance.toFixed(2)}</td>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center;color:green">+${b.deposits.toFixed(2)}</td>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center;color:red">-${b.withdrawals.toFixed(2)}</td>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center;font-weight:bold">${b.closingBalance.toFixed(2)}</td>
+      </tr>`).join('');
+
+    const txRows = d.transactions.length === 0
+      ? `<tr><td colspan="7" style="border:1px solid #cbd5e1;padding:12px;text-align:center">لا توجد عمليات مسجلة في هذه الفترة</td></tr>`
+      : d.transactions.map(tx => {
+          const subTypeLabel = tx.withdrawal_sub_type === 'car' ? 'مصاريف سيارات'
+            : tx.withdrawal_sub_type === 'car_gas' ? 'جاز سيارات'
+            : tx.withdrawal_sub_type === 'car_oil' ? 'زيت/صيانة'
+            : tx.withdrawal_sub_type === 'salary' ? 'رواتب'
+            : tx.withdrawal_sub_type === 'commission' ? 'عمولات'
+            : tx.withdrawal_sub_type === 'loan' ? 'سلفة'
+            : tx.withdrawal_sub_type === 'direct_rent' ? 'إيجار'
+            : tx.withdrawal_sub_type === 'direct_operational' ? 'تشغيل عامة'
+            : tx.withdrawal_sub_type ? 'أخرى' : '';
+          const typeLabel = tx.type === 'deposit' ? 'وارد' : tx.type === 'company_transfer' ? 'حوالة لشركة' : 'منصرف';
+          const details = [
+            tx.type === 'company_transfer' && tx.company_name ? `تحويل لشركة: ${tx.company_name}` : '',
+            tx.rep_name ? `المندوب: ${tx.rep_name}` : '',
+            subTypeLabel ? `(بند: ${subTypeLabel})` : '',
+            tx.notes ? `- ${tx.notes}` : ''
+          ].filter(Boolean).join(' ');
+          const payMethod = tx.bank_name ? `بنك: ${tx.bank_name}` : 'نقدي بالخزينة';
+          const txDateStr = new Date(tx.date).toLocaleString('ar-EG');
+          return `<tr>
+            <td style="border:1px solid #cbd5e1;padding:8px;text-align:center">TX-${String(tx.id).padStart(6, '0')}</td>
+            <td style="border:1px solid #cbd5e1;padding:8px;text-align:center">${txDateStr}</td>
+            <td style="border:1px solid #cbd5e1;padding:8px;text-align:center;font-weight:bold">${typeLabel}</td>
+            <td style="border:1px solid #cbd5e1;padding:8px;text-align:right">${details || '—'}</td>
+            <td style="border:1px solid #cbd5e1;padding:8px;text-align:center">${payMethod}</td>
+            <td style="border:1px solid #cbd5e1;padding:8px;text-align:center;font-weight:bold">${Number(tx.amount).toFixed(2)}</td>
+            <td style="border:1px solid #cbd5e1;padding:8px;text-align:center">${tx.creator_name || 'أمين الخزينة'}</td>
+          </tr>`;
+        }).join('');
+
+    const excelContent = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8" />
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>تقرير الخزينة والمصارف</x:Name>
+                <x:WorksheetOptions>
+                  <x:DisplayRightToLeft/>
+                </x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+        <style>
+          body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; }
+          th { background-color: #0f172a; color: #ffffff; font-weight: bold; border: 1px solid #0f172a; padding: 10px; text-align: center; }
+          h2, h3 { color: #0f172a; }
+        </style>
+      </head>
+      <body dir="rtl">
+        <h2 style="text-align:center">${titleStr}</h2>
+        
+        <h3>أولاً: ملخص حركة الخزينة النقدية (الخزنة الفعلية)</h3>
+        <table border="1" style="border-collapse:collapse;width:100%;text-align:center;margin-bottom:20px">
+          <thead>
+            <tr style="background:#0f172a;color:#fff">
+              <th>الرصيد الافتتاحي</th>
+              <th>إجمالي الإيداعات (الوارد)</th>
+              <th>إجمالي الصرفيات (المنصرف)</th>
+              <th>الرصيد الختامي</th>
+            </tr>
+          </thead>
+          <tbody>${safeSummaryRows}</tbody>
+        </table>
+
+        <h3>ثانياً: ملخص حركة الحسابات البنكية والمصارف</h3>
+        <table border="1" style="border-collapse:collapse;width:100%;margin-bottom:20px">
+          <thead>
+            <tr style="background:#0f172a;color:#fff">
+              <th>كود البنك</th>
+              <th>اسم البنك</th>
+              <th>رقم الحساب</th>
+              <th>الرصيد الافتتاحي</th>
+              <th>إجمالي الوارد</th>
+              <th>إجمالي المنصرف</th>
+              <th>الرصيد الختامي</th>
+            </tr>
+          </thead>
+          <tbody>${bankRows}</tbody>
+        </table>
+
+        <h3>ثالثاً: كشف العمليات المفصل</h3>
+        <table border="1" style="border-collapse:collapse;width:100%">
+          <thead>
+            <tr style="background:#0f172a;color:#fff">
+              <th>رقم الحركة</th>
+              <th>التاريخ والوقت</th>
+              <th>النوع</th>
+              <th>التفاصيل والمستفيد</th>
+              <th>طريقة الدفع / الحساب</th>
+              <th>المبلغ (ج.م)</th>
+              <th>المحاسب</th>
+            </tr>
+          </thead>
+          <tbody>${txRows}</tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob(['\uFEFF' + excelContent], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const fileName = d.isRange ? `تقرير_الخزينة_${d.startDate}_إلى_${d.endDate}.xls` : `تقرير_الخزينة_${d.date}.xls`;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const loadRepLedger = async () => {
     const saved = localStorage.getItem('currentUser');
     const user = saved ? JSON.parse(saved) : null;
@@ -7166,7 +7309,20 @@ const [showCarModal, setShowCarModal] = useState(false);
               )}
 
               <button className="btn btn-secondary" onClick={() => handleFetchDailyReport()} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>🔄 تحديث</button>
+              
+              {/* Excel Export Button */}
               <button 
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => handleExportReportToExcel(dailyReportData)}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', background: '#16a34a', color: '#ffffff', borderColor: '#16a34a', fontWeight: 'bold' }}
+              >
+                📊 حفظ Excel
+              </button>
+
+              {/* Print Button */}
+              <button 
+                type="button"
                 className="btn btn-primary" 
                 onClick={() => {
                   if (!dailyReportData) return;
@@ -7193,7 +7349,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                     </tr>`).join('');
 
                   const txRows = d.transactions.length === 0
-                    ? `<tr><td colspan="7" style="text-align:center;padding:8px">لا توجد عمليات مسجلة في هذا اليوم.</td></tr>`
+                    ? `<tr><td colspan="7" style="text-align:center;padding:8px">لا توجد عمليات مسجلة في هذه الفترة.</td></tr>`
                     : d.transactions.map(tx => {
                         const subTypeLabel = tx.withdrawal_sub_type === 'car' ? 'مصاريف سيارات'
                           : tx.withdrawal_sub_type === 'car_gas' ? 'جاز سيارات'
@@ -7233,7 +7389,7 @@ const [showCarModal, setShowCarModal] = useState(false);
 <html dir="rtl" lang="ar">
 <head>
 <meta charset="utf-8"/>
-<title>التقرير اليومي - ${reportDate}</title>
+<title>تقرير حركة الخزينة والمصارف - ${reportDateStr}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Arial', 'Tahoma', sans-serif; direction: rtl; background: #fff; color: #000; padding: 12mm 15mm; font-size: 10pt; line-height: 1.6; }
@@ -7251,8 +7407,8 @@ const [showCarModal, setShowCarModal] = useState(false);
 </head>
 <body>
 <div class="header">
-  <h1>تقرير حركة الخزينة والمصارف اليومي التفصيلي</h1>
-  <p style="font-size:11pt">تاريخ التقرير: <strong>${reportDate}</strong></p>
+  <h1>تقرير حركة الخزينة والمصارف التفصيلي</h1>
+  <p style="font-size:11pt">تاريخ التقرير: <strong>${reportDateStr}</strong></p>
 </div>
 
 <h3>أولاً: ملخص حركة الخزينة النقدية (الخزنة الفعلية)</h3>
@@ -7282,6 +7438,7 @@ const [showCarModal, setShowCarModal] = useState(false);
 </html>`;
 
                   const win = window.open('', '_blank', 'width=900,height=700');
+                  if (!win) return alert('يرجى السماح بفتح النوافذ المنبثقة للطباعة');
                   win.document.write(html);
                   win.document.close();
                   win.focus();
