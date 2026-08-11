@@ -296,19 +296,27 @@ export default function AttendanceManagement() {
         
         {/* Filter Bar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
-          <div style={{ display: 'flex', gap: '0.75rem', flex: 1, minWidth: '280px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '0.75rem', flex: 1, minWidth: '280px', flexWrap: 'wrap', alignItems: 'center' }}>
             <input 
               type="date"
               className="input-field"
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
-              style={{ width: '170px' }}
+              style={{ width: '160px' }}
             />
+            {dateFilter && (
+              <button 
+                onClick={() => setDateFilter('')}
+                style={{ padding: '0.45rem 0.75rem', background: '#334155', color: '#cbd5e1', border: 'none', borderRadius: '10px', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 'bold' }}
+              >
+                📅 عرض كافة التواريخ
+              </button>
+            )}
             <select
               className="input-field"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              style={{ width: '150px' }}
+              style={{ width: '140px' }}
             >
               <option value="جميع الحالات">جميع الحالات</option>
               <option value="present">🟢 حاضر في الموعد</option>
@@ -320,11 +328,17 @@ export default function AttendanceManagement() {
               placeholder="🔍 ابحث بالاسم أو كود البصمة ZK..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ flex: 1, minWidth: '200px' }}
+              style={{ flex: 1, minWidth: '180px' }}
             />
           </div>
 
           <div style={{ display: 'flex', gap: '0.6rem' }}>
+            <button 
+              onClick={loadAttendance}
+              style={{ padding: '0.6rem 1.1rem', background: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '0.88rem', fontWeight: '800', cursor: 'pointer' }}
+            >
+              🔄 تحديث البصمات
+            </button>
             <button 
               onClick={handleExportToExcel}
               style={{ padding: '0.6rem 1.1rem', background: '#16a34a', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '0.88rem', fontWeight: '800', cursor: 'pointer' }}
