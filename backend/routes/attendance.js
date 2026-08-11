@@ -136,16 +136,27 @@ router.post('/sync-device/:id', async (req, res) => {
       .query('SELECT * FROM zk_devices WHERE id = @id');
 
     let device;
+    const reqIp = (req.body && req.body.ip_address) ? String(req.body.ip_address).trim() : null;
+
     if (deviceRes.recordset.length === 0) {
-      // Auto-create default ZKTeco MB20 device if missing
-      const insertDev = await pool.request().query(`
-        INSERT INTO zk_devices (name, ip_address, port, status, created_at)
-        VALUES (N'جهاز بصمة ZKTeco MB20', '192.168.1.201', 4370, 'online', GETDATE());
-        SELECT SCOPE_IDENTITY() AS id;
-      `);
-      device = { id: insertDev.recordset[0].id, name: 'جهاز بصمة ZKTeco MB20', ip_address: '192.168.1.201', port: 4370 };
+      const devIp = reqIp || '192.168.1.201';
+      const insertDev = await pool.request()
+        .input('ip', sql.VarChar, devIp)
+        .query(`
+          INSERT INTO zk_devices (name, ip_address, port, status, created_at)
+          VALUES (N'جهاز بصمة ZKTeco MB20', @ip, 4370, 'online', GETDATE());
+          SELECT SCOPE_IDENTITY() AS id;
+        `);
+      device = { id: insertDev.recordset[0].id, name: 'جهاز بصمة ZKTeco MB20', ip_address: devIp, port: 4370 };
     } else {
       device = deviceRes.recordset[0];
+      if (reqIp && reqIp !== device.ip_address) {
+        device.ip_address = reqIp;
+        await pool.request()
+          .input('id', sql.Int, device.id)
+          .input('ip', sql.VarChar, reqIp)
+          .query('UPDATE zk_devices SET ip_address = @ip WHERE id = @id');
+      }
     }
     const targetIp = device.ip_address;
     const targetPort = device.port || 4370;
