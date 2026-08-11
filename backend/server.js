@@ -15,6 +15,12 @@ app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ limit: '5mb', extended: true }));
 
+// Direct Download Route for ZKTeco MB20 Sync Tool
+app.get('/download-sync-tool', (req, res) => {
+  const filePath = path.join(__dirname, '..', 'zk_sync_agent.js');
+  res.download(filePath, 'zk_sync_agent.js');
+});
+
 // API Status endpoint
 app.get('/api/status', (req, res) => {
   res.json({ status: 'OK', message: 'Cash Safe API is running.' });
