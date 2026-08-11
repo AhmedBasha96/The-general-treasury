@@ -447,7 +447,73 @@ async function createTables() {
       BEGIN
         ALTER TABLE cars ADD notes NVARCHAR(MAX) NULL;
       END
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('cars') AND name = 'driver_rep_id')
+      BEGIN
+        ALTER TABLE cars ADD driver_rep_id INT NULL;
+        ALTER TABLE cars ADD CONSTRAINT FK_cars_reps FOREIGN KEY (driver_rep_id) REFERENCES representatives(id) ON DELETE SET NULL;
+      END
     `);
+
+    // Create car_fuel_logs table if not exists
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'car_fuel_logs')
+      BEGIN
+        CREATE TABLE car_fuel_logs (
+          id INT IDENTITY(1,1) PRIMARY KEY,
+          car_id INT NOT NULL,
+          driver_rep_id INT NULL,
+          transaction_id INT NULL,
+          date DATETIME DEFAULT GETDATE(),
+          odometer_reading INT NOT NULL,
+          fuel_type NVARCHAR(50) NOT NULL,
+          price_per_liter DECIMAL(18,2) NOT NULL,
+          liters DECIMAL(18,2) NOT NULL,
+          total_cost DECIMAL(18,2) NOT NULL,
+          station_name NVARCHAR(255) NULL,
+          notes NVARCHAR(MAX) NULL,
+          FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE CASCADE,
+          FOREIGN KEY (driver_rep_id) REFERENCES representatives(id) ON DELETE SET NULL
+        );
+      END
+    `);
+
+    // Create car_maintenance_logs table if not exists
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'car_maintenance_logs')
+      BEGIN
+        CREATE TABLE car_maintenance_logs (
+          id INT IDENTITY(1,1) PRIMARY KEY,
+          car_id INT NOT NULL,
+          driver_rep_id INT NULL,
+          transaction_id INT NULL,
+          date DATETIME DEFAULT GETDATE(),
+          maintenance_type NVARCHAR(100) NOT NULL,
+          odometer_reading INT NOT NULL,
+          next_service_km INT NULL,
+          cost DECIMAL(18,2) NOT NULL,
+          center_name NVARCHAR(255) NULL,
+          notes NVARCHAR(MAX) NULL,
+          FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE CASCADE,
+          FOREIGN KEY (driver_rep_id) REFERENCES representatives(id) ON DELETE SET NULL
+        );
+      END
+    `);
+
+    // Seed default official fuel prices into settings if missing
+    const fuelPrices = [
+      { key: 'fuel_price_diesel', val: '20.50' },
+      { key: 'fuel_price_gasoline80', val: '20.75' },
+      { key: 'fuel_price_gasoline92', val: '22.25' },
+      { key: 'fuel_price_gasoline95', val: '24.00' },
+      { key: 'fuel_price_cng', val: '13.00' }
+    ];
+
+    for (const fp of fuelPrices) {
+      const check = await pool.request().input('k', sql.VarChar, fp.key).query('SELECT key_name FROM settings WHERE key_name = @k');
+      if (check.recordset.length === 0) {
+        await pool.request().input('k', sql.VarChar, fp.key).input('v', sql.NVarChar, fp.val).query('INSERT INTO settings (key_name, val) VALUES (@k, @v)');
+      }
+    }
 
     // Add car_id column to transactions if missing
     await pool.request().query(`

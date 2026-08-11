@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import CarManagement from './components/CarManagement';
+import DriverPortal from './components/DriverPortal';
 
 const compressImage = (file, maxWidth = 1000, maxHeight = 1000, quality = 0.6) => {
   return new Promise((resolve, reject) => {
@@ -2193,6 +2194,12 @@ const [showCarModal, setShowCarModal] = useState(false);
       <nav className="tabs-nav" style={{ marginBottom: '2rem' }}>
         {currentUser.role === 'representative' ? (
           <>
+            <button 
+              className={`tab-btn ${activeTab === 'driver-portal' ? 'active' : ''}`}
+              onClick={() => setActiveTab('driver-portal')}
+            >
+              🚗 سيارتي وتفاصيل الوقود (بوابة السائق)
+            </button>
             <button 
               className={`tab-btn ${activeTab === 'rep-dashboard' ? 'active' : ''}`}
               onClick={() => { setActiveTab('rep-dashboard'); loadRepLedger(); }}
@@ -5046,6 +5053,11 @@ const [showCarModal, setShowCarModal] = useState(false);
             </form>
           )}
         </div>
+      )}
+
+      {/* DRIVER PORTAL TAB */}
+      {activeTab === 'driver-portal' && (
+        <DriverPortal user={currentUser} onLogout={handleLogout} />
       )}
 
       {/* REPRESENTATIVE DASHBOARD TAB */}

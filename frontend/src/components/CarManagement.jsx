@@ -102,11 +102,13 @@ function getLicenseAlert(expiryDateStr) {
 
 export default function CarManagement({ onCarAdded, onCarClick }) {
   const [cars, setCars] = useState([]);
+  const [representatives, setRepresentatives] = useState([]);
   const [plateL1, setPlateL1] = useState('');
   const [plateL2, setPlateL2] = useState('');
   const [plateL3, setPlateL3] = useState('');
   const [plateNum, setPlateNum] = useState('');
   const [driverName, setDriverName] = useState('');
+  const [driverRepId, setDriverRepId] = useState('');
   const [vehicleType, setVehicleType] = useState('نقل');
   const [model, setModel] = useState('سوزوكي');
   const [odometerKm, setOdometerKm] = useState('');
@@ -132,8 +134,18 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
     }
   };
 
+  const loadReps = async () => {
+    try {
+      const res = await fetch('/api/representatives');
+      if (res.ok) setRepresentatives(await res.json());
+    } catch (e) {
+      console.error('Error fetching reps', e);
+    }
+  };
+
   useEffect(() => {
     loadCars();
+    loadReps();
   }, []);
 
   const handleSubmit = async (e) => {
@@ -157,6 +169,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
         reqBody.append('plate_numbers', numbersStr);
         reqBody.append('plate_number', combinedPlate);
         reqBody.append('driver_name', driverName.trim());
+        reqBody.append('driver_rep_id', driverRepId || '');
         reqBody.append('vehicle_type', vehicleType.trim());
         reqBody.append('model', model.trim());
         reqBody.append('odometer_km', odometerKm);
@@ -171,6 +184,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
           plate_numbers: numbersStr, 
           plate_number: combinedPlate, 
           driver_name: driverName.trim(),
+          driver_rep_id: driverRepId || null,
           vehicle_type: vehicleType.trim(),
           model: model.trim(),
           odometer_km: odometerKm,
@@ -203,6 +217,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
     e.stopPropagation();
     setEditingCar(c);
     setDriverName(c.driver_name || '');
+    setDriverRepId(c.driver_rep_id ? String(c.driver_rep_id) : '');
     setVehicleType(c.vehicle_type || 'نقل');
     setModel(c.model || 'سوزوكي');
     setOdometerKm(c.odometer_km ? String(c.odometer_km) : '');
@@ -257,7 +272,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
 
   const resetForm = () => {
     setEditingCar(null);
-    setPlateL1(''); setPlateL2(''); setPlateL3(''); setPlateNum(''); setDriverName('');
+    setPlateL1(''); setPlateL2(''); setPlateL3(''); setPlateNum(''); setDriverName(''); setDriverRepId('');
     setVehicleType('نقل'); setModel('سوزوكي');
     setOdometerKm(''); setLicenseExpiryDate(''); setStatus('نشطة'); setFuelType('سولار'); setNotes('');
     setImage(null);
@@ -272,6 +287,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
     const matchesSearch = !searchQuery || 
       (c.plate_number && c.plate_number.includes(searchQuery)) ||
       (c.driver_name && c.driver_name.includes(searchQuery)) ||
+      (c.rep_driver_name && c.rep_driver_name.includes(searchQuery)) ||
       (c.model && c.model.includes(searchQuery));
     
     const matchesStatus = statusFilter === 'جميع الحالات' || c.status === statusFilter;
@@ -380,9 +396,29 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
               </div>
             </div>
 
-            {/* Driver Name */}
+            {/* Driver Account Link & Driver Name */}
             <div>
-              <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 'bold', fontSize: '0.85rem' }}>قائد المركبة (السائق):</label>
+              <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 'bold', fontSize: '0.85rem' }}>ربط السائق بحسابه الشخصي (للدخول للبوابة):</label>
+              <select 
+                className="input-field"
+                value={driverRepId}
+                onChange={(e) => {
+                  setDriverRepId(e.target.value);
+                  const found = representatives.find(r => String(r.id) === e.target.value);
+                  if (found) setDriverName(found.name);
+                }}
+              >
+                <option value="">-- اختار السائق من قائمة الحسابات --</option>
+                {representatives.map(r => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} ({r.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 'bold', fontSize: '0.85rem' }}>اسم قائد المركبة (أو أدخل اسم مخصص):</label>
               <input 
                 type="text" 
                 className="input-field"
