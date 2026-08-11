@@ -177,6 +177,7 @@ const handleSyncDevice = async (req, res) => {
     const reps = repsRes.recordset;
 
     let syncedCount = 0;
+    const incomingLogs = (req.body && Array.isArray(req.body.logs)) ? req.body.logs : null;
     const isFetchAll = (req.query && req.query.fetch_all === 'true') || (req.body && req.body.fetch_all === true);
 
     if (incomingLogs && incomingLogs.length > 0) {
