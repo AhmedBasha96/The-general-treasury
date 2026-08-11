@@ -181,22 +181,27 @@ router.post('/sync-device/:id', async (req, res) => {
       });
     });
 
-    // Update Device status in database
+    // Update Device status in database accurately based on real connectivity
     const now = new Date();
     await pool.request()
       .input('id', sql.Int, device.id)
-      .input('status', sql.VarChar, isConnected ? 'online' : 'online')
+      .input('status', sql.VarChar, isConnected ? 'online' : 'offline')
       .input('last_sync', sql.DateTime, now)
       .query('UPDATE zk_devices SET status = @status, last_sync = @last_sync WHERE id = @id');
+
+    if (!isConnected) {
+      return res.status(400).json({
+        success: false,
+        isConnected: false,
+        error: `🔴 يتعذر الوصول المباشر لجهاز البصمة ${device.name} (IP: ${targetIp}:${targetPort}) - غير متصل حالياً!`
+      });
+    }
 
     // Fetch representatives list for matching
     const repsRes = await pool.request().query('SELECT id, code, name, zk_user_id FROM representatives');
     const reps = repsRes.recordset;
 
     let syncedCount = 0;
-    const nowStr = now.toISOString().slice(0, 10);
-
-    // Accept custom logs payload if provided by ZK reader agent
     const incomingLogs = (req.body && Array.isArray(req.body.logs)) ? req.body.logs : null;
 
     if (incomingLogs && incomingLogs.length > 0) {
@@ -237,9 +242,9 @@ router.post('/sync-device/:id', async (req, res) => {
 
     res.json({
       success: true,
-      message: isConnected ? `تمت المزامنة المباشرة بنجاح مع جهاز ${device.name} (${syncedCount} حركات جديدة)` : `تم التوصيل والمزامنة بنجاح مع جهاز ${device.name} (${syncedCount} حركات جديدة)`,
-      syncedCount,
-      isConnected
+      isConnected: true,
+      message: `🟢 تمت المزامنة المباشرة بنجاح مع جهاز ${device.name} (${syncedCount} حركات جديدة)`,
+      syncedCount
     });
 
   } catch (error) {
