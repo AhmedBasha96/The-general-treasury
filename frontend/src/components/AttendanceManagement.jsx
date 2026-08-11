@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 
 export default function AttendanceManagement() {
   const [attendanceLogs, setAttendanceLogs] = useState([]);
-  const [devices, setDevices] = useState([]);
   const [representatives, setRepresentatives] = useState([]);
 
   const [dateFilter, setDateFilter] = useState(new Date().toISOString().slice(0, 10));
@@ -10,23 +9,14 @@ export default function AttendanceManagement() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Modals
+  // Manual Check-in Modal
   const [showManualModal, setShowManualModal] = useState(false);
-  const [showDeviceModal, setShowDeviceModal] = useState(false);
-
-  // Manual Check-in Form
   const [manualRepId, setManualRepId] = useState('');
   const [manualCheckIn, setManualCheckIn] = useState(new Date().toISOString().slice(0, 16));
   const [manualNotes, setManualNotes] = useState('');
-
-  // Device Form
-  const [deviceName, setDeviceName] = useState('جهاز بصمة مقر الشركة');
-  const [deviceIp, setDeviceIp] = useState('192.168.1.201');
-  const [devicePort, setDevicePort] = useState('4370');
 
   const loadAttendance = async () => {
     setLoading(true);
@@ -47,17 +37,6 @@ export default function AttendanceManagement() {
     }
   };
 
-  const loadDevices = async () => {
-    try {
-      const res = await fetch('/api/attendance/devices');
-      if (res.ok) {
-        setDevices(await res.json());
-      }
-    } catch (e) {
-      console.error('Error fetching devices', e);
-    }
-  };
-
   const loadReps = async () => {
     try {
       const res = await fetch('/api/reps');
@@ -71,31 +50,8 @@ export default function AttendanceManagement() {
 
   useEffect(() => {
     loadAttendance();
-    loadDevices();
     loadReps();
   }, [dateFilter, statusFilter]);
-
-  // Handle direct ZKTeco IP sync
-  const handleSyncDevice = async (deviceId) => {
-    setSyncing(true);
-    setError('');
-    setSuccessMsg('');
-    try {
-      const res = await fetch(`/api/attendance/sync-device/${deviceId}`, { method: 'POST' });
-      const data = await res.json();
-      if (res.ok) {
-        setSuccessMsg(data.message || 'تمت المزامنة بنجاح');
-        loadAttendance();
-        loadDevices();
-      } else {
-        setError(data.error || 'فشلت المزامنة مع جهاز البصمة');
-      }
-    } catch (e) {
-      setError('تعذر الاتصال بالخادم لمزامنة البصمة');
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   // Handle manual attendance submission
   const handleManualSubmit = async (e) => {
@@ -131,85 +87,6 @@ export default function AttendanceManagement() {
     }
   };
 
-  // Handle adding ZK Device
-  const handleAddDevice = async (e) => {
-    e.preventDefault();
-    if (!deviceName || !deviceIp) return setError('اسم الجهاز وعنوان الـ IP مطلوبان');
-    setLoading(true);
-    setError('');
-
-    try {
-      const res = await fetch('/api/attendance/devices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: deviceName,
-          ip_address: deviceIp,
-          port: devicePort
-        })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setShowDeviceModal(false);
-        loadDevices();
-        setSuccessMsg('تم إضافة جهاز بصمة ZKTeco جديد بنجاح');
-      } else {
-        setError(data.error || 'فشل إضافة الجهاز');
-      }
-    } catch (e) {
-      setError('تعذر الاتصال بالخادم');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Handle file import
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      try {
-        const text = evt.target.result;
-        const lines = text.split('\n').filter(Boolean);
-        const records = [];
-
-        for (let i = 1; i < lines.length; i++) {
-          const cols = lines[i].split(/,|\t/).map(c => c.trim().replace(/^"|"$/g, ''));
-          if (cols.length >= 2) {
-            const zkCode = cols[0];
-            const timeStr = cols[1] || cols[2];
-            if (zkCode && timeStr) {
-              records.push({ zk_user_id: zkCode, check_in: timeStr });
-            }
-          }
-        }
-
-        if (records.length === 0) {
-          return alert('لم يتم العثور على حركات بصمة صحيحة بالملف');
-        }
-
-        const res = await fetch('/api/attendance/import-zk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ records })
-        });
-
-        const data = await res.json();
-        if (res.ok) {
-          alert(data.message || 'تم استيراد الملف بنجاح');
-          loadAttendance();
-        } else {
-          alert(data.error || 'فشل استيراد الملف');
-        }
-      } catch (err) {
-        alert('حدث خطأ أثناء قراءة ملف البصمة');
-      }
-    };
-    reader.readAsText(file);
-  };
-
   // Export to Excel
   const handleExportToExcel = () => {
     if (attendanceLogs.length === 0) return alert('لا توجد سجلات حضور للتصدير');
@@ -240,7 +117,7 @@ export default function AttendanceManagement() {
         </style>
       </head>
       <body>
-        <h2>📋 تقرير سجلات حضور أجهزة ZKTeco (${dateFilter || 'شامل'})</h2>
+        <h2>📋 تقرير بصمة الحضور المباشرة (${dateFilter || 'شامل'})</h2>
         <table>
           <thead>
             <tr>
@@ -264,7 +141,7 @@ export default function AttendanceManagement() {
                 <td>${a.date}</td>
                 <td>${new Date(a.check_in).toLocaleTimeString('ar-EG')}</td>
                 <td>${a.late_minutes || 0} دقيقة</td>
-                <td>${a.status === 'present' ? 'حاضر' : a.status === 'late' ? 'متأخر' : 'غائب'}</td>
+                <td>${a.status === 'present' ? 'حاضر في الموعد' : 'متأخر'}</td>
                 <td>${a.device_name || '—'}</td>
                 <td>${a.notes || '—'}</td>
               </tr>
@@ -304,7 +181,7 @@ export default function AttendanceManagement() {
           </style>
         </head>
         <body>
-          <h2>📋 كشف بصمة الحضور المعتمد (ZKTeco)</h2>
+          <h2>📋 كشف بصمة الحضور المعتمد (ZKTeco Direct Sync)</h2>
           <p>التاريخ: ${dateFilter || 'كافة السجلات'} | عدد الحركات: ${attendanceLogs.length}</p>
           <table>
             <thead>
@@ -328,7 +205,7 @@ export default function AttendanceManagement() {
                   <td>${a.date}</td>
                   <td><strong>${new Date(a.check_in).toLocaleTimeString('ar-EG')}</strong></td>
                   <td style="color: ${a.late_minutes > 0 ? '#dc2626' : '#16a34a'};">${a.late_minutes > 0 ? `${a.late_minutes} دقيقة` : 'في الموعد'}</td>
-                  <td>${a.status === 'present' ? '🟢 حاضر' : a.status === 'late' ? '🟠 متأخر' : '🔴 غائب'}</td>
+                  <td>${a.status === 'present' ? '🟢 حاضر' : '🟠 متأخر'}</td>
                   <td>${a.device_name || '—'}</td>
                 </tr>
               `).join('')}
@@ -360,44 +237,24 @@ export default function AttendanceManagement() {
   return (
     <div style={{ padding: '1rem', direction: 'rtl' }}>
       
-      {/* Top ZKTeco Control Bar */}
+      {/* Top ZKTeco Clean Direct Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem', background: 'var(--bg-secondary, #1e293b)', padding: '1.15rem 1.5rem', borderRadius: '20px', border: '1px solid var(--border-color, #334155)' }}>
         <div>
-          <h3 style={{ margin: 0, color: '#f8fafc', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            🕒 نظام بصمة الحضور والربط المباشر بـ ZKTeco
+          <h3 style={{ margin: 0, color: '#f8fafc', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            🕒 نظام بصمة الحضور المباشر (ZKTeco Direct Push)
+            <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.6rem', borderRadius: '10px', background: 'rgba(16,185,129,0.15)', color: '#4ade80', border: '1px solid rgba(16,185,129,0.3)', fontWeight: 'bold' }}>
+              🟢 الربط المباشر أونلاين نشط
+            </span>
           </h3>
-          <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>تتبع وقت حضور السائقين والموظفين، الربط الشبكي المباشر، وتحديد دقائق التأخير</span>
+          <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>استقبال حركات الحضور وتأخيرات السائقين والموظفين أونلاين ومباشرة من جهاز البصمة</span>
         </div>
 
         <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
-          {devices.map(dev => (
-            <button 
-              key={dev.id}
-              onClick={() => handleSyncDevice(dev.id)}
-              disabled={syncing}
-              style={{ padding: '0.65rem 1rem', background: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '0.88rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', boxShadow: '0 4px 12px rgba(37,99,235,0.25)' }}
-            >
-              🔄 مزامنة {dev.name} ({dev.ip_address})
-            </button>
-          ))}
-          
-          <button 
-            onClick={() => setShowDeviceModal(true)}
-            style={{ padding: '0.65rem 1rem', background: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '0.88rem', fontWeight: '800', cursor: 'pointer' }}
-          >
-            ➕ إضافة جهاز ZK
-          </button>
-
-          <label style={{ padding: '0.65rem 1rem', background: '#059669', color: '#ffffff', borderRadius: '12px', fontSize: '0.88rem', fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-            📁 استيراد ملف ZK
-            <input type="file" accept=".csv,.txt,.dat" onChange={handleFileUpload} style={{ display: 'none' }} />
-          </label>
-
           <button 
             onClick={() => setShowManualModal(true)}
-            style={{ padding: '0.65rem 1rem', background: '#7c3aed', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '0.88rem', fontWeight: '800', cursor: 'pointer' }}
+            style={{ padding: '0.65rem 1.1rem', background: '#7c3aed', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '0.88rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', boxShadow: '0 4px 12px rgba(124,58,237,0.25)' }}
           >
-            ➕ تسجيل يدوي
+            ➕ تسجيل حضور يدوي (استثنائي)
           </button>
         </div>
       </div>
@@ -485,7 +342,7 @@ export default function AttendanceManagement() {
 
         {/* Attendance Table */}
         {loading ? (
-          <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8', fontSize: '1.1rem' }}>جاري تحميل سجلات البصمة... ⏳</div>
+          <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8', fontSize: '1.1rem' }}>جاري جلب سجلات البصمة... ⏳</div>
         ) : filteredLogs.length === 0 ? (
           <div style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8' }}>
             <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🕒</div>
@@ -503,7 +360,7 @@ export default function AttendanceManagement() {
                   <th style={{ padding: '0.85rem', textAlign: 'center' }}>وقت الحضور</th>
                   <th style={{ padding: '0.85rem', textAlign: 'center' }}>التأخير (بالدقيقة)</th>
                   <th style={{ padding: '0.85rem', textAlign: 'center' }}>حالة الحضور</th>
-                  <th style={{ padding: '0.85rem', textAlign: 'center' }}>جهاز البصمة</th>
+                  <th style={{ padding: '0.85rem', textAlign: 'center' }}>المصدر</th>
                 </tr>
               </thead>
               <tbody>
@@ -547,7 +404,7 @@ export default function AttendanceManagement() {
         )}
       </div>
 
-      {/* MODAL 1: Manual Attendance Entry */}
+      {/* MODAL: Manual Attendance Entry (Emergency only) */}
       {showManualModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.85)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '1rem' }}>
           <div style={{ background: 'linear-gradient(145deg, #1e293b 0%, #0f172a 100%)', borderRadius: '24px', maxWidth: '480px', width: '100%', padding: '1.75rem', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6)', direction: 'rtl', color: '#f8fafc' }}>
@@ -582,40 +439,6 @@ export default function AttendanceManagement() {
               <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
                 <button type="submit" className="btn btn-primary" style={{ flex: 1, padding: '0.75rem', fontWeight: 'bold', background: '#2563eb' }}>حفظ تسجيل الحضور</button>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowManualModal(false)} style={{ padding: '0.75rem 1.25rem' }}>إلغاء</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 2: Add ZKTeco Device */}
-      {showDeviceModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.85)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '1rem' }}>
-          <div style={{ background: 'linear-gradient(145deg, #1e293b 0%, #0f172a 100%)', borderRadius: '24px', maxWidth: '480px', width: '100%', padding: '1.75rem', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6)', direction: 'rtl', color: '#f8fafc' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #334155', paddingBottom: '0.75rem' }}>
-              <h3 style={{ margin: 0, fontWeight: '800' }}>➕ إضافة جهاز بصمة ZKTeco شبكي</h3>
-              <button onClick={() => setShowDeviceModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', color: '#94a3b8', cursor: 'pointer' }}>✕</button>
-            </div>
-            
-            <form onSubmit={handleAddDevice} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 'bold', fontSize: '0.85rem', color: '#cbd5e1' }}>اسم الجهاز:</label>
-                <input type="text" className="input-field" style={{ width: '100%', background: '#0f172a', color: '#f8fafc', padding: '0.65rem' }} placeholder="مثال: جهاز بصمة مقر الشركة" value={deviceName} onChange={(e) => setDeviceName(e.target.value)} required />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 'bold', fontSize: '0.85rem', color: '#cbd5e1' }}>عنوان IP الجهاز بالشبكة (IP Address):</label>
-                <input type="text" className="input-field" style={{ width: '100%', background: '#0f172a', color: '#f8fafc', padding: '0.65rem', direction: 'ltr', textAlign: 'center' }} placeholder="192.168.1.201" value={deviceIp} onChange={(e) => setDeviceIp(e.target.value)} required />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 'bold', fontSize: '0.85rem', color: '#cbd5e1' }}>منفذ الاتصال الشبكي (Port):</label>
-                <input type="number" className="input-field" style={{ width: '100%', background: '#0f172a', color: '#f8fafc', padding: '0.65rem', direction: 'ltr', textAlign: 'center' }} value={devicePort} onChange={(e) => setDevicePort(e.target.value)} required />
-              </div>
-
-              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
-                <button type="submit" className="btn btn-primary" style={{ flex: 1, padding: '0.75rem', fontWeight: 'bold', background: '#0284c7' }}>إضافة الجهاز بالشبكة</button>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowDeviceModal(false)} style={{ padding: '0.75rem 1.25rem' }}>إلغاء</button>
               </div>
             </form>
           </div>

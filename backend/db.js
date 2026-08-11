@@ -515,10 +515,14 @@ async function createTables() {
       }
     }
 
-    // Add car_id column to transactions if missing
+    // Add car_id and attendance tables if missing
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'car_id')
-      BEGIN
+        BEGIN
+          ALTER TABLE transactions ADD car_id INT NULL;
+          ALTER TABLE transactions ADD CONSTRAINT FK_transactions_cars FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE SET NULL;
+        END
+
         -- Add zk_user_id column to representatives if missing
         IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('representatives') AND name = 'zk_user_id')
         BEGIN
@@ -556,6 +560,7 @@ async function createTables() {
             FOREIGN KEY (rep_id) REFERENCES representatives(id) ON DELETE SET NULL
           );
         END
+      `);
 
     console.log('Database tables verified/created (including ZKTeco Attendance).');
   } catch (error) {

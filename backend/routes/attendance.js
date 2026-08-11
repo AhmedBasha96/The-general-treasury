@@ -261,7 +261,7 @@ router.post('/import-zk', async (req, res) => {
           .input('check_in', sql.DateTime, checkInDate)
           .input('status', sql.VarChar, status)
           .input('late_minutes', sql.Int, lateMinutes)
-          .input('device_name', sql.NVarChar, rec.device_name || N'برنامج ZKTeco')
+          .input('device_name', sql.NVarChar, rec.device_name || 'برنامج ZKTeco')
           .query(`
             INSERT INTO attendance_logs (rep_id, zk_user_id, date, check_in, status, late_minutes, device_name, created_at)
             VALUES (@rep_id, @zk_user_id, @date, @check_in, @status, @late_minutes, @device_name, GETDATE());
@@ -324,7 +324,7 @@ router.post('/iclock/cdata', async (req, res) => {
               .input('check_in', sql.DateTime, checkInDate)
               .input('status', sql.VarChar, status)
               .input('late_minutes', sql.Int, lateMinutes)
-              .input('device_name', sql.NVarChar, N'بصمة ZKTeco ADMS الأونلاين')
+              .input('device_name', sql.NVarChar, 'بصمة ZKTeco ADMS الأونلاين')
               .query(`
                 INSERT INTO attendance_logs (rep_id, zk_user_id, date, check_in, status, late_minutes, device_name, created_at)
                 VALUES (@rep_id, @zk_user_id, @date, @check_in, @status, @late_minutes, @device_name, GETDATE());
@@ -370,7 +370,7 @@ router.post('/manual', async (req, res) => {
       .input('check_in', sql.DateTime, checkInDate)
       .input('status', sql.VarChar, status)
       .input('late_minutes', sql.Int, lateMinutes)
-      .input('device_name', sql.NVarChar, N'تسجيل يدوي (المشرف)')
+      .input('device_name', sql.NVarChar, 'تسجيل يدوي (المشرف)')
       .input('notes', sql.NVarChar, notes ? notes.trim() : null)
       .query(`
         INSERT INTO attendance_logs (rep_id, zk_user_id, date, check_in, status, late_minutes, device_name, notes, created_at)
