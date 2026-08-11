@@ -234,6 +234,19 @@ export default function AttendanceManagement() {
   const lateCount = attendanceLogs.filter(a => a.status === 'late').length;
   const totalLateMins = attendanceLogs.reduce((sum, a) => sum + (Number(a.late_minutes) || 0), 0);
 
+  const handleClearAll = async () => {
+    if (!window.confirm('هل أنت تأكد من مسح السجلات التجريبية وتنظيف جدول الحضور؟')) return;
+    try {
+      const res = await fetch('/api/attendance/clear-all', { method: 'POST' });
+      if (res.ok) {
+        loadAttendance();
+        setSuccessMsg('تم مسح السجلات التجريبية بنجاح');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <div style={{ padding: '1rem', direction: 'rtl' }}>
       
@@ -250,6 +263,13 @@ export default function AttendanceManagement() {
         </div>
 
         <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <button 
+            onClick={handleClearAll}
+            style={{ padding: '0.65rem 1.1rem', background: '#dc2626', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '0.88rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+          >
+            🗑️ مسح السجلات التجريبية
+          </button>
+
           <button 
             onClick={() => setShowManualModal(true)}
             style={{ padding: '0.65rem 1.1rem', background: '#7c3aed', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '0.88rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', boxShadow: '0 4px 12px rgba(124,58,237,0.25)' }}

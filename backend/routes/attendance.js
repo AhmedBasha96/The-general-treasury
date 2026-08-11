@@ -233,36 +233,6 @@ router.post('/sync-device/:id', async (req, res) => {
           syncedCount++;
         }
       }
-    } else {
-      // Default direct sync for registered representatives
-      for (const r of reps) {
-        const zkId = r.zk_user_id || r.code;
-        if (!zkId) continue;
-
-        const checkToday = await pool.request()
-          .input('repId', sql.Int, r.id)
-          .input('zkId', sql.VarChar, String(zkId))
-          .input('dateStr', sql.VarChar, nowStr)
-          .query('SELECT id FROM attendance_logs WHERE (rep_id = @repId OR zk_user_id = @zkId) AND date = @dateStr');
-
-        if (checkToday.recordset.length === 0) {
-          const { status, lateMinutes } = calculateAttendanceStatus(now);
-
-          await pool.request()
-            .input('rep_id', sql.Int, r.id)
-            .input('zk_user_id', sql.VarChar, String(zkId))
-            .input('date', sql.VarChar, nowStr)
-            .input('check_in', sql.DateTime, now)
-            .input('status', sql.VarChar, status)
-            .input('late_minutes', sql.Int, lateMinutes)
-            .input('device_name', sql.NVarChar, device.name)
-            .query(`
-              INSERT INTO attendance_logs (rep_id, zk_user_id, date, check_in, status, late_minutes, device_name, created_at)
-              VALUES (@rep_id, @zk_user_id, @date, @check_in, @status, @late_minutes, @device_name, GETDATE());
-            `);
-          syncedCount++;
-        }
-      }
     }
 
     res.json({
@@ -462,6 +432,18 @@ router.delete('/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting attendance log:', error);
     res.status(500).json({ error: 'فشل حذف سجل الحضور' });
+  }
+});
+
+// DELETE /api/attendance/clear-all - Clear dummy/test attendance logs
+router.post('/clear-all', async (req, res) => {
+  try {
+    const pool = getPool();
+    await pool.request().query("DELETE FROM attendance_logs");
+    res.json({ success: true, message: 'تم مسح السجلات التجريبية وتنظيف جدول الحضور بنجاح' });
+  } catch (error) {
+    console.error('Error clearing attendance logs:', error);
+    res.status(500).json({ error: 'فشل مسح السجلات' });
   }
 });
 
