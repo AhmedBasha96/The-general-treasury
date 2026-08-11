@@ -176,35 +176,74 @@ router.post('/sync-device/:id', async (req, res) => {
     const reps = repsRes.recordset;
 
     let syncedCount = 0;
-    const todayStr = now.toISOString().slice(0, 10);
+    const nowStr = now.toISOString().slice(0, 10);
 
-    // Process attendance logs from device (or create test sync record if testing)
-    for (const r of reps) {
-      const zkId = r.zk_user_id || r.code;
-      if (!zkId) continue;
+    // Accept custom logs payload if provided by ZK reader agent
+    const incomingLogs = (req.body && Array.isArray(req.body.logs)) ? req.body.logs : null;
 
-      // Check if already checked in today
-      const checkToday = await pool.request()
-        .input('repId', sql.Int, r.id)
-        .input('dateStr', sql.VarChar, todayStr)
-        .query('SELECT id FROM attendance_logs WHERE (rep_id = @repId OR zk_user_id = @zkId) AND date = @dateStr');
+    if (incomingLogs && incomingLogs.length > 0) {
+      for (const rec of incomingLogs) {
+        const zkCode = String(rec.zk_user_id || rec.code || '').trim();
+        const checkInTime = rec.check_in ? new Date(rec.check_in) : now;
+        if (!zkCode || isNaN(checkInTime.getTime())) continue;
 
-      if (checkToday.recordset.length === 0) {
-        const { status, lateMinutes } = calculateAttendanceStatus(now);
+        const dateStr = checkInTime.toISOString().slice(0, 10);
+        const matchedRep = reps.find(r => 
+          (r.zk_user_id && String(r.zk_user_id).trim() === zkCode) ||
+          (r.code && String(r.code).trim() === zkCode)
+        );
 
-        await pool.request()
-          .input('rep_id', sql.Int, r.id)
-          .input('zk_user_id', sql.VarChar, String(zkId))
-          .input('date', sql.VarChar, todayStr)
-          .input('check_in', sql.DateTime, now)
-          .input('status', sql.VarChar, status)
-          .input('late_minutes', sql.Int, lateMinutes)
-          .input('device_name', sql.NVarChar, device.name)
-          .query(`
-            INSERT INTO attendance_logs (rep_id, zk_user_id, date, check_in, status, late_minutes, device_name, created_at)
-            VALUES (@rep_id, @zk_user_id, @date, @check_in, @status, @late_minutes, @device_name, GETDATE());
-          `);
-        syncedCount++;
+        const dupCheck = await pool.request()
+          .input('zkCode', sql.VarChar, zkCode)
+          .input('dateStr', sql.VarChar, dateStr)
+          .query('SELECT id FROM attendance_logs WHERE zk_user_id = @zkCode AND date = @dateStr');
+
+        if (dupCheck.recordset.length === 0) {
+          const { status, lateMinutes } = calculateAttendanceStatus(checkInTime);
+          await pool.request()
+            .input('rep_id', sql.Int, matchedRep ? matchedRep.id : null)
+            .input('zk_user_id', sql.VarChar, zkCode)
+            .input('date', sql.VarChar, dateStr)
+            .input('check_in', sql.DateTime, checkInTime)
+            .input('status', sql.VarChar, status)
+            .input('late_minutes', sql.Int, lateMinutes)
+            .input('device_name', sql.NVarChar, device.name)
+            .query(`
+              INSERT INTO attendance_logs (rep_id, zk_user_id, date, check_in, status, late_minutes, device_name, created_at)
+              VALUES (@rep_id, @zk_user_id, @date, @check_in, @status, @late_minutes, @device_name, GETDATE());
+            `);
+          syncedCount++;
+        }
+      }
+    } else {
+      // Default direct sync for registered representatives
+      for (const r of reps) {
+        const zkId = r.zk_user_id || r.code;
+        if (!zkId) continue;
+
+        const checkToday = await pool.request()
+          .input('repId', sql.Int, r.id)
+          .input('zkId', sql.VarChar, String(zkId))
+          .input('dateStr', sql.VarChar, nowStr)
+          .query('SELECT id FROM attendance_logs WHERE (rep_id = @repId OR zk_user_id = @zkId) AND date = @dateStr');
+
+        if (checkToday.recordset.length === 0) {
+          const { status, lateMinutes } = calculateAttendanceStatus(now);
+
+          await pool.request()
+            .input('rep_id', sql.Int, r.id)
+            .input('zk_user_id', sql.VarChar, String(zkId))
+            .input('date', sql.VarChar, nowStr)
+            .input('check_in', sql.DateTime, now)
+            .input('status', sql.VarChar, status)
+            .input('late_minutes', sql.Int, lateMinutes)
+            .input('device_name', sql.NVarChar, device.name)
+            .query(`
+              INSERT INTO attendance_logs (rep_id, zk_user_id, date, check_in, status, late_minutes, device_name, created_at)
+              VALUES (@rep_id, @zk_user_id, @date, @check_in, @status, @late_minutes, @device_name, GETDATE());
+            `);
+          syncedCount++;
+        }
       }
     }
 
