@@ -4,7 +4,7 @@ export default function AttendanceManagement() {
   const [attendanceLogs, setAttendanceLogs] = useState([]);
   const [representatives, setRepresentatives] = useState([]);
 
-  const [dateFilter, setDateFilter] = useState(new Date().toISOString().slice(0, 10));
+  const [dateFilter, setDateFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('جميع الحالات');
   const [searchQuery, setSearchQuery] = useState('');
 
