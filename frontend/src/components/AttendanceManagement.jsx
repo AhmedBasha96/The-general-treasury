@@ -293,6 +293,27 @@ export default function AttendanceManagement() {
     reader.readAsText(file);
   };
 
+  const [pingStatus, setPingStatus] = useState(null);
+
+  const handleLivePing = async () => {
+    setPingStatus('jary');
+    try {
+      const res = await fetch('/api/attendance/sync-device/1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip_address: '192.168.1.201' })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPingStatus({ ok: true, msg: data.message || 'تم الاتصال بنجاح مع جهاز البصمة (192.168.1.201:4370) أونلاين!' });
+      } else {
+        setPingStatus({ ok: false, msg: data.error || 'فشل فحص الاتصال بالبصمة' });
+      }
+    } catch (e) {
+      setPingStatus({ ok: false, msg: 'خطأ في الاتصال بالسيرفر' });
+    }
+  };
+
   return (
     <div style={{ padding: '1rem', direction: 'rtl' }}>
       
@@ -305,10 +326,16 @@ export default function AttendanceManagement() {
               🟢 الربط المباشر أونلاين نشط
             </span>
           </h3>
-          <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>استقبال حركات الحضور وتأخيرات السائقين والموظفين أونلاين ومباشرة من جهاز البصمة</span>
+          <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>استقبال حركات الحضور وتأخيرات السائقين والموظفين أونلاين ومباشرة من جهاز البصمة (192.168.1.201:4370)</span>
         </div>
 
         <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <button 
+            onClick={handleLivePing}
+            style={{ padding: '0.65rem 1.1rem', background: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '0.88rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', boxShadow: '0 4px 12px rgba(2,132,199,0.25)' }}
+          >
+            📡 فحص اتصال البصمة (Live Ping)
+          </button>
           <label style={{ padding: '0.65rem 1.1rem', background: '#059669', color: '#ffffff', borderRadius: '12px', fontSize: '0.88rem', fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
             📁 استيراد ملف ZK
             <input type="file" accept=".csv,.txt,.dat" onChange={handleFileUpload} style={{ display: 'none' }} />
@@ -339,6 +366,18 @@ export default function AttendanceManagement() {
       {successMsg && (
         <div style={{ background: 'rgba(16,185,129,0.15)', border: '1px solid #10b981', color: '#86efac', padding: '0.75rem 1.25rem', borderRadius: '14px', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '1.25rem' }}>
           ✅ {successMsg}
+        </div>
+      )}
+
+      {pingStatus === 'jary' && (
+        <div style={{ background: 'rgba(2,132,199,0.15)', border: '1px solid #0284c7', color: '#38bdf8', padding: '0.75rem 1.25rem', borderRadius: '14px', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '1.25rem' }}>
+          📡 جاري فحص الاتصال التفاعلي أونلاين بجهاز البصمة (192.168.1.201:4370)... ⏳
+        </div>
+      )}
+
+      {pingStatus && typeof pingStatus === 'object' && (
+        <div style={{ background: pingStatus.ok ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)', border: pingStatus.ok ? '1px solid #10b981' : '1px solid #ef4444', color: pingStatus.ok ? '#86efac' : '#fca5a5', padding: '0.75rem 1.25rem', borderRadius: '14px', fontSize: '0.9rem', fontWeight: 'bold', marginBottom: '1.25rem' }}>
+          {pingStatus.ok ? '🟢' : '⚠️'} {pingStatus.msg}
         </div>
       )}
 
