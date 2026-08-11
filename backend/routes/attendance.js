@@ -24,12 +24,12 @@ function calculateAttendanceStatus(checkInDate) {
   }
 }
 
-// GET /api/attendance/download-tool - Direct download of ZK Sync agent
+// GET /api/attendance/download-tool - Direct download of ZK Sync agent (.bat)
 router.get('/download-tool', (req, res) => {
   const path = require('path');
-  const filePath = path.join(__dirname, '..', 'uploads', 'zk_sync_agent.js');
-  res.setHeader('Content-Type', 'application/javascript');
-  res.setHeader('Content-Disposition', 'attachment; filename="zk_sync_agent.js"');
+  const filePath = path.join(__dirname, '..', 'uploads', 'zk_sync_agent.bat');
+  res.setHeader('Content-Type', 'application/x-msdos-program');
+  res.setHeader('Content-Disposition', 'attachment; filename="zk_sync_agent.bat"');
   res.sendFile(filePath);
 });
 
