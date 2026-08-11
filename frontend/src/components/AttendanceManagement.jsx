@@ -247,6 +247,52 @@ export default function AttendanceManagement() {
     }
   };
 
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const text = evt.target.result;
+        const lines = text.split('\n').filter(Boolean);
+        const records = [];
+
+        for (let i = 0; i < lines.length; i++) {
+          const cols = lines[i].split(/,|\t|\s+/).map(c => c.trim().replace(/^"|"$/g, ''));
+          if (cols.length >= 2) {
+            const zkCode = cols[0];
+            const timeStr = cols[1] && cols[2] ? `${cols[1]} ${cols[2]}` : cols[1];
+            if (zkCode && timeStr && !isNaN(new Date(timeStr).getTime())) {
+              records.push({ zk_user_id: zkCode, check_in: timeStr });
+            }
+          }
+        }
+
+        if (records.length === 0) {
+          return alert('لم يتم العثور على حركات بصمة صحيحة بالملف');
+        }
+
+        const res = await fetch('/api/attendance/import-zk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ records })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          alert(data.message || 'تم استيراد الملف بنجاح');
+          loadAttendance();
+        } else {
+          alert(data.error || 'فشل استيراد الملف');
+        }
+      } catch (err) {
+        alert('حدث خطأ أثناء قراءة ملف البصمة');
+      }
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <div style={{ padding: '1rem', direction: 'rtl' }}>
       
@@ -263,6 +309,11 @@ export default function AttendanceManagement() {
         </div>
 
         <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+          <label style={{ padding: '0.65rem 1.1rem', background: '#059669', color: '#ffffff', borderRadius: '12px', fontSize: '0.88rem', fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+            📁 استيراد ملف ZK
+            <input type="file" accept=".csv,.txt,.dat" onChange={handleFileUpload} style={{ display: 'none' }} />
+          </label>
+
           <button 
             onClick={handleClearAll}
             style={{ padding: '0.65rem 1.1rem', background: '#dc2626', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '0.88rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
