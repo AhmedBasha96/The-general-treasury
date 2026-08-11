@@ -519,12 +519,45 @@ async function createTables() {
     await pool.request().query(`
       IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'car_id')
       BEGIN
-        ALTER TABLE transactions ADD car_id INT NULL;
-        ALTER TABLE transactions ADD CONSTRAINT FK_transactions_cars FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE SET NULL;
-      END
-    `);
-    
-    console.log('Database tables verified/created.');
+        -- Add zk_user_id column to representatives if missing
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('representatives') AND name = 'zk_user_id')
+        BEGIN
+          ALTER TABLE representatives ADD zk_user_id VARCHAR(50) NULL;
+        END
+
+        -- Create zk_devices table (أجهزة البصمة المربوطة بالشبكة)
+        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'zk_devices')
+        BEGIN
+          CREATE TABLE zk_devices (
+            id INT IDENTITY(1,1) PRIMARY KEY,
+            name NVARCHAR(100) NOT NULL,
+            ip_address VARCHAR(50) NOT NULL,
+            port INT DEFAULT 4370,
+            status VARCHAR(20) DEFAULT 'offline',
+            last_sync DATETIME NULL,
+            created_at DATETIME DEFAULT GETDATE()
+          );
+        END
+
+        -- Create attendance_logs table (سجلات الحضور البصمة)
+        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'attendance_logs')
+        BEGIN
+          CREATE TABLE attendance_logs (
+            id INT IDENTITY(1,1) PRIMARY KEY,
+            rep_id INT NULL,
+            zk_user_id VARCHAR(50) NOT NULL,
+            date VARCHAR(20) NOT NULL,
+            check_in DATETIME NOT NULL,
+            status VARCHAR(20) DEFAULT 'present',
+            late_minutes INT DEFAULT 0,
+            device_name NVARCHAR(100) DEFAULT N'جهاز البصمة الرئيسي',
+            notes NVARCHAR(500) NULL,
+            created_at DATETIME DEFAULT GETDATE(),
+            FOREIGN KEY (rep_id) REFERENCES representatives(id) ON DELETE SET NULL
+          );
+        END
+
+    console.log('Database tables verified/created (including ZKTeco Attendance).');
   } catch (error) {
     console.error('Failed to create tables:', error);
     throw error;

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import CarManagement from './components/CarManagement';
 import DriverPortal from './components/DriverPortal';
+import AttendanceManagement from './components/AttendanceManagement';
 
 const compressImage = (file, maxWidth = 1000, maxHeight = 1000, quality = 0.6) => {
   return new Promise((resolve, reject) => {
@@ -2509,6 +2510,13 @@ const [showCarModal, setShowCarModal] = useState(false);
             </button>
 
             <button 
+              className={`tab-btn ${activeTab === 'attendance' ? 'active' : ''}`}
+              onClick={() => { setActiveTab('attendance'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+            >
+              🕒 بصمة الحضور ZKTeco
+            </button>
+
+            <button 
               className={`tab-btn ${activeTab === 'new-tx' ? 'active' : ''}`}
               onClick={() => { setActiveTab('new-tx'); setTxSuccess(null); setTxError(''); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
             >
@@ -4395,6 +4403,11 @@ const [showCarModal, setShowCarModal] = useState(false);
           </div>
 
         </div>
+      )}
+
+      {/* ATTENDANCE & ZKTECO TAB */}
+      {activeTab === 'attendance' && (
+        <AttendanceManagement />
       )}
 
       {/* NEW TRANSACTION TAB */}

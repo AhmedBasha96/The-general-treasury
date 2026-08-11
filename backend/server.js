@@ -20,11 +20,14 @@ app.get('/api/status', (req, res) => {
   res.json({ status: 'OK', message: 'Cash Safe API is running.' });
 });
 
-// Car routes
+// Car & Attendance routes
 const carRouter = require('./routes/cars');
 app.use('/api/cars', carRouter);
 const transfersRouter = require('./routes/transfers');
 app.use('/api/transfers', transfersRouter);
+const attendanceRouter = require('./routes/attendance');
+app.use('/api/attendance', attendanceRouter);
+app.use('/iclock', attendanceRouter);
 
 // POST /api/auth/login
 app.post('/api/auth/login', async (req, res) => {
