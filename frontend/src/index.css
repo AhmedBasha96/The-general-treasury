@@ -40,6 +40,47 @@
   --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+[data-theme="light"] {
+  --bg-primary: #f1f5f9;
+  --bg-secondary: #ffffff;
+  --card-bg: rgba(255, 255, 255, 0.9);
+  --border-color: rgba(15, 23, 42, 0.12);
+  
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  
+  --primary: #0284c7;
+  --primary-hover: #0369a1;
+  --primary-glow: rgba(2, 132, 199, 0.15);
+}
+
+[data-theme="light"] body {
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(14, 165, 233, 0.08) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.06) 0px, transparent 50%);
+}
+
+[data-theme="light"] th {
+  background: rgba(241, 245, 249, 0.9);
+  color: #1e293b;
+}
+
+[data-theme="light"] input, 
+[data-theme="light"] select, 
+[data-theme="light"] textarea {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme="light"] .panel,
+[data-theme="light"] .metric-card,
+[data-theme="light"] .chart-card,
+[data-theme="light"] .kpi-card {
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;

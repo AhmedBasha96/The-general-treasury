@@ -50,6 +50,17 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
+  const [theme, setTheme] = useState(() => localStorage.getItem('appTheme') || 'dark');
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('appTheme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  };
+
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -2428,6 +2439,16 @@ const [showCarModal, setShowCarModal] = useState(false);
               </div>
             )}
           </div>
+          {/* Theme Toggle Button */}
+          <button
+            onClick={toggleTheme}
+            className="btn btn-secondary"
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+            title={theme === 'dark' ? 'التحويل للوضع الفاتح (نهاراً)' : 'التحويل للوضع الداكن (ليلاً)'}
+          >
+            {theme === 'dark' ? '☀️ الوضع الفاتح' : '🌙 الوضع الداكن'}
+          </button>
+
           <button 
             className="btn btn-secondary" 
             onClick={handleLogout}
