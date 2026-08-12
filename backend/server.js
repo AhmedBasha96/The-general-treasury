@@ -333,11 +333,60 @@ app.get('/api/analytics/dashboard', async (req, res) => {
 app.get('/api/audit-logs', async (req, res) => {
   try {
     const pool = getPool();
-    const result = await pool.request().query(`
+    let result = await pool.request().query(`
       SELECT TOP 100 id, user_id, user_name, user_role, action, entity_type, entity_id, details, created_at
       FROM audit_logs
       ORDER BY created_at DESC
     `);
+
+    // If empty, auto-populate audit_logs from existing transactions as initial history
+    if (result.recordset.length === 0) {
+      const txs = await pool.request().query(`
+        SELECT TOP 100 t.id, t.type, t.payment_method, t.amount, t.date, t.notes, t.status, t.withdrawal_sub_type,
+               r.name AS rep_name, b.name AS bank_name, u.username AS creator_name
+        FROM transactions t
+        LEFT JOIN representatives r ON t.rep_id = r.id
+        LEFT JOIN banks b ON t.bank_id = b.id
+        LEFT JOIN users u ON t.created_by = u.id
+        ORDER BY t.date DESC
+      `);
+
+      for (const tx of txs.recordset) {
+        const actionName = tx.type === 'deposit' ? 'إيداع نقدية (وارد)'
+          : tx.type === 'withdrawal' ? 'صرف نقدية (منصرف)'
+          : tx.type === 'company_transfer' ? 'تحويل شركة'
+          : 'تسوية فئات (فك)';
+        
+        const details = [
+          `المبلغ: ${Number(tx.amount).toLocaleString('ar-EG')} ج.م`,
+          tx.rep_name ? `المندوب: ${tx.rep_name}` : '',
+          tx.bank_name ? `البنك: ${tx.bank_name}` : '',
+          tx.withdrawal_sub_type ? `البند: ${tx.withdrawal_sub_type}` : '',
+          tx.notes ? `ملاحظات: ${tx.notes}` : ''
+        ].filter(Boolean).join(' | ');
+
+        await pool.request()
+          .input('userName', sql.NVarChar, tx.creator_name || 'أمين الخزينة')
+          .input('userRole', sql.VarChar, 'accountant')
+          .input('action', sql.NVarChar, actionName)
+          .input('entityType', sql.NVarChar, 'transaction')
+          .input('entityId', sql.Int, tx.id)
+          .input('details', sql.NVarChar, details)
+          .input('createdAt', sql.DateTime, tx.date)
+          .query(`
+            INSERT INTO audit_logs (user_name, user_role, action, entity_type, entity_id, details, created_at)
+            VALUES (@userName, @userRole, @action, @entityType, @entityId, @details, @createdAt)
+          `);
+      }
+
+      // Re-fetch after populating
+      result = await pool.request().query(`
+        SELECT TOP 100 id, user_id, user_name, user_role, action, entity_type, entity_id, details, created_at
+        FROM audit_logs
+        ORDER BY created_at DESC
+      `);
+    }
+
     res.json(result.recordset);
   } catch (error) {
     console.error('Error fetching audit logs:', error);
