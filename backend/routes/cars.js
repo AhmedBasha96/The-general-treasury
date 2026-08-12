@@ -368,6 +368,10 @@ router.get('/driver/my-car/:repId', async (req, res) => {
         SELECT TOP 1
           c.id, c.plate_number, c.plate_letters, c.plate_numbers, c.driver_name, c.driver_rep_id,
           c.vehicle_type, c.model, c.image_path, ISNULL(c.odometer_km, 0) AS odometer_km,
+          ISNULL(c.last_odometer, ISNULL(c.odometer_km, 0)) AS last_odometer,
+          ISNULL(c.oil_change_interval_km, 10000) AS oil_change_interval_km,
+          ISNULL(c.last_oil_change_km, 0) AS last_oil_change_km,
+          ISNULL(c.next_oil_change_km, ISNULL(c.last_oil_change_km, 0) + ISNULL(c.oil_change_interval_km, 10000)) AS next_oil_change_km,
           CONVERT(VARCHAR(10), c.license_expiry_date, 120) AS license_expiry_date,
           ISNULL(c.status, N'نشطة') AS status, ISNULL(c.fuel_type, N'سولار') AS fuel_type, c.notes
         FROM cars c
@@ -468,7 +472,7 @@ router.post('/oil-change', async (req, res) => {
     const pool = getPool();
     await pool.request()
       .input('car_id', sql.Int, car_id)
-      .input('mtype', sql.NVarChar(100), 'تغيير زيت موتور')
+      .input('mtype', sql.NVarChar(100), `تغيير زيت موتور وفلاتر (${interval.toLocaleString()} كم)`)
       .input('odo', sql.Int, odo)
       .input('nextKm', sql.Int, nextKm)
       .input('cost', sql.Decimal(18, 2), totalCost)
@@ -502,25 +506,33 @@ router.post('/oil-change', async (req, res) => {
   }
 });
 
-// POST /api/driver/oil-change - Driver Portal oil / maintenance entry
+// POST /api/driver/oil-change - Driver Portal oil entry (Enforcing management oil interval)
 router.post('/driver/oil-change', async (req, res) => {
-  const { car_id, driver_rep_id, maintenance_type, odometer_reading, next_service_km, cost, center_name, notes } = req.body;
+  const { car_id, driver_rep_id, odometer_reading, cost, center_name, notes } = req.body;
   if (!car_id || !odometer_reading) {
     return res.status(400).json({ error: 'بيانات العداد قراءة الصيانة مطلوبة' });
   }
   
   const odo = parseInt(odometer_reading, 10);
-  const nextKm = next_service_km ? parseInt(next_service_km, 10) : (odo + 10000);
   const totalCost = parseFloat(cost) || 0;
   
   try {
     const pool = getPool();
     
+    // Fetch management designated oil interval for this car
+    const carRes = await pool.request()
+      .input('car_id', sql.Int, car_id)
+      .query(`SELECT ISNULL(oil_change_interval_km, 10000) AS interval FROM cars WHERE id = @car_id`);
+
+    const interval = carRes.recordset[0]?.interval || 10000;
+    const nextKm = odo + interval;
+    const mtype = `تغيير زيت موتور وفلاتر (${interval.toLocaleString()} كم)`;
+
     // Insert into car_maintenance_logs
     await pool.request()
       .input('car_id', sql.Int, car_id)
       .input('driver_rep', sql.Int, driver_rep_id || null)
-      .input('mtype', sql.NVarChar(100), maintenance_type || 'تغيير زيت موتور')
+      .input('mtype', sql.NVarChar(100), mtype)
       .input('odo', sql.Int, odo)
       .input('nextKm', sql.Int, nextKm)
       .input('cost', sql.Decimal(18, 2), totalCost)
@@ -535,10 +547,12 @@ router.post('/driver/oil-change', async (req, res) => {
     await pool.request()
       .input('car_id', sql.Int, car_id)
       .input('odo', sql.Int, odo)
+      .input('interval', sql.Int, interval)
       .input('nextKm', sql.Int, nextKm)
       .query(`
         UPDATE cars 
         SET last_oil_change_km = @odo,
+            oil_change_interval_km = @interval,
             next_oil_change_km = @nextKm,
             last_oil_change_date = GETDATE(),
             last_odometer = CASE WHEN @odo > ISNULL(last_odometer, 0) THEN @odo ELSE last_odometer END,

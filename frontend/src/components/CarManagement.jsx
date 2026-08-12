@@ -816,8 +816,11 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
                 <label>نوع/عمر الزيت الجديد (الكيلومترات المسموحة):*</label>
                 <select value={oilInterval} onChange={e => setOilInterval(e.target.value)}>
                   <option value="10000">🛢️ زيت 10,000 كم (تخليقي كامل)</option>
+                  <option value="7000">🛢️ زيت 7,000 كم (7 آلاف)</option>
                   <option value="5000">🛢️ زيت 5,000 كم (نصف تخليقي)</option>
                   <option value="3000">🛢️ زيت 3,000 كم (معدني)</option>
+                  <option value="2000">🛢️ زيت 2,000 كم (2 ألف)</option>
+                  <option value="1000">🛢️ زيت 1,000 كم (تشغيل / تلين)</option>
                 </select>
               </div>
 
@@ -1052,6 +1055,8 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
                     <option value="7000">🛢️ زيت 7,000 كم (7 آلاف)</option>
                     <option value="5000">🛢️ زيت 5,000 كم (نصف تخليقي)</option>
                     <option value="3000">🛢️ زيت 3,000 كم (معدني)</option>
+                    <option value="2000">🛢️ زيت 2,000 كم (2 ألف)</option>
+                    <option value="1000">🛢️ زيت 1,000 كم (تشغيل / تلين)</option>
                   </select>
                 </div>
               </div>

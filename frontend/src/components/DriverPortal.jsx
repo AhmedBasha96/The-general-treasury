@@ -102,7 +102,8 @@ export default function DriverPortal({ user, onLogout }) {
   const [fuelImage, setFuelImage] = useState(null);
 
   // Oil/Maintenance Form state
-  const [maintenanceType, setMaintenanceType] = useState('تغيير زيت موتور وفلاتر');
+  const [maintenanceType, setMaintenanceType] = useState('تغيير زيت موتور وفلاتر (10,000 كم)');
+  const [selectedDriverOilKm, setSelectedDriverOilKm] = useState(10000);
   const [oilOdometer, setOilOdometer] = useState('');
   const [nextKm, setNextKm] = useState('');
   const [oilCost, setOilCost] = useState('');
@@ -241,7 +242,7 @@ export default function DriverPortal({ user, onLogout }) {
           driver_rep_id: user.id,
           maintenance_type: maintenanceType,
           odometer_reading: oilOdometer,
-          next_service_km: nextKm || (parseInt(oilOdometer, 10) + 10000),
+          next_service_km: nextKm || (parseInt(oilOdometer, 10) + (selectedDriverOilKm || 10000)),
           cost: oilCost || 0,
           center_name: centerName,
           notes: oilNotes
@@ -594,29 +595,30 @@ export default function DriverPortal({ user, onLogout }) {
       {showOilModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
           <div style={{ background: '#ffffff', borderRadius: '24px', maxWidth: '480px', width: '100%', padding: '1.75rem', direction: 'rtl', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
-            <h3 style={{ marginTop: 0, color: '#0f172a', fontWeight: 'bold' }}>🛢️ تسجيل غيار زيت / صيانة</h3>
+            <h3 style={{ marginTop: 0, color: '#0f172a', fontWeight: 'bold' }}>🛢️ تسجيل غيار زيت جديد للسيارة</h3>
             
+            {/* Designated Oil Interval Badge set by Management */}
+            <div style={{ background: '#eff6ff', padding: '0.85rem 1rem', borderRadius: '14px', border: '1px solid #bfdbfe', marginBottom: '1rem', color: '#1e3a8a', fontSize: '0.9rem' }}>
+              <div style={{ fontWeight: 'bold' }}>🛢️ نوع ودورة الزيت المحددة لسيارتك من الإدارة:</div>
+              <div style={{ marginTop: '0.2rem', color: '#2563eb', fontWeight: 900, fontSize: '1rem' }}>
+                تغيير زيت موتور وفلاتر ({Number(car.oil_change_interval_km || 10000).toLocaleString()} كم)
+              </div>
+            </div>
+
             <form onSubmit={handleOilSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
-                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem' }}>نوع الصيانة / الزيت:</label>
-                <select className="input-field" value={maintenanceType} onChange={(e) => setMaintenanceType(e.target.value)}>
-                  <option value="تغيير زيت موتور وفلاتر">🛢️ تغيير زيت موتور وفلاتر (10,000 كم)</option>
-                  <option value="تغيير زيت موتور 5000">🛢️ تغيير زيت موتور (5,000 كم)</option>
-                  <option value="تغيير زيت فتيس">⚙️ تغيير زيت فتيس</option>
-                  <option value="فحص وتشحيم دوري">🔧 فحص وتشحيم دوري</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem' }}>قراءة العداد الحالية (كم):</label>
+                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem' }}>قراءة العداد الحالية وقت غيار الزيت (كم):*</label>
                 <input 
                   type="number" 
                   className="input-field"
-                  placeholder="أدخل قراءة العداد وقت غيار الزيت..."
+                  placeholder="أدخل قراءة عداد السيارة الحالية..."
                   value={oilOdometer}
                   onChange={(e) => {
                     setOilOdometer(e.target.value);
-                    if (e.target.value) setNextKm(String(parseInt(e.target.value, 10) + 10000));
+                    if (e.target.value) {
+                      const assignedInterval = Number(car.oil_change_interval_km || 10000);
+                      setNextKm(String(parseInt(e.target.value, 10) + assignedInterval));
+                    }
                   }}
                   required
                 />
@@ -624,13 +626,14 @@ export default function DriverPortal({ user, onLogout }) {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem' }}>العداد المستهدف للصيانة القادمة:</label>
+                  <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem' }}>العداد القادم المستهدف (محسوب):</label>
                   <input 
                     type="number" 
                     className="input-field"
-                    placeholder="مثال: + 10000 كم"
-                    value={nextKm}
-                    onChange={(e) => setNextKm(e.target.value)}
+                    placeholder="يحسب أوتوماتيكياً"
+                    value={nextKm || (oilOdometer ? String(parseInt(oilOdometer, 10) + Number(car.oil_change_interval_km || 10000)) : '')}
+                    disabled
+                    style={{ background: '#f1f5f9', cursor: 'not-allowed' }}
                   />
                 </div>
                 <div>
@@ -638,7 +641,7 @@ export default function DriverPortal({ user, onLogout }) {
                   <input 
                     type="number" 
                     className="input-field"
-                    placeholder="المبلغ المدفوع"
+                    placeholder="المبلغ المدفوع (اختياري)"
                     value={oilCost}
                     onChange={(e) => setOilCost(e.target.value)}
                   />
@@ -650,9 +653,20 @@ export default function DriverPortal({ user, onLogout }) {
                 <input 
                   type="text" 
                   className="input-field"
-                  placeholder="اسم الورشة أو الفني..."
+                  placeholder="اسم الورشة أو المركز..."
                   value={centerName}
                   onChange={(e) => setCenterName(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem' }}>ملاحظات إضافية:</label>
+                <input 
+                  type="text" 
+                  className="input-field"
+                  placeholder="نوع الفلتر، الماركة..."
+                  value={oilNotes}
+                  onChange={(e) => setOilNotes(e.target.value)}
                 />
               </div>
 
@@ -660,7 +674,7 @@ export default function DriverPortal({ user, onLogout }) {
 
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
                 <button type="submit" className="btn btn-primary" disabled={formLoading} style={{ flex: 1, background: '#ea580c' }}>
-                  {formLoading ? 'جاري الحفظ…' : 'حفظ عملية غيار الزيت'}
+                  {formLoading ? 'جاري الحفظ…' : 'حفظ عملية غيار الزيت وتحديث الموعد القادم 🛢️'}
                 </button>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowOilModal(false)}>
                   إلغاء
