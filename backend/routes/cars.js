@@ -411,12 +411,15 @@ router.post('/driver/refuel', upload.single('image'), async (req, res) => {
   if (!car_id || !odometer_reading || !liters) {
     return res.status(400).json({ error: 'بيانات التفويل (العداد واللترات) مطلوبة' });
   }
+  if (!req.file) {
+    return res.status(400).json({ error: '⚠️ صورة عداد المحطة إلزامية بالكاميرا للتمكن من حفظ عملية التفويل' });
+  }
   
   const odo = parseInt(odometer_reading, 10);
   const ltr = parseFloat(liters);
   const price = parseFloat(price_per_liter) || 20.50;
   const cost = parseFloat(total_cost) || (ltr * price);
-  const imagePath = req.file ? `uploads/cars/${req.file.filename}` : null;
+  const imagePath = `uploads/cars/${req.file.filename}`;
   
   try {
     const pool = getPool();

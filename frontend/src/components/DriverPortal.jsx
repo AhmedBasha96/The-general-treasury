@@ -182,12 +182,15 @@ export default function DriverPortal({ user, onLogout }) {
     }
   };
 
-  // Submit Refuel Entry (with photo)
+  // Submit Refuel Entry (with mandatory photo)
   const handleFuelSubmit = async (e) => {
     e.preventDefault();
     if (!data?.car?.id) return;
     if (!odometerReading || !liters) {
       return alert('يرجى إدخال قراءة العداد وعدد اللترات');
+    }
+    if (!fuelImage) {
+      return alert('⚠️ إلزامية التقاط صورة حية لعداد المحطة بالكاميرا للتمكن من حفظ عملية التفويل!');
     }
 
     setFormLoading(true);
@@ -202,9 +205,7 @@ export default function DriverPortal({ user, onLogout }) {
       formData.append('total_cost', totalCost);
       formData.append('station_name', stationName);
       formData.append('notes', fuelNotes);
-      if (fuelImage) {
-        formData.append('image', fuelImage);
-      }
+      formData.append('image', fuelImage);
 
       const res = await fetch('/api/cars/driver/refuel', {
         method: 'POST',
@@ -498,21 +499,22 @@ export default function DriverPortal({ user, onLogout }) {
                 />
               </div>
 
-              {/* Photo Input (Camera Capture on Mobile) */}
-              <div style={{ background: '#f8fafc', padding: '0.85rem', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
-                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem', color: '#1e293b' }}>
-                  📷 تصوير / رفع صورة عداد المحطة والسيارة:*
+              {/* Photo Input (Camera Capture Mandatory) */}
+              <div style={{ background: fuelImage ? '#f0fdf4' : '#fff1f2', padding: '0.9rem', borderRadius: '14px', border: fuelImage ? '2px solid #22c55e' : '2px dashed #f43f5e' }}>
+                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem', color: fuelImage ? '#15803d' : '#be123c' }}>
+                  📸 التقاط صورة حية لعداد المحطة والسيارة (إجباري بالكاميرا 📷):*
                 </label>
                 <input 
                   type="file" 
                   accept="image/*"
                   capture="environment"
                   className="input-field"
-                  onChange={(e) => setFuelImage(e.target.files[0])}
-                  style={{ padding: '0.4rem', background: '#ffffff' }}
+                  onChange={(e) => setFuelImage(e.target.files[0] || null)}
+                  style={{ padding: '0.4rem', background: '#ffffff', cursor: 'pointer' }}
+                  required
                 />
-                <small style={{ color: '#64748b', fontSize: '0.75rem', marginTop: '0.25rem', display: 'block' }}>
-                  📸 اضغط لتصوير شاشة عداد البنزين بالمحطة مباشرة من الموبايل
+                <small style={{ color: fuelImage ? '#16a34a' : '#e11d48', fontSize: '0.75rem', marginTop: '0.35rem', display: 'block', fontWeight: 'bold' }}>
+                  {fuelImage ? '✅ تم التقاط صورة العداد بنجاح!' : '⚠️ اضغط هنا لفتح كاميرا الموبايل والتقاط صورة حية لعداد شاشة البنزين بالمحطة'}
                 </small>
               </div>
 
