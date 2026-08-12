@@ -41,44 +41,188 @@
 }
 
 [data-theme="light"] {
-  --bg-primary: #f1f5f9;
+  --bg-primary: #f8fafc;
   --bg-secondary: #ffffff;
-  --card-bg: rgba(255, 255, 255, 0.9);
-  --border-color: rgba(15, 23, 42, 0.12);
+  --card-bg: #ffffff;
+  --border-color: #e2e8f0;
   
   --text-primary: #0f172a;
-  --text-secondary: #475569;
+  --text-secondary: #334155;
   --text-muted: #64748b;
   
   --primary: #0284c7;
   --primary-hover: #0369a1;
   --primary-glow: rgba(2, 132, 199, 0.15);
+  
+  --hero-green-bg: #f0fdf4;
+  --hero-green-border: #86efac;
+  --hero-green-title: #15803d;
+  --hero-green-text: #166534;
+
+  --hero-blue-bg: #f0f9ff;
+  --hero-blue-border: #7dd3fc;
+  --hero-blue-title: #0369a1;
+  --hero-blue-text: #075985;
 }
 
 [data-theme="light"] body {
-  background-image: 
-    radial-gradient(at 0% 0%, rgba(14, 165, 233, 0.08) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.06) 0px, transparent 50%);
-}
-
-[data-theme="light"] th {
-  background: rgba(241, 245, 249, 0.9);
-  color: #1e293b;
-}
-
-[data-theme="light"] input, 
-[data-theme="light"] select, 
-[data-theme="light"] textarea {
-  background: #ffffff;
-  border-color: #cbd5e1;
+  background-color: #f8fafc;
   color: #0f172a;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(14, 165, 233, 0.05) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.04) 0px, transparent 50%);
 }
 
+/* Fix Hero Cards in Light Mode */
+[data-theme="light"] div[style*="rgba(16,185,129,0.15)"],
+[data-theme="light"] div[style*="rgba(16, 185, 129, 0.15)"] {
+  background: var(--hero-green-bg) !important;
+  border-color: var(--hero-green-border) !important;
+}
+
+[data-theme="light"] div[style*="rgba(14,165,233,0.15)"],
+[data-theme="light"] div[style*="rgba(14, 165, 233, 0.15)"] {
+  background: var(--hero-blue-bg) !important;
+  border-color: var(--hero-blue-border) !important;
+}
+
+/* Fix Hero Card Texts in Light Mode */
+[data-theme="light"] span[style*="color: #34d399"],
+[data-theme="light"] span[style*="color: rgb(52, 211, 153)"] {
+  color: var(--hero-green-title) !important;
+}
+
+[data-theme="light"] span[style*="color: #6ee7b7"],
+[data-theme="light"] div[style*="color: #6ee7b7"] {
+  color: var(--hero-green-text) !important;
+}
+
+[data-theme="light"] span[style*="color: #38bdf8"],
+[data-theme="light"] div[style*="color: #38bdf8"],
+[data-theme="light"] span[style*="color: #7dd3fc"],
+[data-theme="light"] div[style*="color: #7dd3fc"] {
+  color: var(--hero-blue-title) !important;
+}
+
+[data-theme="light"] strong[style*="color: #fff"],
+[data-theme="light"] strong[style*="color: rgb(255, 255, 255)"],
+[data-theme="light"] div[style*="color: #fff"],
+[data-theme="light"] div[style*="color: rgb(255, 255, 255)"] {
+  color: #0f172a !important;
+}
+
+/* Fix Denomination & Bank Pills in Light Mode */
+[data-theme="light"] div[style*="rgba(16,185,129,0.12)"],
+[data-theme="light"] div[style*="rgba(16, 185, 129, 0.12)"] {
+  background: #e6f4ea !important;
+  border-color: #bbf7d0 !important;
+}
+
+[data-theme="light"] div[style*="rgba(14,165,233,0.12)"],
+[data-theme="light"] div[style*="rgba(14, 165, 233, 0.12)"] {
+  background: #e0f2fe !important;
+  border-color: #bae6fd !important;
+}
+
+/* Fix Slice Row (Expenses Breakdown) in Light Mode */
+[data-theme="light"] .slice-row {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .slice-name {
+  color: #0f172a !important;
+  font-weight: 700 !important;
+}
+
+[data-theme="light"] .slice-amount {
+  color: #0284c7 !important;
+}
+
+[data-theme="light"] .slice-pct {
+  color: #475569 !important;
+}
+
+/* Fix Tables & Cards in Light Mode */
 [data-theme="light"] .panel,
 [data-theme="light"] .metric-card,
 [data-theme="light"] .chart-card,
-[data-theme="light"] .kpi-card {
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+[data-theme="light"] .kpi-card,
+[data-theme="light"] .table-container {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05) !important;
+}
+
+[data-theme="light"] th {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-bottom-color: #cbd5e1 !important;
+}
+
+[data-theme="light"] td {
+  border-bottom-color: #f1f5f9 !important;
+  color: #1e293b !important;
+}
+
+[data-theme="light"] tr:hover td {
+  background: #f8fafc !important;
+}
+
+[data-theme="light"] input,
+[data-theme="light"] select,
+[data-theme="light"] textarea {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+[data-theme="light"] input:focus,
+[data-theme="light"] select:focus,
+[data-theme="light"] textarea:focus {
+  background: #ffffff !important;
+  border-color: #0284c7 !important;
+}
+
+[data-theme="light"] .tab-btn {
+  color: #475569;
+}
+
+[data-theme="light"] .tab-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+[data-theme="light"] .tab-btn.active {
+  background: #0284c7;
+  color: #ffffff;
+}
+
+[data-theme="light"] .badge-deposit {
+  background: #dcfce7 !important;
+  color: #15803d !important;
+  border-color: #86efac !important;
+}
+
+[data-theme="light"] .badge-withdrawal {
+  background: #ffe4e6 !important;
+  color: #be123c !important;
+  border-color: #fca5a5 !important;
+}
+
+[data-theme="light"] .badge-company-transfer {
+  background: #e0f2fe !important;
+  color: #0369a1 !important;
+  border-color: #7dd3fc !important;
+}
+
+[data-theme="light"] .amount-deposit {
+  color: #15803d !important;
+}
+
+[data-theme="light"] .amount-withdrawal {
+  color: #be123c !important;
 }
 
 * {
