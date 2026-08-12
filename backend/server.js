@@ -394,6 +394,286 @@ app.get('/api/audit-logs', async (req, res) => {
   }
 });
 
+// ==========================================================================
+// LOANS & INSTALLMENTS API ROUTES
+// ==========================================================================
+
+// GET /api/loans - List all loans with progress and due stats
+app.get('/api/loans', async (req, res) => {
+  try {
+    const pool = getPool();
+    const loansRes = await pool.request().query(`
+      SELECT 
+        l.*,
+        b.name AS bank_name,
+        c.plate_number AS car_plate, c.driver_name AS car_driver,
+        (SELECT COUNT(*) FROM loan_installments WHERE loan_id = l.id AND status = 'paid') AS paid_installments,
+        (SELECT ISNULL(SUM(paid_amount), 0) FROM loan_installments WHERE loan_id = l.id AND status = 'paid') AS total_paid_amount,
+        (SELECT COUNT(*) FROM loan_installments WHERE loan_id = l.id AND status = 'pending' AND due_date <= GETDATE()) AS overdue_installments,
+        (SELECT COUNT(*) FROM loan_installments WHERE loan_id = l.id AND status = 'pending' AND due_date BETWEEN GETDATE() AND DATEADD(day, 7, GETDATE())) AS upcoming_installments
+      FROM loans l
+      LEFT JOIN banks b ON l.bank_id = b.id
+      LEFT JOIN cars c ON l.car_id = c.id
+      ORDER BY l.created_at DESC
+    `);
+
+    const dueAlertsRes = await pool.request().query(`
+      SELECT 
+        i.id AS installment_id, i.installment_number, i.due_date, i.amount, i.status AS installment_status,
+        l.id AS loan_id, l.title AS loan_title, l.loan_type, l.entity_name
+      FROM loan_installments i
+      JOIN loans l ON i.loan_id = l.id
+      WHERE i.status = 'pending' AND i.due_date <= DATEADD(day, 7, GETDATE())
+      ORDER BY i.due_date ASC
+    `);
+
+    res.json({
+      loans: loansRes.recordset,
+      dueAlerts: dueAlertsRes.recordset
+    });
+  } catch (error) {
+    console.error('Error fetching loans:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء جلب بيانات القروض والأقساط' });
+  }
+});
+
+// POST /api/loans - Add new loan and auto-generate installments schedule
+app.post('/api/loans', async (req, res) => {
+  const { title, loan_type, entity_name, bank_id, car_id, total_amount, installment_amount, total_installments, start_date, frequency, notes } = req.body;
+
+  if (!title || !loan_type || !entity_name || !total_amount || !installment_amount || !total_installments || !start_date) {
+    return res.status(400).json({ error: 'يرجى إكمال جميع البيانات المطلوبة للقرض' });
+  }
+
+  try {
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const loanReq = transaction.request()
+        .input('title', sql.NVarChar, title)
+        .input('loan_type', sql.NVarChar, loan_type)
+        .input('entity_name', sql.NVarChar, entity_name)
+        .input('bank_id', sql.Int, bank_id || null)
+        .input('car_id', sql.Int, car_id || null)
+        .input('total_amount', sql.Decimal(18, 2), total_amount)
+        .input('installment_amount', sql.Decimal(18, 2), installment_amount)
+        .input('total_installments', sql.Int, total_installments)
+        .input('start_date', sql.Date, start_date)
+        .input('frequency', sql.NVarChar, frequency || 'monthly')
+        .input('notes', sql.NVarChar, notes || null);
+
+      const loanResult = await loanReq.query(`
+        INSERT INTO loans (title, loan_type, entity_name, bank_id, car_id, total_amount, installment_amount, total_installments, start_date, frequency, notes)
+        OUTPUT INSERTED.id
+        VALUES (@title, @loan_type, @entity_name, @bank_id, @car_id, @total_amount, @installment_amount, @total_installments, @start_date, @frequency, @notes)
+      `);
+
+      const loanId = loanResult.recordset[0].id;
+
+      // Auto-generate installments schedule
+      const startDateObj = new Date(start_date);
+      for (let i = 1; i <= total_installments; i++) {
+        const dueDate = new Date(startDateObj);
+        if (frequency === 'weekly') {
+          dueDate.setDate(dueDate.getDate() + (i - 1) * 7);
+        } else if (frequency === 'quarterly') {
+          dueDate.setMonth(dueDate.getMonth() + (i - 1) * 3);
+        } else {
+          // monthly default
+          dueDate.setMonth(dueDate.getMonth() + (i - 1));
+        }
+
+        const dueDateStr = dueDate.toISOString().split('T')[0];
+
+        await transaction.request()
+          .input('loanId', sql.Int, loanId)
+          .input('instNum', sql.Int, i)
+          .input('dueDate', sql.Date, dueDateStr)
+          .input('amount', sql.Decimal(18, 2), installment_amount)
+          .query(`
+            INSERT INTO loan_installments (loan_id, installment_number, due_date, amount, status)
+            VALUES (@loanId, @instNum, @dueDate, @amount, 'pending')
+          `);
+      }
+
+      await transaction.commit();
+      logAuditLog(req, 'إضافة قرض / التزام جديد', 'loan', loanId, { title, total_amount, total_installments });
+
+      res.status(201).json({ message: 'تم إضافة القرض وتوليد جدول الأقساط بنجاح', loanId });
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+  } catch (error) {
+    console.error('Error creating loan:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء إضافة القرض وجدولة الأقساط' });
+  }
+});
+
+// GET /api/loans/:id/installments - Get all installments for a loan
+app.get('/api/loans/:id/installments', async (req, res) => {
+  const loanId = req.params.id;
+  try {
+    const pool = getPool();
+    const result = await pool.request()
+      .input('loanId', sql.Int, loanId)
+      .query(`
+        SELECT i.*, b.name AS bank_name
+        FROM loan_installments i
+        LEFT JOIN banks b ON i.bank_id = b.id
+        WHERE i.loan_id = @loanId
+        ORDER BY i.installment_number ASC
+      `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error('Error fetching loan installments:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء جلب جدول أقساط القرض' });
+  }
+});
+
+// POST /api/loans/installments/:id/pay - Pay an installment and auto-deduct from safe/bank
+app.post('/api/loans/installments/:id/pay', async (req, res) => {
+  const installmentId = req.params.id;
+  const { paymentMethod, bankId, notes } = req.body; // paymentMethod: 'cash' | 'bank_transfer'
+  const userId = parseInt(req.headers['x-user-id']);
+
+  try {
+    const pool = getPool();
+    const instRes = await pool.request()
+      .input('instId', sql.Int, installmentId)
+      .query(`
+        SELECT i.*, l.title AS loan_title, l.loan_type, l.car_id, l.bank_id AS loan_bank_id
+        FROM loan_installments i
+        JOIN loans l ON i.loan_id = l.id
+        WHERE i.id = @instId
+      `);
+
+    if (instRes.recordset.length === 0) {
+      return res.status(404).json({ error: 'القسط غير موجود' });
+    }
+
+    const inst = instRes.recordset[0];
+    if (inst.status === 'paid') {
+      return res.status(400).json({ error: 'هذا القسط مسدد بالفعل مسبقاً' });
+    }
+
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      // 1. Check Cash Safe or Bank Balance
+      if (paymentMethod === 'cash' || !paymentMethod) {
+        const cashDepRes = await transaction.request().query(`
+          SELECT ISNULL(SUM(amount), 0) AS total FROM transactions WITH (UPDLOCK, TABLOCKX)
+          WHERE type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved', 'disbursed') OR status IS NULL)
+        `);
+        const withRes = await transaction.request().query(`
+          SELECT ISNULL(SUM(amount), 0) AS total FROM transactions
+          WHERE (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+             OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status = 'approved' OR status IS NULL))
+        `);
+        const safeInitialBalance = await getSafeInitialBalance(transaction);
+        const currentCashBalance = safeInitialBalance + Number(cashDepRes.recordset[0].total) - Number(withRes.recordset[0].total);
+
+        if (currentCashBalance < Number(inst.amount)) {
+          await transaction.rollback();
+          return res.status(400).json({
+            error: `رصيد الخزينة النقدي الحالي (${currentCashBalance.toLocaleString('ar-EG')} ج.م) غير كافٍ لسداد القسط (${Number(inst.amount).toLocaleString('ar-EG')} ج.م).`
+          });
+        }
+      } else if (paymentMethod === 'bank_transfer') {
+        const targetBankId = bankId || inst.loan_bank_id;
+        if (!targetBankId) {
+          await transaction.rollback();
+          return res.status(400).json({ error: 'الحساب البنكي غير محدد لسداد القسط' });
+        }
+      }
+
+      // 2. Create withdrawal transaction automatically
+      const txNotes = `سداد قسط رقم (${inst.installment_number}) - ${inst.loan_title}${notes ? ` - ${notes}` : ''}`;
+      const txReq = transaction.request()
+        .input('bank_id', sql.Int, paymentMethod === 'bank_transfer' ? (bankId || inst.loan_bank_id) : null)
+        .input('car_id', sql.Int, inst.car_id || null)
+        .input('payment_method', sql.VarChar, paymentMethod || 'cash')
+        .input('withdrawal_sub_type', sql.NVarChar, 'loan')
+        .input('amount', sql.Decimal(18, 2), inst.amount)
+        .input('date', sql.DateTime, new Date())
+        .input('notes', sql.NVarChar, txNotes)
+        .input('created_by', sql.Int, isNaN(userId) ? null : userId)
+        .input('approved_by', sql.Int, isNaN(userId) ? null : userId);
+
+      const txResult = await txReq.query(`
+        INSERT INTO transactions (bank_id, car_id, type, payment_method, withdrawal_sub_type, amount, date, notes, status, created_by, approved_by)
+        OUTPUT INSERTED.id
+        VALUES (@bank_id, @car_id, 'withdrawal', @payment_method, @withdrawal_sub_type, @amount, @date, @notes, 'disbursed', @created_by, @approved_by)
+      `);
+
+      const newTxId = txResult.recordset[0].id;
+
+      // 3. Update loan_installment status to paid
+      await transaction.request()
+        .input('instId', sql.Int, installmentId)
+        .input('paidAmount', sql.Decimal(18, 2), inst.amount)
+        .input('payMethod', sql.VarChar, paymentMethod || 'cash')
+        .input('bankId', sql.Int, paymentMethod === 'bank_transfer' ? (bankId || inst.loan_bank_id) : null)
+        .input('txId', sql.Int, newTxId)
+        .input('notes', sql.NVarChar, notes || null)
+        .query(`
+          UPDATE loan_installments
+          SET status = 'paid',
+              paid_amount = @paidAmount,
+              paid_date = GETDATE(),
+              payment_method = @payMethod,
+              bank_id = @bankId,
+              transaction_id = @txId,
+              notes = @notes
+          WHERE id = @instId
+        `);
+
+      // 4. Check if all installments for this loan are paid -> mark loan as completed
+      const checkPendingRes = await transaction.request()
+        .input('loanId', sql.Int, inst.loan_id)
+        .query(`SELECT COUNT(*) AS pending_count FROM loan_installments WHERE loan_id = @loanId AND status = 'pending'`);
+
+      if (checkPendingRes.recordset[0].pending_count === 0) {
+        await transaction.request()
+          .input('loanId', sql.Int, inst.loan_id)
+          .query(`UPDATE loans SET status = 'completed' WHERE id = @loanId`);
+      }
+
+      await transaction.commit();
+      logAuditLog(req, 'سداد قسط قرض / التزام بنجاح', 'loan_installment', parseInt(installmentId), { loan_title: inst.loan_title, amount: inst.amount, paymentMethod });
+
+      res.json({ message: 'تم سداد القسط وخصم المبلغ من الحساب بنجاح', transactionId: newTxId });
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+  } catch (error) {
+    console.error('Error paying installment:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء سداد القسط' });
+  }
+});
+
+// DELETE /api/loans/:id - Delete/Cancel a loan
+app.delete('/api/loans/:id', async (req, res) => {
+  const loanId = req.params.id;
+  try {
+    const pool = getPool();
+    await pool.request()
+      .input('loanId', sql.Int, loanId)
+      .query('DELETE FROM loans WHERE id = @loanId');
+
+    logAuditLog(req, 'حذف / إلغاء قرض أو التزام', 'loan', parseInt(loanId));
+    res.json({ message: 'تم حذف القرض والأقساط التابعة له بنجاح' });
+  } catch (error) {
+    console.error('Error deleting loan:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء حذف القرض' });
+  }
+});
+
 // 1. GET /api/dashboard
 app.get('/api/dashboard', async (req, res) => {
   const userRole = req.headers['x-user-role'];

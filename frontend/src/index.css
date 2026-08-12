@@ -1225,6 +1225,152 @@ tr:hover td {
 }
 
 /* ==========================================================================
+   LOANS & INSTALLMENTS STYLES
+   ========================================================================== */
+.due-alerts-box {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(245, 158, 11, 0.08) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.due-alerts-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.due-bell {
+  font-size: 1.5rem;
+  animation: bellRing 1s infinite alternate ease-in-out;
+}
+
+.due-alerts-header h3 {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #fbbf24;
+}
+
+.due-alerts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.due-alert-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--border-color);
+}
+
+.due-alert-item.overdue {
+  border-color: rgba(244, 63, 94, 0.4);
+  background: rgba(244, 63, 94, 0.08);
+}
+
+.due-alert-item.upcoming {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.due-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.due-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.due-date {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.due-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.due-amount {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--danger);
+}
+
+/* Progress bar inside table */
+.progress-bar-wrapper {
+  width: 100px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid var(--border-color);
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981, #38bdf8);
+  border-radius: 10px;
+  transition: width 0.4s ease;
+}
+
+.progress-pct {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+
+/* Light mode overrides for Loans */
+[data-theme="light"] .due-alerts-box {
+  background: #fff5f5 !important;
+  border-color: #fca5a5 !important;
+}
+
+[data-theme="light"] .due-alerts-header h3 {
+  color: #991b1b !important;
+}
+
+[data-theme="light"] .due-alert-item {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+}
+
+[data-theme="light"] .due-title {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .due-amount {
+  color: #be123c !important;
+}
+
+[data-theme="light"] .progress-bar-wrapper {
+  background: #e2e8f0 !important;
+  border-color: #cbd5e1 !important;
+}
+
+[data-theme="light"] .progress-pct {
+  color: #0f172a !important;
+  text-shadow: none !important;
+}
+
+/* ==========================================================================
    THERMAL PRINTING STYLES (80mm Roll)
    ========================================================================== */
 

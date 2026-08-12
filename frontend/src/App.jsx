@@ -4,6 +4,7 @@ import DriverPortal from './components/DriverPortal';
 import AttendanceManagement from './components/AttendanceManagement';
 import AnalyticsCharts from './components/AnalyticsCharts';
 import AuditLogViewer from './components/AuditLogViewer';
+import LoanManagement from './components/LoanManagement';
 
 const compressImage = (file, maxWidth = 1000, maxHeight = 1000, quality = 0.6) => {
   return new Promise((resolve, reject) => {
@@ -2550,6 +2551,15 @@ const [showCarModal, setShowCarModal] = useState(false);
                 onClick={() => { setActiveTab('companies'); loadCompanies(); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
               >
                 🏢 الشركات
+              </button>
+            )}
+
+            {(currentUser.role === 'manager' || currentUser.role === 'accountant') && (
+              <button 
+                className={`tab-btn ${activeTab === 'loans' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('loans'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+              >
+                💳 الأقساط والقروض
               </button>
             )}
 
@@ -7280,6 +7290,11 @@ const [showCarModal, setShowCarModal] = useState(false);
       {/* AUDIT LOGS TAB */}
       {activeTab === 'audit-logs' && currentUser.role === 'manager' && (
         <AuditLogViewer />
+      )}
+
+      {/* LOANS & INSTALLMENTS TAB */}
+      {activeTab === 'loans' && (currentUser.role === 'manager' || currentUser.role === 'accountant') && (
+        <LoanManagement banks={banks} carsList={carsList} onRefreshDashboard={loadDashboard} />
       )}
 
       {/* EDIT USER OVERLAY MODAL */}

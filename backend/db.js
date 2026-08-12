@@ -576,9 +576,55 @@ async function createTables() {
             created_at DATETIME DEFAULT GETDATE()
           );
         END
+
+        -- Create loans table (جدول القروض والأقساط)
+        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'loans')
+        BEGIN
+          CREATE TABLE loans (
+            id INT IDENTITY(1,1) PRIMARY KEY,
+            title NVARCHAR(255) NOT NULL,
+            loan_type NVARCHAR(50) NOT NULL,
+            entity_name NVARCHAR(255) NOT NULL,
+            bank_id INT NULL,
+            car_id INT NULL,
+            total_amount DECIMAL(18,2) NOT NULL,
+            installment_amount DECIMAL(18,2) NOT NULL,
+            total_installments INT NOT NULL,
+            start_date DATE NOT NULL,
+            frequency NVARCHAR(20) DEFAULT 'monthly',
+            status NVARCHAR(20) DEFAULT 'active',
+            notes NVARCHAR(MAX) NULL,
+            created_at DATETIME DEFAULT GETDATE(),
+            FOREIGN KEY (bank_id) REFERENCES banks(id) ON DELETE SET NULL,
+            FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE SET NULL
+          );
+        END
+
+        -- Create loan_installments table (جدول الأقساط المجدولة للسداد)
+        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'loan_installments')
+        BEGIN
+          CREATE TABLE loan_installments (
+            id INT IDENTITY(1,1) PRIMARY KEY,
+            loan_id INT NOT NULL,
+            installment_number INT NOT NULL,
+            due_date DATE NOT NULL,
+            amount DECIMAL(18,2) NOT NULL,
+            status NVARCHAR(20) DEFAULT 'pending',
+            paid_amount DECIMAL(18,2) DEFAULT 0,
+            paid_date DATETIME NULL,
+            payment_method NVARCHAR(20) NULL,
+            bank_id INT NULL,
+            transaction_id INT NULL,
+            notes NVARCHAR(MAX) NULL,
+            created_at DATETIME DEFAULT GETDATE(),
+            FOREIGN KEY (loan_id) REFERENCES loans(id) ON DELETE CASCADE,
+            FOREIGN KEY (bank_id) REFERENCES banks(id) ON DELETE SET NULL,
+            FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL
+          );
+        END
       `);
 
-    console.log('Database tables verified/created (including ZKTeco Attendance & Audit Logs).');
+    console.log('Database tables verified/created (including ZKTeco Attendance, Audit Logs & Loans).');
   } catch (error) {
     console.error('Failed to create tables:', error);
     throw error;
