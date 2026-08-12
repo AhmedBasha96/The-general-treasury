@@ -152,6 +152,37 @@ export default function DriverPortal({ user, onLogout }) {
     loadDriverCar();
   }, [user]);
 
+  // Open refuel modal prefilled with car's assigned fuel type
+  const handleOpenFuelModal = () => {
+    const assignedFuel = car?.fuel_type || 'سولار';
+    setFuelType(assignedFuel);
+    const p = fuelPriceMap[assignedFuel] || 20.50;
+    setOfficialPrice(p);
+    setLiters('');
+    setTotalCost('');
+    setOdometerReading('');
+    setStationName('');
+    setFuelNotes('');
+    setFuelImage(null);
+    setShowFuelModal(true);
+  };
+
+  // Open oil change modal prefilled using car's exact assigned oil interval (e.g. 2000, 5000 km)
+  const handleOpenOilModal = () => {
+    const currentOdoVal = car?.last_odometer || car?.odometer_km || '';
+    const assignedInterval = Number(car?.oil_change_interval_km || 10000);
+    setOilOdometer(currentOdoVal ? String(currentOdoVal) : '');
+    if (currentOdoVal && !isNaN(currentOdoVal)) {
+      setNextKm(String(Number(currentOdoVal) + assignedInterval));
+    } else {
+      setNextKm('');
+    }
+    setOilCost('');
+    setCenterName('');
+    setOilNotes('');
+    setShowOilModal(true);
+  };
+
   // When fuel type changes, update official fixed price per liter
   const handleFuelTypeChange = (type) => {
     setFuelType(type);
@@ -231,7 +262,10 @@ export default function DriverPortal({ user, onLogout }) {
   const handleOilSubmit = async (e) => {
     e.preventDefault();
     if (!data?.car?.id) return;
-    if (!oilOdometer) return alert('يرجى إدخال قراءة العداد الحالية');
+    if (!oilOdometer) return alert('يرجى إدخال عداد السيارة الحالي عند غيار الزيت');
+
+    const assignedInterval = Number(car?.oil_change_interval_km || 10000);
+    const calculatedNextKm = nextKm || String(parseInt(oilOdometer, 10) + assignedInterval);
 
     setFormLoading(true);
     try {
@@ -241,9 +275,8 @@ export default function DriverPortal({ user, onLogout }) {
         body: JSON.stringify({
           car_id: data.car.id,
           driver_rep_id: user.id,
-          maintenance_type: maintenanceType,
           odometer_reading: oilOdometer,
-          next_service_km: nextKm || (parseInt(oilOdometer, 10) + (selectedDriverOilKm || 10000)),
+          next_service_km: calculatedNextKm,
           cost: oilCost || 0,
           center_name: centerName,
           notes: oilNotes
@@ -252,11 +285,11 @@ export default function DriverPortal({ user, onLogout }) {
 
       const result = await res.json();
       if (res.ok) {
-        setFormMessage('✅ تم تسجيل غيار الزيت وتحديث العداد بنجاح!');
+        setFormMessage('✅ تم تسجيل غيار الزيت وتحديث العداد القادم بنجاح!');
         setTimeout(() => { setFormMessage(''); setShowOilModal(false); }, 1500);
         loadDriverCar();
       } else {
-        alert(result.error || 'فشل حفظ عملية الصيانة');
+        alert(result.error || 'فشل حفظ عملية غيار الزيت');
       }
     } catch (err) {
       alert('تعذر الاتصال بالخادم');
@@ -286,12 +319,13 @@ export default function DriverPortal({ user, onLogout }) {
 
   const { car, recentFuelLogs, recentMaintenanceLogs } = data;
 
-  // Calculate Oil Remaining KM for Driver
+  // Calculate Oil Remaining KM for Driver (Only active after first recorded oil change)
+  const hasOilHistory = Boolean(car.next_oil_change_km && car.next_oil_change_km > 0);
   const currentOdo = Number(car.last_odometer || car.odometer_km || 0);
-  const nextOilKm = Number(car.next_oil_change_km || (Number(car.last_oil_change_km || 0) + 10000));
-  const remainingOilKm = nextOilKm - currentOdo;
-  const isOilOverdue = remainingOilKm <= 0;
-  const isOilWarning = remainingOilKm > 0 && remainingOilKm <= 500;
+  const nextOilKm = hasOilHistory ? Number(car.next_oil_change_km) : 0;
+  const remainingOilKm = hasOilHistory ? (nextOilKm - currentOdo) : null;
+  const isOilOverdue = hasOilHistory && remainingOilKm <= 0;
+  const isOilWarning = hasOilHistory && remainingOilKm > 0 && remainingOilKm <= 500;
 
   return (
     <div style={{ padding: '1rem', maxWidth: '900px', margin: '0 auto', direction: 'rtl' }}>
@@ -393,16 +427,16 @@ export default function DriverPortal({ user, onLogout }) {
         {/* Action Buttons */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
           <button 
-            onClick={() => setShowFuelModal(true)}
+            onClick={handleOpenFuelModal}
             style={{ padding: '0.9rem 1rem', background: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '14px', fontSize: '1.05rem', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 14px rgba(37, 99, 235, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
           >
             📷 ⛽ تفويل وتصوير العداد
           </button>
           <button 
-            onClick={() => setShowOilModal(true)}
+            onClick={handleOpenOilModal}
             style={{ padding: '0.9rem 1rem', background: '#ea580c', color: '#ffffff', border: 'none', borderRadius: '14px', fontSize: '1.05rem', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 14px rgba(234, 88, 12, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
           >
-            🛢️ تسجيل غيار زيت / صيانة
+            🛢️ تسجيل غيار زيت المحرك
           </button>
         </div>
       </div>
@@ -476,15 +510,15 @@ export default function DriverPortal({ user, onLogout }) {
             <h3 style={{ marginTop: 0, color: '#0f172a', fontWeight: 'bold' }}>📷 ⛽ تفويل وقود جديد وتصوير عداد المحطة</h3>
             
             <form onSubmit={handleFuelSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem' }}>نوع الوقود (والسعر الرسمي الثابت):</label>
-                <select className="input-field" value={fuelType} onChange={(e) => handleFuelTypeChange(e.target.value)}>
-                  <option value="سولار">⛽ سولار (20.50 ج.م / لتر)</option>
-                  <option value="بنزين 80">⛽ بنزين 80 (20.75 ج.م / لتر)</option>
-                  <option value="بنزين 92">⛽ بنزين 92 (22.25 ج.م / لتر)</option>
-                  <option value="بنزين 95">⛽ بنزين 95 (24.00 ج.م / لتر)</option>
-                  <option value="غاز">⛽ غاز (13.00 ج.م / م³)</option>
-                </select>
+              {/* Read-Only Assigned Fuel Type set by Management */}
+              <div style={{ background: '#f0f9ff', padding: '0.85rem 1rem', borderRadius: '14px', border: '1px solid #bae6fd', color: '#0369a1' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#0284c7' }}>⛽ نوع الوقود المعتمد لسيارتك من الإدارة:</div>
+                <div style={{ fontSize: '1.05rem', fontWeight: '900', color: '#0369a1', marginTop: '0.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>⛽ {car?.fuel_type || 'سولار'}</span>
+                  <span style={{ fontSize: '0.85rem', background: '#e0f2fe', padding: '0.2rem 0.6rem', borderRadius: '8px', color: '#0369a1', fontWeight: 'bold' }}>
+                    السعر الرسمي: {officialPrice} ج.م / لتر
+                  </span>
+                </div>
               </div>
 
               <div>
@@ -499,23 +533,46 @@ export default function DriverPortal({ user, onLogout }) {
                 />
               </div>
 
-              {/* Photo Input (Camera Capture Mandatory) */}
-              <div style={{ background: fuelImage ? '#f0fdf4' : '#fff1f2', padding: '0.9rem', borderRadius: '14px', border: fuelImage ? '2px solid #22c55e' : '2px dashed #f43f5e' }}>
-                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem', color: fuelImage ? '#15803d' : '#be123c' }}>
-                  📸 التقاط صورة حية لعداد المحطة والسيارة (إجباري بالكاميرا 📷):*
+              {/* Photo Input (Mandatory Live Camera Capture Button) */}
+              <div style={{ background: fuelImage ? '#f0fdf4' : '#fff1f2', padding: '1rem', borderRadius: '16px', border: fuelImage ? '2px solid #22c55e' : '2px dashed #f43f5e', textAlign: 'center' }}>
+                <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: '900', fontSize: '0.9rem', color: fuelImage ? '#15803d' : '#be123c' }}>
+                  📸 تصوير عداد شاشة البنزين بالمحطة (إجباري بالكاميرا 📷)*
                 </label>
+                
+                <label 
+                  htmlFor="liveCameraInput" 
+                  style={{ 
+                    display: 'inline-flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    gap: '0.5rem', 
+                    padding: '0.85rem 1.25rem', 
+                    background: fuelImage ? '#16a34a' : '#e11d48', 
+                    color: '#ffffff', 
+                    borderRadius: '14px', 
+                    fontWeight: '800', 
+                    fontSize: '0.95rem', 
+                    cursor: 'pointer', 
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    width: '100%'
+                  }}
+                >
+                  {fuelImage ? '📸 إعادة تصوير العداد بالكاميرا' : '📷 اضغط هنا لفتح كاميرا الموبايل وتصوير العداد حياً'}
+                </label>
+
                 <input 
+                  id="liveCameraInput"
                   type="file" 
                   accept="image/*"
                   capture="environment"
-                  className="input-field"
                   onChange={(e) => setFuelImage(e.target.files[0] || null)}
-                  style={{ padding: '0.4rem', background: '#ffffff', cursor: 'pointer' }}
+                  style={{ display: 'none' }}
                   required
                 />
-                <small style={{ color: fuelImage ? '#16a34a' : '#e11d48', fontSize: '0.75rem', marginTop: '0.35rem', display: 'block', fontWeight: 'bold' }}>
-                  {fuelImage ? '✅ تم التقاط صورة العداد بنجاح!' : '⚠️ اضغط هنا لفتح كاميرا الموبايل والتقاط صورة حية لعداد شاشة البنزين بالمحطة'}
-                </small>
+
+                <div style={{ color: fuelImage ? '#16a34a' : '#e11d48', fontSize: '0.8rem', marginTop: '0.5rem', fontWeight: '800' }}>
+                  {fuelImage ? `✅ تم التقاط صورة العداد بنجاح!` : '⚠️ اضغط الزر الأحمر أعلاه لفتح الكاميرا والتقاط صورة حية لعداد المحطة'}
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
@@ -593,15 +650,14 @@ export default function DriverPortal({ user, onLogout }) {
         </div>
       )}
 
-      {/* Oil & Maintenance Modal */}
+      {/* Oil Change Modal */}
       {showOilModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
           <div style={{ background: '#ffffff', borderRadius: '24px', maxWidth: '480px', width: '100%', padding: '1.75rem', direction: 'rtl', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
-            <h3 style={{ marginTop: 0, color: '#0f172a', fontWeight: 'bold' }}>🛢️ تسجيل غيار زيت جديد للسيارة</h3>
+            <h3 style={{ marginTop: 0, color: '#0f172a', fontWeight: 'bold' }}>🛢️ تسجيل غيار زيت المحرك</h3>
             
-            {/* Designated Oil Interval Badge set by Management */}
             <div style={{ background: '#eff6ff', padding: '0.85rem 1rem', borderRadius: '14px', border: '1px solid #bfdbfe', marginBottom: '1rem', color: '#1e3a8a', fontSize: '0.9rem' }}>
-              <div style={{ fontWeight: 'bold' }}>🛢️ نوع ودورة الزيت المحددة لسيارتك من الإدارة:</div>
+              <div style={{ fontWeight: 'bold' }}>🛢️ دورة غيار الزيت المحددة للسيارة من الإدارة:</div>
               <div style={{ marginTop: '0.2rem', color: '#2563eb', fontWeight: 900, fontSize: '1rem' }}>
                 تغيير زيت موتور وفلاتر ({Number(car.oil_change_interval_km || 10000).toLocaleString()} كم)
               </div>
@@ -609,37 +665,46 @@ export default function DriverPortal({ user, onLogout }) {
 
             <form onSubmit={handleOilSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
-                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem' }}>قراءة العداد الحالية وقت غيار الزيت (كم):*</label>
+                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem', color: '#1e293b' }}>
+                  عداد السيارة الحالي عند غيار الزيت (كم):*
+                </label>
                 <input 
                   type="number" 
                   className="input-field"
-                  placeholder="أدخل قراءة عداد السيارة الحالية..."
+                  placeholder="أدخل قراءة عداد السيارة الحالي..."
                   value={oilOdometer}
                   onChange={(e) => {
-                    setOilOdometer(e.target.value);
-                    if (e.target.value) {
+                    const val = e.target.value;
+                    setOilOdometer(val);
+                    if (val && !isNaN(val)) {
                       const assignedInterval = Number(car.oil_change_interval_km || 10000);
-                      setNextKm(String(parseInt(e.target.value, 10) + assignedInterval));
+                      setNextKm(String(parseInt(val, 10) + assignedInterval));
                     }
                   }}
                   required
                 />
               </div>
 
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem', color: '#1e293b' }}>
+                  العداد المفروض يغير عنده الزيت في المرة القادمة (كم):*
+                </label>
+                <input 
+                  type="number" 
+                  className="input-field"
+                  placeholder="أدخل العداد المستهدف للغيار القادم..."
+                  value={nextKm}
+                  onChange={(e) => setNextKm(e.target.value)}
+                  required
+                />
+                <small style={{ color: '#64748b', fontSize: '0.75rem', marginTop: '0.25rem', display: 'block' }}>
+                  💡 محتسب تلقائياً بناءً على دورة الزيت ({Number(car.oil_change_interval_km || 10000).toLocaleString()} كم) ويمكنك تعديله عند اللزوم
+                </small>
+              </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem' }}>العداد القادم المستهدف (محسوب):</label>
-                  <input 
-                    type="number" 
-                    className="input-field"
-                    placeholder="يحسب أوتوماتيكياً"
-                    value={nextKm || (oilOdometer ? String(parseInt(oilOdometer, 10) + Number(car.oil_change_interval_km || 10000)) : '')}
-                    disabled
-                    style={{ background: '#f1f5f9', cursor: 'not-allowed' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem' }}>التكلفة الإجمالية (ج.م):</label>
+                  <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem' }}>التكلفة (ج.م - اختياري):</label>
                   <input 
                     type="number" 
                     className="input-field"
@@ -648,17 +713,16 @@ export default function DriverPortal({ user, onLogout }) {
                     onChange={(e) => setOilCost(e.target.value)}
                   />
                 </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem' }}>اسم الورشة / المركز (اختياري):</label>
-                <input 
-                  type="text" 
-                  className="input-field"
-                  placeholder="اسم الورشة أو المركز..."
-                  value={centerName}
-                  onChange={(e) => setCenterName(e.target.value)}
-                />
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem' }}>اسم الورشة / المركز (اختياري):</label>
+                  <input 
+                    type="text" 
+                    className="input-field"
+                    placeholder="اسم الورشة أو المركز..."
+                    value={centerName}
+                    onChange={(e) => setCenterName(e.target.value)}
+                  />
+                </div>
               </div>
 
               <div>
@@ -676,7 +740,7 @@ export default function DriverPortal({ user, onLogout }) {
 
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
                 <button type="submit" className="btn btn-primary" disabled={formLoading} style={{ flex: 1, background: '#ea580c' }}>
-                  {formLoading ? 'جاري الحفظ…' : 'حفظ عملية غيار الزيت وتحديث الموعد القادم 🛢️'}
+                  {formLoading ? 'جاري الحفظ…' : 'حفظ عملية غيار الزيت وتحديث العداد 🛢️'}
                 </button>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowOilModal(false)}>
                   إلغاء

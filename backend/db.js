@@ -473,6 +473,30 @@ async function createTables() {
       BEGIN
         ALTER TABLE cars ADD last_oil_change_date DATETIME NULL;
       END
+
+      -- Reset oil change tracking for cars that have never had an oil change recorded in car_maintenance_logs
+      UPDATE c
+      SET c.last_oil_change_km = m.last_odo,
+          c.next_oil_change_km = m.next_km,
+          c.last_oil_change_date = m.last_date
+      FROM cars c
+      INNER JOIN (
+        SELECT 
+          car_id, 
+          MAX(odometer_reading) AS last_odo, 
+          MAX(next_service_km) AS next_km,
+          MAX(date) AS last_date
+        FROM car_maintenance_logs
+        GROUP BY car_id
+      ) m ON c.id = m.car_id;
+
+      UPDATE c
+      SET c.last_oil_change_km = NULL,
+          c.next_oil_change_km = NULL,
+          c.last_oil_change_date = NULL
+      FROM cars c
+      LEFT JOIN car_maintenance_logs ml ON c.id = ml.car_id
+      WHERE ml.id IS NULL;
     `);
 
     // Create car_fuel_logs table if not exists

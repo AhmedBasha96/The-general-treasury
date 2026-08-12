@@ -362,8 +362,9 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
   const activeCount = cars.filter(c => c.status === 'نشطة' || !c.status).length;
   const maintenanceCount = cars.filter(c => c.status === 'صيانة').length;
 
-  // Filter cars needing oil change (remaining <= 500 km)
+  // Filter cars needing oil change (only for cars with recorded oil change history)
   const oilAlertCars = cars.filter(c => {
+    if (c.remaining_oil_km === null || c.remaining_oil_km === undefined || !c.next_oil_change_km) return false;
     const rem = Number(c.remaining_oil_km);
     return !isNaN(rem) && rem <= 500;
   });
@@ -564,17 +565,31 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
                       </div>
 
                       {/* Engine Oil Status Badge */}
-                      <div style={{
-                        fontSize: '0.75rem',
-                        fontWeight: '800',
-                        padding: '0.3rem 0.6rem',
-                        borderRadius: '10px',
-                        background: isOilOverdue ? 'rgba(244,63,94,0.15)' : isOilWarning ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.12)',
-                        color: isOilOverdue ? '#f43f5e' : isOilWarning ? '#f59e0b' : '#10b981',
-                        border: `1px solid ${isOilOverdue ? 'rgba(244,63,94,0.35)' : isOilWarning ? 'rgba(245,158,11,0.35)' : 'rgba(16,185,129,0.3)'}`
-                      }}>
-                        🛢️ زيت المحرك: {isOilOverdue ? `🚨 مستحق غيار الآن (تجاوز بـ ${Math.abs(remOil).toLocaleString()} كم)` : isOilWarning ? `🟡 باقي ${remOil.toLocaleString()} كم على الغيار` : `🟢 ممتاز (متبقي ${remOil.toLocaleString()} كم)`}
-                      </div>
+                      {c.remaining_oil_km === null || c.remaining_oil_km === undefined || !c.next_oil_change_km ? (
+                        <div style={{
+                          fontSize: '0.75rem',
+                          fontWeight: '800',
+                          padding: '0.3rem 0.6rem',
+                          borderRadius: '10px',
+                          background: 'rgba(148, 163, 184, 0.15)',
+                          color: '#94a3b8',
+                          border: '1px solid rgba(148, 163, 184, 0.3)'
+                        }}>
+                          ⏳ لم يتم تسجيل غيار زيت بعد (في انتظار الغيار الأول)
+                        </div>
+                      ) : (
+                        <div style={{
+                          fontSize: '0.75rem',
+                          fontWeight: '800',
+                          padding: '0.3rem 0.6rem',
+                          borderRadius: '10px',
+                          background: isOilOverdue ? 'rgba(244,63,94,0.15)' : isOilWarning ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.12)',
+                          color: isOilOverdue ? '#f43f5e' : isOilWarning ? '#f59e0b' : '#10b981',
+                          border: `1px solid ${isOilOverdue ? 'rgba(244,63,94,0.35)' : isOilWarning ? 'rgba(245,158,11,0.35)' : 'rgba(16,185,129,0.3)'}`
+                        }}>
+                          🛢️ زيت المحرك: {isOilOverdue ? `🚨 مستحق غيار الآن (تجاوز بـ ${Math.abs(remOil).toLocaleString()} كم)` : isOilWarning ? `🟡 باقي ${remOil.toLocaleString()} كم على الغيار` : `🟢 ممتاز (متبقي ${remOil.toLocaleString()} كم)`}
+                        </div>
+                      )}
 
                       {/* Balance / Total expenses */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>

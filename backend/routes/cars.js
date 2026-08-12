@@ -64,11 +64,15 @@ router.get('/', async (req, res) => {
         c.image_path,
         ISNULL(c.odometer_km, 0) AS odometer_km,
         ISNULL(c.last_odometer, ISNULL(c.odometer_km, 0)) AS last_odometer,
-        ISNULL(c.last_oil_change_km, 0) AS last_oil_change_km,
+        c.last_oil_change_km,
         ISNULL(c.oil_change_interval_km, 10000) AS oil_change_interval_km,
-        ISNULL(c.next_oil_change_km, ISNULL(c.last_oil_change_km, 0) + ISNULL(c.oil_change_interval_km, 10000)) AS next_oil_change_km,
+        c.next_oil_change_km,
         CONVERT(VARCHAR(10), c.last_oil_change_date, 120) AS last_oil_change_date,
-        (ISNULL(c.next_oil_change_km, ISNULL(c.last_oil_change_km, 0) + ISNULL(c.oil_change_interval_km, 10000)) - ISNULL(c.last_odometer, ISNULL(c.odometer_km, 0))) AS remaining_oil_km,
+        CASE 
+          WHEN c.next_oil_change_km IS NOT NULL AND c.next_oil_change_km > 0 THEN 
+            (c.next_oil_change_km - ISNULL(c.last_odometer, ISNULL(c.odometer_km, 0))) 
+          ELSE NULL 
+        END AS remaining_oil_km,
         CONVERT(VARCHAR(10), c.license_expiry_date, 120) AS license_expiry_date,
         ISNULL(c.status, N'نشطة') AS status,
         ISNULL(c.fuel_type, N'سولار') AS fuel_type,
@@ -170,9 +174,9 @@ router.post('/', upload.single('image'), async (req, res) => {
       .input('next_oil', sql.Int, odoVal + oil_change_interval_km)
       .query(`
         INSERT INTO cars 
-        (plate_number, plate_letters, plate_numbers, driver_name, driver_rep_id, vehicle_type, model, image_path, odometer_km, last_odometer, license_expiry_date, status, fuel_type, notes, oil_change_interval_km, next_oil_change_km) 
+        (plate_number, plate_letters, plate_numbers, driver_name, driver_rep_id, vehicle_type, model, image_path, odometer_km, last_odometer, last_oil_change_km, next_oil_change_km, license_expiry_date, status, fuel_type, notes, oil_change_interval_km) 
         VALUES 
-        (@plate, @letters, @numbers, @driver, @driver_rep, @vtype, @model, @img, @odo, @odo, @expiry, @status, @ftype, @notes, @oil_interval, @next_oil)
+        (@plate, @letters, @numbers, @driver, @driver_rep, @vtype, @model, @img, @odo, @odo, NULL, NULL, @expiry, @status, @ftype, @notes, @oil_interval)
       `);
     res.status(201).json({ message: 'تم إضافة السيارة بنجاح' });
   } catch (error) {
@@ -319,7 +323,7 @@ router.put('/:id', upload.single('image'), async (req, res) => {
               last_odometer = CASE WHEN @odo > ISNULL(last_odometer, 0) THEN @odo ELSE last_odometer END,
               license_expiry_date = @expiry, status = @status, fuel_type = @ftype, notes = @notes,
               oil_change_interval_km = @oil_interval,
-              next_oil_change_km = ISNULL(last_oil_change_km, 0) + @oil_interval
+              next_oil_change_km = CASE WHEN last_oil_change_km IS NOT NULL THEN last_oil_change_km + @oil_interval ELSE NULL END
           WHERE id = @id
         `);
     } else {
@@ -346,7 +350,7 @@ router.put('/:id', upload.single('image'), async (req, res) => {
               last_odometer = CASE WHEN @odo > ISNULL(last_odometer, 0) THEN @odo ELSE last_odometer END,
               license_expiry_date = @expiry, status = @status, fuel_type = @ftype, notes = @notes,
               oil_change_interval_km = @oil_interval,
-              next_oil_change_km = ISNULL(last_oil_change_km, 0) + @oil_interval
+              next_oil_change_km = CASE WHEN last_oil_change_km IS NOT NULL THEN last_oil_change_km + @oil_interval ELSE NULL END
           WHERE id = @id
         `);
     }
@@ -511,7 +515,7 @@ router.post('/oil-change', async (req, res) => {
 
 // POST /api/driver/oil-change - Driver Portal oil entry (Enforcing management oil interval)
 router.post('/driver/oil-change', async (req, res) => {
-  const { car_id, driver_rep_id, odometer_reading, cost, center_name, notes } = req.body;
+  const { car_id, driver_rep_id, odometer_reading, next_service_km, cost, center_name, notes } = req.body;
   if (!car_id || !odometer_reading) {
     return res.status(400).json({ error: 'بيانات العداد قراءة الصيانة مطلوبة' });
   }
@@ -528,7 +532,7 @@ router.post('/driver/oil-change', async (req, res) => {
       .query(`SELECT ISNULL(oil_change_interval_km, 10000) AS interval FROM cars WHERE id = @car_id`);
 
     const interval = carRes.recordset[0]?.interval || 10000;
-    const nextKm = odo + interval;
+    const nextKm = next_service_km ? parseInt(next_service_km, 10) : (odo + interval);
     const mtype = `تغيير زيت موتور وفلاتر (${interval.toLocaleString()} كم)`;
 
     // Insert into car_maintenance_logs
