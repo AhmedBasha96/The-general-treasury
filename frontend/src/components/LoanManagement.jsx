@@ -29,8 +29,6 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
 
   // Pay Installment Modal State
   const [payingInstallment, setPayingInstallment] = useState(null);
-  const [payMethod, setPayMethod] = useState('cash');
-  const [payBankId, setPayBankId] = useState('');
   const [payNotes, setPayNotes] = useState('');
   const [payLoading, setPayLoading] = useState(false);
   const [payError, setPayError] = useState('');
@@ -131,24 +129,20 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          paymentMethod: payMethod,
-          bankId: payMethod === 'bank_transfer' ? payBankId : null,
           notes: payNotes
         })
       });
       const data = await res.json();
 
       if (res.ok) {
-        alert('تم سداد القسط وخصم المبلغ وتوثيق حركة الصرف بنجاح! ✅');
         setPayingInstallment(null);
         setPayNotes('');
         fetchLoans();
         if (selectedLoan) {
           fetchInstallments(selectedLoan.id);
         }
-        if (onRefreshDashboard) onRefreshDashboard();
       } else {
-        setPayError(data.error || 'حدث خطأ أثناء سداد القسط');
+        setPayError(data.error || 'حدث خطأ أثناء تسجيل سداد القسط');
       }
     } catch (err) {
       setPayError('تعذر الاتصال بالسيرفر');
@@ -197,7 +191,7 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
     <div className="panel loans-panel">
       {/* Panel Header */}
       <div className="panel-header">
-        <h2 className="panel-title">💳 إدارة الأقساط والقروض ومواعيد السداد</h2>
+        <h2 className="panel-title">💳 إشعارات الأقساط والقروض ومواعيد السداد</h2>
         <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
           ➕ إضافة قرض / التزام جديد
         </button>
@@ -233,7 +227,7 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                         setPayError('');
                       }}
                     >
-                      💸 سداد القسط الآن
+                      ✅ تعليم كمسدد
                     </button>
                   </div>
                 </div>
@@ -258,8 +252,8 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                 <th>إجمالي القرض</th>
                 <th>المسدد</th>
                 <th>المتبقي</th>
-                <th>نسبة السداد</th>
-                <th>الأقساط</th>
+                <th>نسبة الإنجاز</th>
+                <th>الأقساط (المدفوع / المتبقي)</th>
                 <th>الإجراءات</th>
               </tr>
             </thead>
@@ -291,7 +285,7 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                     </td>
                     <td>
                       <span className="badge badge-secondary">
-                        {loan.paid_installments} / {loan.total_installments} قسط
+                        {loan.paid_installments} مدفوع / {loan.total_installments - loan.paid_installments} متبقي
                       </span>
                     </td>
                     <td>
@@ -474,7 +468,6 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                       <th>تاريخ الاستحقاق</th>
                       <th>مبلغ القسط</th>
                       <th>الحالة</th>
-                      <th>طريقة السداد</th>
                       <th>الإجراء</th>
                     </tr>
                   </thead>
@@ -494,11 +487,6 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                             </span>
                           </td>
                           <td>
-                            {isPaid ? (
-                              inst.payment_method === 'bank_transfer' ? `بنك: ${inst.bank_name || 'تحويل بنكي'}` : 'نقداً من الخزنة'
-                            ) : '—'}
-                          </td>
-                          <td>
                             {!isPaid ? (
                               <button
                                 className="btn btn-xs btn-primary"
@@ -507,7 +495,7 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                                   setPayError('');
                                 }}
                               >
-                                💸 سداد القسط الآن
+                                ✅ تعليم كمسدد
                               </button>
                             ) : (
                               <span style={{ fontSize: '0.8rem', color: 'var(--success)' }}>تم السداد في {new Date(inst.paid_date).toLocaleDateString('ar-EG')}</span>
@@ -524,12 +512,12 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
         </div>
       )}
 
-      {/* MODAL: PAY INSTALLMENT */}
+      {/* MODAL: MARK INSTALLMENT AS PAID */}
       {payingInstallment && (
         <div className="modal-overlay">
           <div className="panel modal-content" style={{ maxWidth: '480px' }}>
             <div className="panel-header">
-              <h2 className="panel-title">💸 سداد قسط رقم #{payingInstallment.installment_number}</h2>
+              <h2 className="panel-title">✅ تسجيل سداد قسط رقم #{payingInstallment.installment_number}</h2>
               <button className="btn btn-secondary" onClick={() => setPayingInstallment(null)}>✕ إغلاق</button>
             </div>
 
@@ -541,40 +529,23 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                 <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--primary)', marginTop: '0.25rem' }}>
                   مبلغ القسط: {Number(payingInstallment.amount).toLocaleString('ar-EG')} ج.م
                 </div>
-              </div>
-
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>طريقة سداد القسط:*</label>
-                <select value={payMethod} onChange={e => setPayMethod(e.target.value)}>
-                  <option value="cash">💵 نقداً خصماً من الخزنة العامة</option>
-                  <option value="bank_transfer">🏦 تحويل خصماً من حساب بنكي</option>
-                </select>
-              </div>
-
-              {payMethod === 'bank_transfer' && (
-                <div className="form-group" style={{ marginBottom: '1rem' }}>
-                  <label>اختر الحساب البنكي الخاسم:*</label>
-                  <select value={payBankId} onChange={e => setPayBankId(e.target.value)} required>
-                    <option value="">اختر البنك...</option>
-                    {banks.map(b => (
-                      <option key={b.id} value={b.id}>{b.name} ({b.code}) - الرصيد: {Number(b.balance || 0).toLocaleString()} ج.م</option>
-                    ))}
-                  </select>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+                  ℹ️ ملاحظة: سداد القسط هنا للمتابعة والتنبهات فقط، ولا يخصم من رصيد الخزينة أو البنوك.
                 </div>
-              )}
+              </div>
 
               <div className="form-group" style={{ marginBottom: '1.25rem' }}>
                 <label>ملاحظات السداد (اختياري):</label>
                 <input
                   type="text"
-                  placeholder="رقم الشيك أو رقم التحويل..."
+                  placeholder="رقم الشيك، إيصال البنك، أو ملاحظات..."
                   value={payNotes}
                   onChange={e => setPayNotes(e.target.value)}
                 />
               </div>
 
               <button type="submit" disabled={payLoading} className="btn btn-primary" style={{ width: '100%' }}>
-                {payLoading ? 'جاري السداد وتأكيد الصرف...' : 'تأكيد سداد القسط وخصم المبلغ 💸'}
+                {payLoading ? 'جاري الحفظ...' : 'تأكيد تسجيل القسط كمسدد ✅'}
               </button>
             </form>
           </div>

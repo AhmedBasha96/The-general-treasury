@@ -533,18 +533,17 @@ app.get('/api/loans/:id/installments', async (req, res) => {
   }
 });
 
-// POST /api/loans/installments/:id/pay - Pay an installment and auto-deduct from safe/bank
+// POST /api/loans/installments/:id/pay - Mark installment as paid (reminder/tracking only, no deduction from safe/banks)
 app.post('/api/loans/installments/:id/pay', async (req, res) => {
   const installmentId = req.params.id;
-  const { paymentMethod, bankId, notes } = req.body; // paymentMethod: 'cash' | 'bank_transfer'
-  const userId = parseInt(req.headers['x-user-id']);
+  const { notes } = req.body;
 
   try {
     const pool = getPool();
     const instRes = await pool.request()
       .input('instId', sql.Int, installmentId)
       .query(`
-        SELECT i.*, l.title AS loan_title, l.loan_type, l.car_id, l.bank_id AS loan_bank_id
+        SELECT i.*, l.title AS loan_title
         FROM loan_installments i
         JOIN loans l ON i.loan_id = l.id
         WHERE i.id = @instId
@@ -559,101 +558,37 @@ app.post('/api/loans/installments/:id/pay', async (req, res) => {
       return res.status(400).json({ error: 'هذا القسط مسدد بالفعل مسبقاً' });
     }
 
-    const transaction = new sql.Transaction(pool);
-    await transaction.begin();
-
-    try {
-      // 1. Check Cash Safe or Bank Balance
-      if (paymentMethod === 'cash' || !paymentMethod) {
-        const cashDepRes = await transaction.request().query(`
-          SELECT ISNULL(SUM(amount), 0) AS total FROM transactions WITH (UPDLOCK, TABLOCKX)
-          WHERE type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved', 'disbursed') OR status IS NULL)
-        `);
-        const withRes = await transaction.request().query(`
-          SELECT ISNULL(SUM(amount), 0) AS total FROM transactions
-          WHERE (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
-             OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status = 'approved' OR status IS NULL))
-        `);
-        const safeInitialBalance = await getSafeInitialBalance(transaction);
-        const currentCashBalance = safeInitialBalance + Number(cashDepRes.recordset[0].total) - Number(withRes.recordset[0].total);
-
-        if (currentCashBalance < Number(inst.amount)) {
-          await transaction.rollback();
-          return res.status(400).json({
-            error: `رصيد الخزينة النقدي الحالي (${currentCashBalance.toLocaleString('ar-EG')} ج.م) غير كافٍ لسداد القسط (${Number(inst.amount).toLocaleString('ar-EG')} ج.م).`
-          });
-        }
-      } else if (paymentMethod === 'bank_transfer') {
-        const targetBankId = bankId || inst.loan_bank_id;
-        if (!targetBankId) {
-          await transaction.rollback();
-          return res.status(400).json({ error: 'الحساب البنكي غير محدد لسداد القسط' });
-        }
-      }
-
-      // 2. Create withdrawal transaction automatically
-      const txNotes = `سداد قسط رقم (${inst.installment_number}) - ${inst.loan_title}${notes ? ` - ${notes}` : ''}`;
-      const txReq = transaction.request()
-        .input('bank_id', sql.Int, paymentMethod === 'bank_transfer' ? (bankId || inst.loan_bank_id) : null)
-        .input('car_id', sql.Int, inst.car_id || null)
-        .input('payment_method', sql.VarChar, paymentMethod || 'cash')
-        .input('withdrawal_sub_type', sql.NVarChar, 'loan')
-        .input('amount', sql.Decimal(18, 2), inst.amount)
-        .input('date', sql.DateTime, new Date())
-        .input('notes', sql.NVarChar, txNotes)
-        .input('created_by', sql.Int, isNaN(userId) ? null : userId)
-        .input('approved_by', sql.Int, isNaN(userId) ? null : userId);
-
-      const txResult = await txReq.query(`
-        INSERT INTO transactions (bank_id, car_id, type, payment_method, withdrawal_sub_type, amount, date, notes, status, created_by, approved_by)
-        OUTPUT INSERTED.id
-        VALUES (@bank_id, @car_id, 'withdrawal', @payment_method, @withdrawal_sub_type, @amount, @date, @notes, 'disbursed', @created_by, @approved_by)
+    // Update loan_installment status to paid (tracking & notification only)
+    await pool.request()
+      .input('instId', sql.Int, installmentId)
+      .input('paidAmount', sql.Decimal(18, 2), inst.amount)
+      .input('notes', sql.NVarChar, notes || null)
+      .query(`
+        UPDATE loan_installments
+        SET status = 'paid',
+            paid_amount = @paidAmount,
+            paid_date = GETDATE(),
+            notes = @notes
+        WHERE id = @instId
       `);
 
-      const newTxId = txResult.recordset[0].id;
+    // Check if all installments for this loan are paid -> mark loan as completed
+    const checkPendingRes = await pool.request()
+      .input('loanId', sql.Int, inst.loan_id)
+      .query(`SELECT COUNT(*) AS pending_count FROM loan_installments WHERE loan_id = @loanId AND status = 'pending'`);
 
-      // 3. Update loan_installment status to paid
-      await transaction.request()
-        .input('instId', sql.Int, installmentId)
-        .input('paidAmount', sql.Decimal(18, 2), inst.amount)
-        .input('payMethod', sql.VarChar, paymentMethod || 'cash')
-        .input('bankId', sql.Int, paymentMethod === 'bank_transfer' ? (bankId || inst.loan_bank_id) : null)
-        .input('txId', sql.Int, newTxId)
-        .input('notes', sql.NVarChar, notes || null)
-        .query(`
-          UPDATE loan_installments
-          SET status = 'paid',
-              paid_amount = @paidAmount,
-              paid_date = GETDATE(),
-              payment_method = @payMethod,
-              bank_id = @bankId,
-              transaction_id = @txId,
-              notes = @notes
-          WHERE id = @instId
-        `);
-
-      // 4. Check if all installments for this loan are paid -> mark loan as completed
-      const checkPendingRes = await transaction.request()
+    if (checkPendingRes.recordset[0].pending_count === 0) {
+      await pool.request()
         .input('loanId', sql.Int, inst.loan_id)
-        .query(`SELECT COUNT(*) AS pending_count FROM loan_installments WHERE loan_id = @loanId AND status = 'pending'`);
-
-      if (checkPendingRes.recordset[0].pending_count === 0) {
-        await transaction.request()
-          .input('loanId', sql.Int, inst.loan_id)
-          .query(`UPDATE loans SET status = 'completed' WHERE id = @loanId`);
-      }
-
-      await transaction.commit();
-      logAuditLog(req, 'سداد قسط قرض / التزام بنجاح', 'loan_installment', parseInt(installmentId), { loan_title: inst.loan_title, amount: inst.amount, paymentMethod });
-
-      res.json({ message: 'تم سداد القسط وخصم المبلغ من الحساب بنجاح', transactionId: newTxId });
-    } catch (err) {
-      await transaction.rollback();
-      throw err;
+        .query(`UPDATE loans SET status = 'completed' WHERE id = @loanId`);
     }
+
+    logAuditLog(req, 'تسجيل سداد قسط (متابعة وتنبيهات)', 'loan_installment', parseInt(installmentId), { loan_title: inst.loan_title, amount: inst.amount });
+
+    res.json({ message: 'تم تحديث حالة القسط إلى مسدد بنجاح' });
   } catch (error) {
     console.error('Error paying installment:', error);
-    res.status(500).json({ error: 'حدث خطأ أثناء سداد القسط' });
+    res.status(500).json({ error: 'حدث خطأ أثناء تحديث حالة القسط' });
   }
 });
 
