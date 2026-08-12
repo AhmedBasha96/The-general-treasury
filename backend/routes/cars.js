@@ -131,6 +131,7 @@ router.post('/', upload.single('image'), async (req, res) => {
   let status = fixUtf8String(req.body?.status).trim() || 'نشطة';
   let fuel_type = fixUtf8String(req.body?.fuel_type).trim() || 'سولار';
   let notes = fixUtf8String(req.body?.notes).trim();
+  let oil_change_interval_km = req.body?.oil_change_interval_km ? parseInt(req.body.oil_change_interval_km, 10) : 10000;
 
   if (!plate_number && (plate_letters || plate_numbers)) {
     plate_number = [plate_letters, plate_numbers].filter(Boolean).join(' ');
@@ -150,6 +151,7 @@ router.post('/', upload.single('image'), async (req, res) => {
     if (dup.recordset.length > 0) {
       return res.status(400).json({ error: 'رقم اللوحة مسجل مسبقاً' });
     }
+    const odoVal = isNaN(odometer_km) ? 0 : odometer_km;
     await pool.request()
       .input('plate', sql.NVarChar(255), plate_number)
       .input('letters', sql.NVarChar(50), plate_letters || null)
@@ -159,12 +161,19 @@ router.post('/', upload.single('image'), async (req, res) => {
       .input('vtype', sql.NVarChar(100), vehicle_type || 'نقل')
       .input('model', sql.NVarChar(100), model || 'سوزوكي')
       .input('img', sql.NVarChar(sql.MAX), imagePath)
-      .input('odo', sql.Int, isNaN(odometer_km) ? 0 : odometer_km)
+      .input('odo', sql.Int, odoVal)
       .input('expiry', sql.Date, license_expiry_date || null)
       .input('status', sql.NVarChar(50), status)
       .input('ftype', sql.NVarChar(50), fuel_type)
       .input('notes', sql.NVarChar(sql.MAX), notes || null)
-      .query(`INSERT INTO cars (plate_number, plate_letters, plate_numbers, driver_name, driver_rep_id, vehicle_type, model, image_path, odometer_km, license_expiry_date, status, fuel_type, notes) VALUES (@plate, @letters, @numbers, @driver, @driver_rep, @vtype, @model, @img, @odo, @expiry, @status, @ftype, @notes)`);
+      .input('oil_interval', sql.Int, oil_change_interval_km)
+      .input('next_oil', sql.Int, odoVal + oil_change_interval_km)
+      .query(`
+        INSERT INTO cars 
+        (plate_number, plate_letters, plate_numbers, driver_name, driver_rep_id, vehicle_type, model, image_path, odometer_km, last_odometer, license_expiry_date, status, fuel_type, notes, oil_change_interval_km, next_oil_change_km) 
+        VALUES 
+        (@plate, @letters, @numbers, @driver, @driver_rep, @vtype, @model, @img, @odo, @odo, @expiry, @status, @ftype, @notes, @oil_interval, @next_oil)
+      `);
     res.status(201).json({ message: 'تم إضافة السيارة بنجاح' });
   } catch (error) {
     console.error('Error adding car:', error);
@@ -260,6 +269,7 @@ router.put('/:id', upload.single('image'), async (req, res) => {
   let status = fixUtf8String(req.body?.status).trim() || 'نشطة';
   let fuel_type = fixUtf8String(req.body?.fuel_type).trim() || 'سولار';
   let notes = fixUtf8String(req.body?.notes).trim();
+  let oil_change_interval_km = req.body?.oil_change_interval_km ? parseInt(req.body.oil_change_interval_km, 10) : 10000;
 
   if (!plate_number && (plate_letters || plate_numbers)) {
     plate_number = [plate_letters, plate_numbers].filter(Boolean).join(' ');
@@ -282,6 +292,8 @@ router.put('/:id', upload.single('image'), async (req, res) => {
       return res.status(400).json({ error: 'رقم اللوحة مسجل لسيارة أخرى' });
     }
 
+    const odoVal = isNaN(odometer_km) ? 0 : odometer_km;
+
     if (imagePath) {
       await pool.request()
         .input('id', sql.Int, id)
@@ -293,12 +305,23 @@ router.put('/:id', upload.single('image'), async (req, res) => {
         .input('vtype', sql.NVarChar(100), vehicle_type || 'نقل')
         .input('model', sql.NVarChar(100), model || 'سوزوكي')
         .input('img', sql.NVarChar(sql.MAX), imagePath)
-        .input('odo', sql.Int, isNaN(odometer_km) ? 0 : odometer_km)
+        .input('odo', sql.Int, odoVal)
         .input('expiry', sql.Date, license_expiry_date || null)
         .input('status', sql.NVarChar(50), status)
         .input('ftype', sql.NVarChar(50), fuel_type)
         .input('notes', sql.NVarChar(sql.MAX), notes || null)
-        .query(`UPDATE cars SET plate_number = @plate, plate_letters = @letters, plate_numbers = @numbers, driver_name = @driver, driver_rep_id = @driver_rep, vehicle_type = @vtype, model = @model, image_path = @img, odometer_km = @odo, license_expiry_date = @expiry, status = @status, fuel_type = @ftype, notes = @notes WHERE id = @id`);
+        .input('oil_interval', sql.Int, oil_change_interval_km)
+        .query(`
+          UPDATE cars 
+          SET plate_number = @plate, plate_letters = @letters, plate_numbers = @numbers, 
+              driver_name = @driver, driver_rep_id = @driver_rep, vehicle_type = @vtype, 
+              model = @model, image_path = @img, odometer_km = @odo, 
+              last_odometer = CASE WHEN @odo > ISNULL(last_odometer, 0) THEN @odo ELSE last_odometer END,
+              license_expiry_date = @expiry, status = @status, fuel_type = @ftype, notes = @notes,
+              oil_change_interval_km = @oil_interval,
+              next_oil_change_km = ISNULL(last_oil_change_km, 0) + @oil_interval
+          WHERE id = @id
+        `);
     } else {
       await pool.request()
         .input('id', sql.Int, id)
@@ -309,12 +332,23 @@ router.put('/:id', upload.single('image'), async (req, res) => {
         .input('driver_rep', sql.Int, isNaN(driver_rep_id) ? null : driver_rep_id)
         .input('vtype', sql.NVarChar(100), vehicle_type || 'نقل')
         .input('model', sql.NVarChar(100), model || 'سوزوكي')
-        .input('odo', sql.Int, isNaN(odometer_km) ? 0 : odometer_km)
+        .input('odo', sql.Int, odoVal)
         .input('expiry', sql.Date, license_expiry_date || null)
         .input('status', sql.NVarChar(50), status)
         .input('ftype', sql.NVarChar(50), fuel_type)
         .input('notes', sql.NVarChar(sql.MAX), notes || null)
-        .query(`UPDATE cars SET plate_number = @plate, plate_letters = @letters, plate_numbers = @numbers, driver_name = @driver, driver_rep_id = @driver_rep, vehicle_type = @vtype, model = @model, odometer_km = @odo, license_expiry_date = @expiry, status = @status, fuel_type = @ftype, notes = @notes WHERE id = @id`);
+        .input('oil_interval', sql.Int, oil_change_interval_km)
+        .query(`
+          UPDATE cars 
+          SET plate_number = @plate, plate_letters = @letters, plate_numbers = @numbers, 
+              driver_name = @driver, driver_rep_id = @driver_rep, vehicle_type = @vtype, 
+              model = @model, odometer_km = @odo, 
+              last_odometer = CASE WHEN @odo > ISNULL(last_odometer, 0) THEN @odo ELSE last_odometer END,
+              license_expiry_date = @expiry, status = @status, fuel_type = @ftype, notes = @notes,
+              oil_change_interval_km = @oil_interval,
+              next_oil_change_km = ISNULL(last_oil_change_km, 0) + @oil_interval
+          WHERE id = @id
+        `);
     }
     res.json({ message: 'تم تحديث بيانات السيارة بنجاح' });
   } catch (error) {

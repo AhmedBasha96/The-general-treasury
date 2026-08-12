@@ -120,6 +120,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
   const [fuelType, setFuelType] = useState('سولار');
   const [notes, setNotes] = useState('');
   const [image, setImage] = useState(null);
+  const [oilIntervalKm, setOilIntervalKm] = useState('10000');
   
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('جميع الحالات');
@@ -213,6 +214,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
         reqBody.append('license_expiry_date', licenseExpiryDate);
         reqBody.append('status', status);
         reqBody.append('fuel_type', fuelType);
+        reqBody.append('oil_change_interval_km', oilIntervalKm);
         reqBody.append('notes', notes.trim());
         reqBody.append('image', image);
       } else {
@@ -228,6 +230,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
           license_expiry_date: licenseExpiryDate,
           status,
           fuel_type: fuelType,
+          oil_change_interval_km: oilIntervalKm,
           notes: notes.trim()
         });
         headers = { 'Content-Type': 'application/json' };
@@ -297,6 +300,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
     setLicenseExpiryDate(c.license_expiry_date || '');
     setStatus(c.status || 'نشطة');
     setFuelType(c.fuel_type || 'سولار');
+    setOilIntervalKm(c.oil_change_interval_km ? String(c.oil_change_interval_km) : '10000');
     setNotes(c.notes || '');
     
     if (c.plate_letters || c.plate_numbers) {
@@ -349,7 +353,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
     setEditingCar(null);
     setPlateL1(''); setPlateL2(''); setPlateL3(''); setPlateNum(''); setDriverName(''); setDriverRepId('');
     setVehicleType('نقل'); setModel('سوزوكي');
-    setOdometerKm(''); setLicenseExpiryDate(''); setStatus('نشطة'); setFuelType('سولار'); setNotes('');
+    setOdometerKm(''); setLicenseExpiryDate(''); setStatus('نشطة'); setFuelType('سولار'); setOilIntervalKm('10000'); setNotes('');
     setImage(null);
     setError('');
   };
@@ -1021,7 +1025,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
                 </div>
               </div>
 
-              {/* Fuel Type & License Expiry Date */}
+              {/* Fuel Type & Oil Interval & License Expiry */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <div>
                   <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 'bold', fontSize: '0.85rem', color: '#cbd5e1' }}>نوع الوقود المعتمد:</label>
@@ -1038,14 +1042,28 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 'bold', fontSize: '0.85rem', color: '#cbd5e1' }}>تاريخ انتهاء الرخصة:</label>
-                  <input 
-                    type="date" 
-                    style={{ width: '100%', background: '#0f172a', color: '#f8fafc', border: '1px solid #334155', borderRadius: '10px', padding: '0.65rem' }}
-                    value={licenseExpiryDate} 
-                    onChange={(e) => setLicenseExpiryDate(e.target.value)} 
-                  />
+                  <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 'bold', fontSize: '0.85rem', color: '#cbd5e1' }}>دورة غيار الزيت المعتمدة (كم):</label>
+                  <select 
+                    style={{ width: '100%', background: '#0f172a', color: '#f8fafc', border: '1px solid #334155', borderRadius: '10px', padding: '0.65rem' }} 
+                    value={oilIntervalKm} 
+                    onChange={(e) => setOilIntervalKm(e.target.value)}
+                  >
+                    <option value="10000">🛢️ زيت 10,000 كم (تخليقي كامل)</option>
+                    <option value="7000">🛢️ زيت 7,000 كم (7 آلاف)</option>
+                    <option value="5000">🛢️ زيت 5,000 كم (نصف تخليقي)</option>
+                    <option value="3000">🛢️ زيت 3,000 كم (معدني)</option>
+                  </select>
                 </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 'bold', fontSize: '0.85rem', color: '#cbd5e1' }}>تاريخ انتهاء الرخصة:</label>
+                <input 
+                  type="date" 
+                  style={{ width: '100%', background: '#0f172a', color: '#f8fafc', border: '1px solid #334155', borderRadius: '10px', padding: '0.65rem' }}
+                  value={licenseExpiryDate} 
+                  onChange={(e) => setLicenseExpiryDate(e.target.value)} 
+                />
               </div>
 
               <div>
