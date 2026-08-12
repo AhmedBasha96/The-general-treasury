@@ -67,8 +67,10 @@ export default function App() {
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
 
-  // Manager Pending Approvals, Editing, and User Management State
+  // Manager Pending Approvals, Rejected Requests, Editing, and User Management State
   const [pendingTx, setPendingTx] = useState([]);
+  const [rejectedTx, setRejectedTx] = useState([]);
+  const [approvalSubTab, setApprovalSubTab] = useState('pending');
   const [editingTx, setEditingTx] = useState(null);
   const [editError, setEditError] = useState('');
   const [editSuccess, setEditSuccess] = useState('');
@@ -667,6 +669,18 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
     }
   };
 
+  const loadRejectedTx = async () => {
+    try {
+      const res = await fetch('/api/transactions/rejected');
+      if (res.ok) {
+        const data = await res.json();
+        setRejectedTx(data);
+      }
+    } catch (err) {
+      console.error('Failed to load rejected transactions:', err);
+    }
+  };
+
   const handleApproveTx = async (id) => {
     if (window.confirm('هل أنت متأكد من الموافقة على طلب الصرف هذا؟')) {
       try {
@@ -677,6 +691,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
         if (res.ok) {
           alert('تمت الموافقة بنجاح!');
           loadPendingTx();
+          loadRejectedTx();
           loadDashboard();
           loadTransactions();
           loadCarExpenses();
@@ -697,8 +712,9 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
         });
         const data = await res.json();
         if (res.ok) {
-          alert('تم رفض الطلب بنجاح!');
+          alert('تم رفض الطلب بنجاح ونقله لسجل الطلبات المرفوضة!');
           loadPendingTx();
+          loadRejectedTx();
           loadDashboard();
           loadTransactions();
         } else {
@@ -989,8 +1005,9 @@ const [showCarModal, setShowCarModal] = useState(false);
         loadCarsList();
         loadTransactions();
         loadCarExpenses();
-        if (currentUser.role === 'manager') {
+        if (currentUser.role === 'manager' || currentUser.role === 'accountant') {
           loadPendingTx();
+          loadRejectedTx();
           loadUsers();
         }
 
@@ -1046,8 +1063,9 @@ const [showCarModal, setShowCarModal] = useState(false);
         loadCompanies();
         loadCarsList();
         
-        if (currentUser.role === 'manager') {
+        if (currentUser.role === 'manager' || currentUser.role === 'accountant') {
           loadPendingTx();
+          loadRejectedTx();
         }
       }
     };
@@ -1374,6 +1392,7 @@ const [showCarModal, setShowCarModal] = useState(false);
       if (appliedFilters.type) queryParams.append('type', appliedFilters.type);
       if (appliedFilters.repId) queryParams.append('rep_id', appliedFilters.repId);
       if (appliedFilters.bankId) queryParams.append('bank_id', appliedFilters.bankId);
+      if (appliedFilters.status) queryParams.append('status', appliedFilters.status);
       if (appliedFilters.startDate) queryParams.append('start_date', appliedFilters.startDate);
       if (appliedFilters.endDate) queryParams.append('end_date', appliedFilters.endDate);
       
@@ -2494,8 +2513,8 @@ const [showCarModal, setShowCarModal] = useState(false);
 
             {currentUser.role === 'manager' && (
               <button 
-                className={`tab-btn ${activeTab === 'pending-approvals' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('pending-approvals'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+                className={`tab-btn ${activeTab === 'pending-approvals' && approvalSubTab === 'pending' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('pending-approvals'); setApprovalSubTab('pending'); loadPendingTx(); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
                 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
               >
                 📥 طلبات الصرف المعلقة
@@ -2508,6 +2527,26 @@ const [showCarModal, setShowCarModal] = useState(false);
                     animation: 'pulse 1.5s infinite' 
                   }}>
                     {pendingTx.length}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {(currentUser.role === 'manager' || currentUser.role === 'accountant') && (
+              <button 
+                className={`tab-btn ${activeTab === 'pending-approvals' && approvalSubTab === 'rejected' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('pending-approvals'); setApprovalSubTab('rejected'); loadRejectedTx(); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                🚫 الطلبات المرفوضة
+                {rejectedTx.length > 0 && (
+                  <span style={{ 
+                    background: 'rgba(244, 63, 94, 0.2)', color: '#f43f5e', 
+                    border: '1px solid rgba(244, 63, 94, 0.3)',
+                    fontSize: '0.75rem', fontWeight: 'bold', 
+                    padding: '0.15rem 0.45rem', borderRadius: '50px'
+                  }}>
+                    {rejectedTx.length}
                   </span>
                 )}
               </button>
@@ -2966,6 +3005,352 @@ const [showCarModal, setShowCarModal] = useState(false);
         </>
       )}
 
+      {/* PENDING APPROVALS & REJECTED REQUESTS TAB */}
+      {activeTab === 'pending-approvals' && (
+        <div className="panel">
+          <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
+            <div>
+              <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                {approvalSubTab === 'pending' ? '📥 طلبات الصرف المعلقة (بانتظار الموافقة)' : '🚫 سجل الطلبات المرفوضة'}
+              </h2>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0.25rem 0 0 0' }}>
+                {approvalSubTab === 'pending'
+                  ? 'مراجعة كافة طلبات وإذونات الصرف الواردة والبت فيها بالقبول أو الرفض أو التعديل'
+                  : 'أرشيف طلبات الصرف المرفوضة مع إمكانية تعديل بياناتها أو إعادة اعتمادها وتعديلها'}
+              </p>
+            </div>
+
+            {/* Sub-tab pills */}
+            <div style={{ display: 'flex', gap: '0.5rem', background: 'var(--bg-secondary)', padding: '0.3rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+              <button
+                className="btn"
+                style={{
+                  padding: '0.4rem 1rem', fontSize: '0.85rem', fontWeight: 'bold', borderRadius: '8px', border: 'none',
+                  background: approvalSubTab === 'pending' ? 'var(--primary)' : 'transparent',
+                  color: approvalSubTab === 'pending' ? '#fff' : 'var(--text-secondary)',
+                  display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer'
+                }}
+                onClick={() => { setApprovalSubTab('pending'); loadPendingTx(); }}
+              >
+                📥 المعلقة ({pendingTx.length})
+              </button>
+              <button
+                className="btn"
+                style={{
+                  padding: '0.4rem 1rem', fontSize: '0.85rem', fontWeight: 'bold', borderRadius: '8px', border: 'none',
+                  background: approvalSubTab === 'rejected' ? 'var(--danger)' : 'transparent',
+                  color: approvalSubTab === 'rejected' ? '#fff' : 'var(--text-secondary)',
+                  display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer'
+                }}
+                onClick={() => { setApprovalSubTab('rejected'); loadRejectedTx(); }}
+              >
+                🚫 المرفوضة ({rejectedTx.length})
+              </button>
+            </div>
+          </div>
+
+          {/* SUB-VIEW 1: PENDING REQUESTS */}
+          {approvalSubTab === 'pending' && (
+            <div className="table-container">
+              {pendingTx.length === 0 ? (
+                <div className="no-data-msg" style={{ padding: '3rem 1rem' }}>
+                  <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>✨</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--success)' }}>لا توجد طلبات صرف معلقة حالياً!</div>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>جميع طلبات الصرف المقترحة تم البت فيها بنجاح.</div>
+                </div>
+              ) : (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>رقم الطلب والتاريخ</th>
+                      <th>طالب الصرف</th>
+                      <th>بند المصروف</th>
+                      <th>المبلغ المطلوب</th>
+                      <th>ملاحظات واختيار السيارة</th>
+                      <th>إجراءات الموافقة والتعديل والرفض</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingTx.map((tx) => {
+                      const subTypeLabel = tx.withdrawal_sub_type === 'car' ? '🚗 مصاريف سيارات'
+                        : tx.withdrawal_sub_type === 'car_gas' ? '⛽ سيارة (جاز)'
+                        : tx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)'
+                        : tx.withdrawal_sub_type === 'car_other' ? '🔧 سيارة (مصاريف أخرى)'
+                        : tx.withdrawal_sub_type === 'salary' ? '💼 راتب'
+                        : tx.withdrawal_sub_type === 'commission' ? '💰 عمولة'
+                        : tx.withdrawal_sub_type === 'loan' ? '💸 سلفة'
+                        : tx.withdrawal_sub_type === 'direct_rent' ? '🏢 إيجار'
+                        : tx.withdrawal_sub_type === 'direct_operational' ? '🔧 تشغيل'
+                        : tx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى'
+                        : tx.withdrawal_sub_type === 'other' ? '📤 صرف عام' : '📤 صرف';
+
+                      return (
+                        <tr key={tx.id} style={{ background: 'rgba(245, 158, 11, 0.02)' }}>
+                          <td>
+                            <div style={{ fontWeight: 'bold', color: 'var(--warning)' }}>TX-{String(tx.id).padStart(6, '0')}</div>
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                              {new Date(tx.date).toLocaleString('en-US')}
+                            </div>
+                          </td>
+                          <td>
+                            <div>
+                              <strong style={{ color: 'var(--text-primary)' }}>{tx.rep_name || 'خزينة مباشرة'}</strong>
+                              {tx.rep_code && <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginRight: '0.3rem' }}>({tx.rep_code})</span>}
+                            </div>
+                            {tx.agency_name && (
+                              <div style={{ fontSize: '0.75rem', color: 'var(--primary)', marginTop: '0.15rem' }}>
+                                🏢 {tx.agency_name}
+                              </div>
+                            )}
+                          </td>
+                          <td>
+                            <span className="badge badge-withdrawal" style={{ background: 'rgba(245, 158, 11, 0.12)', color: 'var(--warning)', border: '1px solid rgba(245, 158, 11, 0.25)' }}>
+                              {subTypeLabel}
+                            </span>
+                          </td>
+                          <td>
+                            <strong style={{ color: 'var(--danger)', fontSize: '1.05rem' }}>
+                              {Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
+                            </strong>
+                          </td>
+                          <td style={{ maxWidth: '220px', fontSize: '0.85rem' }}>
+                            <div>{tx.notes || '—'}</div>
+                            {tx.receipt_image && (
+                              <div style={{ marginTop: '0.3rem' }}>
+                                <a 
+                                  href="#" 
+                                  onClick={(e) => { e.preventDefault(); setActiveImageModal(tx.receipt_image); }} 
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.78rem', color: '#a78bfa', textDecoration: 'underline', fontWeight: 600 }}
+                                >
+                                  📎 عرض الصورة / الإيصال
+                                </a>
+                              </div>
+                            )}
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                              <button
+                                className="btn btn-primary"
+                                style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem', background: 'linear-gradient(135deg, var(--success), var(--success-hover))', border: 'none' }}
+                                onClick={() => handleApproveTx(tx.id)}
+                              >
+                                ✔️ موافقة
+                              </button>
+                              <button
+                                className="btn btn-secondary"
+                                style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
+                                onClick={() => {
+                                  setEditingTx({
+                                    ...tx,
+                                    denominations: {
+                                      denom_200: tx.denom_200 || 0,
+                                      denom_100: tx.denom_100 || 0,
+                                      denom_50: tx.denom_50 || 0,
+                                      denom_20: tx.denom_20 || 0,
+                                      denom_10: tx.denom_10 || 0,
+                                      denom_5: tx.denom_5 || 0,
+                                      denom_1: tx.denom_1 || 0
+                                    }
+                                  });
+                                  setEditError('');
+                                  setEditSuccess('');
+                                }}
+                              >
+                                ✏️ تعديل
+                              </button>
+                              <button
+                                className="btn btn-secondary"
+                                style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
+                                onClick={() => handleRejectTx(tx.id)}
+                              >
+                                ❌ رفض
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
+          {/* SUB-VIEW 2: REJECTED REQUESTS */}
+          {approvalSubTab === 'rejected' && (
+            <div>
+              {/* KPI Banner for Rejected Requests */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', margin: '0 0 1.5rem 0' }}>
+                <div style={{ background: 'rgba(244, 63, 94, 0.08)', border: '1px solid rgba(244, 63, 94, 0.25)', borderRadius: '16px', padding: '1.1rem' }}>
+                  <div style={{ fontSize: '0.8rem', color: '#f87171', fontWeight: 'bold', marginBottom: '0.3rem' }}>🔢 إجمالي الطلبات المرفوضة</div>
+                  <div style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--danger)' }}>
+                    {rejectedTx.length.toLocaleString('en-US')} <small style={{ fontSize: '0.8rem' }}>طلب</small>
+                  </div>
+                </div>
+
+                <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)', borderRadius: '16px', padding: '1.1rem' }}>
+                  <div style={{ fontSize: '0.8rem', color: '#fbbf24', fontWeight: 'bold', marginBottom: '0.3rem' }}>💰 مجموع المبالغ المرفوضة</div>
+                  <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#f59e0b' }}>
+                    {rejectedTx.reduce((sum, tx) => sum + Number(tx.amount || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} <small style={{ fontSize: '0.8rem' }}>ج.م</small>
+                  </div>
+                </div>
+
+                <div style={{ background: 'rgba(14, 165, 233, 0.08)', border: '1px solid rgba(14, 165, 233, 0.25)', borderRadius: '16px', padding: '1.1rem' }}>
+                  <div style={{ fontSize: '0.8rem', color: '#38bdf8', fontWeight: 'bold', marginBottom: '0.3rem' }}>💡 تلميح للمدير</div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                    يمكنك تعديل أي بيانات بالطلب المرفوض (المبلغ، البند، التفاصيل) ثم اضغط <strong>موافقة / اعتماد</strong> لإجازته ورده للنظام.
+                  </div>
+                </div>
+              </div>
+
+              <div className="table-container">
+                {rejectedTx.length === 0 ? (
+                  <div className="no-data-msg" style={{ padding: '3rem 1rem' }}>
+                    <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🎉</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--success)' }}>لا توجد أي طلبات مرفوضة بالنظام!</div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>جميع طلبات الصرف المقترحة تم قبولها أو معالجة معاملاتها بنجاح.</div>
+                  </div>
+                ) : (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>رقم الإيصال والتاريخ</th>
+                        <th>الجهة طالبة الصرف</th>
+                        <th>نوع العملية / بند الصرف</th>
+                        <th>المبلغ المرفوض</th>
+                        <th>الملاحظات والإيصال</th>
+                        <th>الحالة الحاليـة</th>
+                        <th>إجراءات التعديل والاعتماد</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rejectedTx.map((tx) => {
+                        const subTypeLabel = tx.withdrawal_sub_type === 'car' ? '🚗 مصاريف سيارات'
+                          : tx.withdrawal_sub_type === 'car_gas' ? '⛽ سيارة (جاز)'
+                          : tx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)'
+                          : tx.withdrawal_sub_type === 'car_other' ? '🔧 سيارة (مصاريف أخرى)'
+                          : tx.withdrawal_sub_type === 'salary' ? '💼 راتب'
+                          : tx.withdrawal_sub_type === 'commission' ? '💰 عمولة'
+                          : tx.withdrawal_sub_type === 'loan' ? '💸 سلفة'
+                          : tx.withdrawal_sub_type === 'direct_rent' ? '🏢 إيجار'
+                          : tx.withdrawal_sub_type === 'direct_operational' ? '🔧 تشغيل'
+                          : tx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى'
+                          : tx.withdrawal_sub_type === 'other' ? '📤 صرف عام' : '📤 صرف';
+
+                        return (
+                          <tr key={tx.id} style={{ background: 'rgba(244, 63, 94, 0.02)' }}>
+                            <td>
+                              <div style={{ fontWeight: 'bold', color: 'var(--danger)' }}>TX-{String(tx.id).padStart(6, '0')}</div>
+                              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                                {new Date(tx.date).toLocaleString('en-US')}
+                              </div>
+                            </td>
+                            <td>
+                              <div>
+                                <strong style={{ color: 'var(--text-primary)' }}>{tx.rep_name || 'خزينة مباشرة'}</strong>
+                                {tx.rep_code && <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginRight: '0.3rem' }}>({tx.rep_code})</span>}
+                              </div>
+                              {tx.agency_name && (
+                                <div style={{ fontSize: '0.75rem', color: 'var(--primary)', marginTop: '0.15rem' }}>
+                                  🏢 {tx.agency_name}
+                                </div>
+                              )}
+                            </td>
+                            <td>
+                              <span className="badge badge-withdrawal" style={{ background: 'rgba(244,63,94,0.12)', color: 'var(--danger)', border: '1px solid rgba(244,63,94,0.25)' }}>
+                                {subTypeLabel}
+                              </span>
+                            </td>
+                            <td>
+                              <strong style={{ color: 'var(--danger)', fontSize: '1.05rem' }}>
+                                {Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
+                              </strong>
+                            </td>
+                            <td style={{ maxWidth: '220px', fontSize: '0.85rem' }}>
+                              <div>{tx.notes || '—'}</div>
+                              {tx.receipt_image && (
+                                <div style={{ marginTop: '0.3rem' }}>
+                                  <a 
+                                    href="#" 
+                                    onClick={(e) => { e.preventDefault(); setActiveImageModal(tx.receipt_image); }} 
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.78rem', color: '#a78bfa', textDecoration: 'underline', fontWeight: 600 }}
+                                  >
+                                    📎 عرض الصورة المصورة
+                                  </a>
+                                </div>
+                              )}
+                            </td>
+                            <td>
+                              <span style={{ padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.8rem', background: 'rgba(244, 63, 94, 0.15)', color: '#f43f5e', border: '1px solid rgba(244, 63, 94, 0.3)', fontWeight: 'bold' }}>
+                                ❌ طلب مرفوض
+                              </span>
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                {currentUser.role === 'manager' && (
+                                  <>
+                                    <button
+                                      className="btn btn-secondary"
+                                      style={{ padding: '0.35rem 0.7rem', fontSize: '0.78rem' }}
+                                      onClick={() => {
+                                        setEditingTx({
+                                          ...tx,
+                                          denominations: {
+                                            denom_200: tx.denom_200 || 0,
+                                            denom_100: tx.denom_100 || 0,
+                                            denom_50: tx.denom_50 || 0,
+                                            denom_20: tx.denom_20 || 0,
+                                            denom_10: tx.denom_10 || 0,
+                                            denom_5: tx.denom_5 || 0,
+                                            denom_1: tx.denom_1 || 0
+                                          }
+                                        });
+                                        setEditError('');
+                                        setEditSuccess('');
+                                      }}
+                                      title="تعديل المبلغ أو تفاصيل هذا الطلب المرفوض"
+                                    >
+                                      ✏️ تعديل
+                                    </button>
+                                    <button
+                                      className="btn btn-primary"
+                                      style={{ padding: '0.35rem 0.7rem', fontSize: '0.78rem', background: 'linear-gradient(135deg, var(--success), var(--success-hover))', border: 'none' }}
+                                      onClick={() => handleApproveTx(tx.id)}
+                                      title="إعادة الاعتماد والموافقة الرسمية على هذا الطلب"
+                                    >
+                                      ✔️ موافقة / اعتماد
+                                    </button>
+                                    <button
+                                      className="btn btn-secondary"
+                                      style={{ padding: '0.35rem 0.7rem', fontSize: '0.78rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
+                                      onClick={() => handleDeleteTransaction(tx.id)}
+                                      title="حذف هذا الطلب المرفوض نهائياً"
+                                    >
+                                      🗑️ حذف
+                                    </button>
+                                  </>
+                                )}
+                                <button
+                                  className="btn btn-secondary"
+                                  style={{ padding: '0.35rem 0.7rem', fontSize: '0.78rem' }}
+                                  onClick={() => handlePrintReceipt(tx)}
+                                >
+                                  🖨️ طباعة
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* TRANSACTIONS TAB */}
       {activeTab === 'transactions' && (
         <div className="panel">
@@ -3174,6 +3559,18 @@ const [showCarModal, setShowCarModal] = useState(false);
                 <option value="">الكل</option>
                 <option value="deposit">توريد فقط</option>
                 <option value="withdrawal">صرف فقط</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>حالة العملية</label>
+              <select 
+                value={filters.status || ''} 
+                onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              >
+                <option value="">مكتملة ومقبولة</option>
+                <option value="all">جميع الحالات (بما فيها المرفوضة)</option>
+                <option value="pending">⏳ قيد المراجعة المعلقة</option>
+                <option value="rejected">❌ الطلبات المرفوضة فقط</option>
               </select>
             </div>
             <div className="form-group">

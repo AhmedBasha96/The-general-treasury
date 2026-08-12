@@ -2260,8 +2260,10 @@ app.get('/api/transactions', async (req, res) => {
     }
 
     if (status) {
-      query += ` AND t.status = @status`;
-      request.input('status', sql.VarChar, status);
+      if (status !== 'all') {
+        query += ` AND t.status = @status`;
+        request.input('status', sql.VarChar, status);
+      }
     } else {
       query += ` AND (t.status IS NULL OR t.status != 'rejected')`;
     }
@@ -2945,6 +2947,37 @@ app.get('/api/transactions/pending', async (req, res) => {
   }
 });
 
+// GET /api/transactions/rejected (List all transactions with status 'rejected')
+app.get('/api/transactions/rejected', async (req, res) => {
+  try {
+    const pool = getPool();
+    const result = await pool.request().query(`
+      SELECT t.id, t.rep_id, t.bank_id, t.company_id, t.agency_id, t.car_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
+             r.name AS rep_name, r.code AS rep_code,
+             b.name AS bank_name, b.code AS bank_code,
+             c.name AS company_name, c.code AS company_code,
+             a.name AS agency_name, a.code AS agency_code,
+             s.name AS supervisor_name, s.code AS supervisor_code,
+             u.username AS creator_name, u2.username AS approver_name
+      FROM transactions t
+      LEFT JOIN representatives r ON t.rep_id = r.id
+      LEFT JOIN banks b ON t.bank_id = b.id
+      LEFT JOIN companies c ON t.company_id = c.id
+      LEFT JOIN agencies a ON (r.agency_id = a.id OR t.agency_id = a.id)
+      LEFT JOIN supervisors s ON r.supervisor_id = s.id
+      LEFT JOIN users u ON t.created_by = u.id
+      LEFT JOIN users u2 ON t.approved_by = u2.id
+      WHERE t.status = 'rejected'
+      ORDER BY t.date DESC
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error('Error fetching rejected transactions:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء جلب الطلبات المرفوضة' });
+  }
+});
+
+
 // POST /api/transactions/:id/approve - Approve a pending withdrawal - Manager only
 app.post('/api/transactions/:id/approve', async (req, res) => {
   const txId = req.params.id;
@@ -2967,7 +3000,7 @@ app.post('/api/transactions/:id/approve', async (req, res) => {
       }
       
       const tx = txResult.recordset[0];
-      if (tx.status !== 'pending') {
+      if (tx.status !== 'pending' && tx.status !== 'rejected') {
         await transaction.rollback();
         return res.status(400).json({ error: 'هذه العملية تم البت فيها بالفعل' });
       }
