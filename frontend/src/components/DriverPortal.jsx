@@ -87,6 +87,7 @@ export default function DriverPortal({ user, onLogout }) {
   // Modals state
   const [showFuelModal, setShowFuelModal] = useState(false);
   const [showOilModal, setShowOilModal] = useState(false);
+  const [activeImageModal, setActiveImageModal] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formMessage, setFormMessage] = useState('');
 
@@ -98,9 +99,10 @@ export default function DriverPortal({ user, onLogout }) {
   const [odometerReading, setOdometerReading] = useState('');
   const [stationName, setStationName] = useState('');
   const [fuelNotes, setFuelNotes] = useState('');
+  const [fuelImage, setFuelImage] = useState(null);
 
   // Oil/Maintenance Form state
-  const [maintenanceType, setMaintenanceType] = useState('تغيير زيت موتور');
+  const [maintenanceType, setMaintenanceType] = useState('تغيير زيت موتور وفلاتر');
   const [oilOdometer, setOilOdometer] = useState('');
   const [nextKm, setNextKm] = useState('');
   const [oilCost, setOilCost] = useState('');
@@ -179,7 +181,7 @@ export default function DriverPortal({ user, onLogout }) {
     }
   };
 
-  // Submit Refuel Entry
+  // Submit Refuel Entry (with photo)
   const handleFuelSubmit = async (e) => {
     e.preventDefault();
     if (!data?.car?.id) return;
@@ -189,26 +191,29 @@ export default function DriverPortal({ user, onLogout }) {
 
     setFormLoading(true);
     try {
+      const formData = new FormData();
+      formData.append('car_id', data.car.id);
+      formData.append('driver_rep_id', user.id);
+      formData.append('odometer_reading', odometerReading);
+      formData.append('fuel_type', fuelType);
+      formData.append('price_per_liter', officialPrice);
+      formData.append('liters', liters);
+      formData.append('total_cost', totalCost);
+      formData.append('station_name', stationName);
+      formData.append('notes', fuelNotes);
+      if (fuelImage) {
+        formData.append('image', fuelImage);
+      }
+
       const res = await fetch('/api/cars/driver/refuel', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          car_id: data.car.id,
-          driver_rep_id: user.id,
-          odometer_reading: odometerReading,
-          fuel_type: fuelType,
-          price_per_liter: officialPrice,
-          liters,
-          total_cost: totalCost,
-          station_name: stationName,
-          notes: fuelNotes
-        })
+        body: formData
       });
 
       const result = await res.json();
       if (res.ok) {
-        setFormMessage('✅ تم تسجيل تفويل الوقود وتحديث العداد بنجاح!');
-        setTimeout(() => { setFormMessage(''); setShowFuelModal(false); }, 1500);
+        setFormMessage('✅ تم تسجيل تفويل الوقود وصورة العداد بنجاح!');
+        setTimeout(() => { setFormMessage(''); setShowFuelModal(false); setFuelImage(null); }, 1500);
         loadDriverCar();
       } else {
         alert(result.error || 'فشل حفظ عملية الوقود');
@@ -236,7 +241,7 @@ export default function DriverPortal({ user, onLogout }) {
           driver_rep_id: user.id,
           maintenance_type: maintenanceType,
           odometer_reading: oilOdometer,
-          next_service_km: nextKm || (parseInt(oilOdometer, 10) + 5000),
+          next_service_km: nextKm || (parseInt(oilOdometer, 10) + 10000),
           cost: oilCost || 0,
           center_name: centerName,
           notes: oilNotes
@@ -245,7 +250,7 @@ export default function DriverPortal({ user, onLogout }) {
 
       const result = await res.json();
       if (res.ok) {
-        setFormMessage('✅ تم تسجيل غيار الزيت والصيانة بنجاح!');
+        setFormMessage('✅ تم تسجيل غيار الزيت وتحديث العداد بنجاح!');
         setTimeout(() => { setFormMessage(''); setShowOilModal(false); }, 1500);
         loadDriverCar();
       } else {
@@ -279,19 +284,69 @@ export default function DriverPortal({ user, onLogout }) {
 
   const { car, recentFuelLogs, recentMaintenanceLogs } = data;
 
+  // Calculate Oil Remaining KM for Driver
+  const currentOdo = Number(car.last_odometer || car.odometer_km || 0);
+  const nextOilKm = Number(car.next_oil_change_km || (Number(car.last_oil_change_km || 0) + 10000));
+  const remainingOilKm = nextOilKm - currentOdo;
+  const isOilOverdue = remainingOilKm <= 0;
+  const isOilWarning = remainingOilKm > 0 && remainingOilKm <= 500;
+
   return (
     <div style={{ padding: '1rem', maxWidth: '900px', margin: '0 auto', direction: 'rtl' }}>
       
       {/* Header Bar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', padding: '1rem 1.5rem', borderRadius: '20px', border: '1px solid #e2e8f0', marginBottom: '1.5rem', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
         <div>
-          <h3 style={{ margin: 0, color: '#0f172a', fontWeight: '800' }}>مرحباً، {user?.name || user?.username} 👋</h3>
-          <span style={{ fontSize: '0.85rem', color: '#64748b' }}>بوابة متابعة السيارة والمحروقات الخاصة بك</span>
+          <h3 style={{ margin: 0, color: '#0f172a', fontWeight: '800' }}>مرحباً يا قائد المركبة، {user?.name || user?.username} 👋</h3>
+          <span style={{ fontSize: '0.85rem', color: '#64748b' }}>بوابة متابعة السيارة والتفويل وغيار الزيت وتصوير العدادات</span>
         </div>
         <button onClick={onLogout} className="btn btn-secondary" style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>
           🔒 خروج
         </button>
       </div>
+
+      {/* PROMINENT DRIVER OIL CHANGE ALERT BANNER */}
+      {(isOilOverdue || isOilWarning) && (
+        <div style={{
+          background: isOilOverdue ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+          color: '#ffffff',
+          padding: '1.25rem 1.5rem',
+          borderRadius: '20px',
+          marginBottom: '1.5rem',
+          boxShadow: isOilOverdue ? '0 10px 25px rgba(239, 68, 68, 0.4)' : '0 10px 25px rgba(245, 158, 11, 0.4)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '1rem'
+        }}>
+          <div style={{ fontSize: '2.5rem', animation: 'bellRing 1s infinite alternate' }}>🛢️</div>
+          <div style={{ flex: 1 }}>
+            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 900 }}>
+              {isOilOverdue ? '🚨 تنبيه عاجل جداً: سيارتك وصلت لموعد غيار الزيت المستحق!' : '🟡 تنبيه هاب: اقترب موعد غيار الزيت لسيارتك!'}
+            </h3>
+            <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.9rem', lineHeight: '1.5', opacity: 0.95 }}>
+              سيارتك ({car.plate_number}) وصل عدادها إلى <strong>{currentOdo.toLocaleString()} كم</strong> والعداد المستحق لغيار الزيت هو <strong>{nextOilKm.toLocaleString()} كم</strong>.
+              {isOilOverdue ? ` (تجاوزت العداد بـ ${Math.abs(remainingOilKm).toLocaleString()} كم - يرجى التوجه لمركز الخدمة لغيار الزيت فوراً!)` : ` (متبقي ${remainingOilKm.toLocaleString()} كم فقط).`}
+            </p>
+          </div>
+          <button 
+            onClick={() => setShowOilModal(true)}
+            style={{
+              padding: '0.65rem 1.25rem',
+              background: '#ffffff',
+              color: isOilOverdue ? '#dc2626' : '#d97706',
+              border: 'none',
+              borderRadius: '12px',
+              fontWeight: 900,
+              cursor: 'pointer',
+              fontSize: '0.9rem',
+              whiteSpace: 'nowrap',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+            }}
+          >
+            🛢️ تسجيل غيار الزيت الآن
+          </button>
+        </div>
+      )}
 
       {/* Main Car Card */}
       <div style={{ background: '#ffffff', borderRadius: '24px', border: '2px solid #3b82f6', padding: '1.5rem', boxShadow: '0 10px 30px rgba(59, 130, 246, 0.08)', marginBottom: '1.5rem' }}>
@@ -316,19 +371,19 @@ export default function DriverPortal({ user, onLogout }) {
           </div>
         </div>
 
-        {/* Big Odometer Card */}
+        {/* Big Odometer Card & Oil Status */}
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px dashed #e2e8f0' }}>
           <div style={{ flex: 1, minWidth: '200px', background: '#f8fafc', padding: '1rem 1.25rem', borderRadius: '16px', border: '1px solid #cbd5e1' }}>
             <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 'bold' }}>🛣️ قراءة العداد الحالية</span>
             <h2 style={{ margin: '0.25rem 0 0 0', color: '#1e293b', fontSize: '1.8rem', fontWeight: '900' }}>
-              {car.odometer_km ? `${Number(car.odometer_km).toLocaleString('en-US')} كم` : '0 كم'}
+              {currentOdo ? `${currentOdo.toLocaleString('en-US')} كم` : '0 كم'}
             </h2>
           </div>
 
-          <div style={{ flex: 1, minWidth: '200px', background: '#f8fafc', padding: '1rem 1.25rem', borderRadius: '16px', border: '1px solid #cbd5e1' }}>
-            <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 'bold' }}>⛽ نوع الوقود المعتمد</span>
-            <h3 style={{ margin: '0.25rem 0 0 0', color: '#ea580c', fontSize: '1.4rem', fontWeight: '800' }}>
-              {car.fuel_type || 'سولار'} ({fuelPriceMap[car.fuel_type || 'سولار']} ج.م/لتر)
+          <div style={{ flex: 1, minWidth: '200px', background: isOilOverdue ? '#fef2f2' : isOilWarning ? '#fffbe6' : '#f0fdf4', padding: '1rem 1.25rem', borderRadius: '16px', border: `1px solid ${isOilOverdue ? '#fca5a5' : isOilWarning ? '#fde047' : '#bbf7d0'}` }}>
+            <span style={{ fontSize: '0.85rem', color: isOilOverdue ? '#dc2626' : isOilWarning ? '#d97706' : '#16a34a', fontWeight: 'bold' }}>🛢️ حالة زيت المحرك</span>
+            <h3 style={{ margin: '0.25rem 0 0 0', color: isOilOverdue ? '#dc2626' : isOilWarning ? '#d97706' : '#16a34a', fontSize: '1.2rem', fontWeight: '900' }}>
+              {isOilOverdue ? `🚨 مستحق الغيار (تجاوز ${Math.abs(remainingOilKm).toLocaleString()} كم)` : isOilWarning ? `🟡 باقي ${remainingOilKm.toLocaleString()} كم` : `🟢 ممتاز (متبقي ${remainingOilKm.toLocaleString()} كم)`}
             </h3>
           </div>
         </div>
@@ -339,7 +394,7 @@ export default function DriverPortal({ user, onLogout }) {
             onClick={() => setShowFuelModal(true)}
             style={{ padding: '0.9rem 1rem', background: '#2563eb', color: '#ffffff', border: 'none', borderRadius: '14px', fontSize: '1.05rem', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 14px rgba(37, 99, 235, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
           >
-            ⛽ تسجيل تفويل وقود جديد
+            📷 ⛽ تفويل وتصوير العداد
           </button>
           <button 
             onClick={() => setShowOilModal(true)}
@@ -362,9 +417,20 @@ export default function DriverPortal({ user, onLogout }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {recentFuelLogs.map(log => (
                 <div key={log.id} style={{ background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '12px', borderRight: '4px solid #2563eb' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '0.9rem', color: '#0f172a' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 'bold', fontSize: '0.9rem', color: '#0f172a' }}>
                     <span>{log.liters} لتر ({log.fuel_type})</span>
-                    <span style={{ color: '#16a34a' }}>{Number(log.total_cost).toLocaleString()} ج.م</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      {log.image_path && (
+                        <button 
+                          className="btn btn-xs btn-secondary" 
+                          onClick={() => setActiveImageModal(log.image_path)}
+                          style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                        >
+                          📷 صورة العداد
+                        </button>
+                      )}
+                      <span style={{ color: '#16a34a' }}>{Number(log.total_cost).toLocaleString()} ج.م</span>
+                    </div>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#64748b', marginTop: '0.25rem' }}>
                     <span>🛣️ العداد: {Number(log.odometer_reading).toLocaleString()} كم</span>
@@ -404,8 +470,8 @@ export default function DriverPortal({ user, onLogout }) {
       {/* Refuel Modal */}
       {showFuelModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
-          <div style={{ background: '#ffffff', borderRadius: '24px', maxWidth: '480px', width: '100%', padding: '1.75rem', direction: 'rtl', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
-            <h3 style={{ marginTop: 0, color: '#0f172a', fontWeight: 'bold' }}>⛽ تسجيل تفويل وقود جديد</h3>
+          <div style={{ background: '#ffffff', borderRadius: '24px', maxWidth: '480px', width: '100%', padding: '1.75rem', direction: 'rtl', boxShadow: '0 20px 40px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ marginTop: 0, color: '#0f172a', fontWeight: 'bold' }}>📷 ⛽ تفويل وقود جديد وتصوير عداد المحطة</h3>
             
             <form onSubmit={handleFuelSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
@@ -420,7 +486,7 @@ export default function DriverPortal({ user, onLogout }) {
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem' }}>قراءة العداد الحالية وقت التفويل (كم):</label>
+                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem' }}>قراءة العداد الحالية وقت التفويل (كم):*</label>
                 <input 
                   type="number" 
                   className="input-field"
@@ -431,9 +497,27 @@ export default function DriverPortal({ user, onLogout }) {
                 />
               </div>
 
+              {/* Photo Input (Camera Capture on Mobile) */}
+              <div style={{ background: '#f8fafc', padding: '0.85rem', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
+                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem', color: '#1e293b' }}>
+                  📷 تصوير / رفع صورة عداد المحطة والسيارة:*
+                </label>
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  capture="environment"
+                  className="input-field"
+                  onChange={(e) => setFuelImage(e.target.files[0])}
+                  style={{ padding: '0.4rem', background: '#ffffff' }}
+                />
+                <small style={{ color: '#64748b', fontSize: '0.75rem', marginTop: '0.25rem', display: 'block' }}>
+                  📸 اضغط لتصوير شاشة عداد البنزين بالمحطة مباشرة من الموبايل
+                </small>
+              </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem' }}>عدد اللترات المعبأة:</label>
+                  <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem' }}>عدد اللترات المعبأة:*</label>
                   <input 
                     type="number" 
                     step="0.01"
@@ -445,7 +529,7 @@ export default function DriverPortal({ user, onLogout }) {
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem' }}>إجمالي المبلغ (ج.م):</label>
+                  <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem' }}>إجمالي المبلغ (ج.م):*</label>
                   <input 
                     type="number" 
                     step="0.01"
@@ -473,13 +557,35 @@ export default function DriverPortal({ user, onLogout }) {
 
               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
                 <button type="submit" className="btn btn-primary" disabled={formLoading} style={{ flex: 1 }}>
-                  {formLoading ? 'جاري الحفظ…' : 'حفظ عملية التفويل'}
+                  {formLoading ? 'جاري الحفظ…' : 'حفظ التفويل وصورة العداد 📷'}
                 </button>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowFuelModal(false)}>
                   إلغاء
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Image Preview Lightbox Modal */}
+      {activeImageModal && (
+        <div 
+          onClick={() => setActiveImageModal(null)}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: '1rem' }}
+        >
+          <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }}>
+            <img 
+              src={`/${activeImageModal}`} 
+              alt="صورة عداد المحطة" 
+              style={{ maxWidth: '100%', maxHeight: '85vh', borderRadius: '16px', border: '2px solid #ffffff', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }} 
+            />
+            <button 
+              onClick={() => setActiveImageModal(null)}
+              style={{ position: 'absolute', top: '-15px', right: '-15px', background: '#f43f5e', color: '#fff', border: 'none', borderRadius: '50%', width: '36px', height: '36px', fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer' }}
+            >
+              ✕
+            </button>
           </div>
         </div>
       )}
@@ -492,13 +598,12 @@ export default function DriverPortal({ user, onLogout }) {
             
             <form onSubmit={handleOilSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
-                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem' }}>نوع الصيانة:</label>
+                <label style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 'bold', fontSize: '0.85rem' }}>نوع الصيانة / الزيت:</label>
                 <select className="input-field" value={maintenanceType} onChange={(e) => setMaintenanceType(e.target.value)}>
-                  <option value="تغيير زيت موتور وفلاتر">تغيير زيت موتور وفلاتر</option>
-                  <option value="تغيير زيت فتيس">تغيير زيت فتيس</option>
-                  <option value="فحص وتشحيم دوري">فحص وتشحيم دوري</option>
-                  <option value="تغيير فرامل / إطارات">تغيير فرامل / إطارات</option>
-                  <option value="إصلاح أعطال وقطع غيار">إصلاح أعطال وقطع غيار</option>
+                  <option value="تغيير زيت موتور وفلاتر">🛢️ تغيير زيت موتور وفلاتر (10,000 كم)</option>
+                  <option value="تغيير زيت موتور 5000">🛢️ تغيير زيت موتور (5,000 كم)</option>
+                  <option value="تغيير زيت فتيس">⚙️ تغيير زيت فتيس</option>
+                  <option value="فحص وتشحيم دوري">🔧 فحص وتشحيم دوري</option>
                 </select>
               </div>
 
@@ -511,7 +616,7 @@ export default function DriverPortal({ user, onLogout }) {
                   value={oilOdometer}
                   onChange={(e) => {
                     setOilOdometer(e.target.value);
-                    if (e.target.value) setNextKm(String(parseInt(e.target.value, 10) + 5000));
+                    if (e.target.value) setNextKm(String(parseInt(e.target.value, 10) + 10000));
                   }}
                   required
                 />
@@ -523,7 +628,7 @@ export default function DriverPortal({ user, onLogout }) {
                   <input 
                     type="number" 
                     className="input-field"
-                    placeholder="مثال: + 5000 كم"
+                    placeholder="مثال: + 10000 كم"
                     value={nextKm}
                     onChange={(e) => setNextKm(e.target.value)}
                   />

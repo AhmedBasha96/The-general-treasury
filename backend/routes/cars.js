@@ -63,6 +63,12 @@ router.get('/', async (req, res) => {
         c.model,
         c.image_path,
         ISNULL(c.odometer_km, 0) AS odometer_km,
+        ISNULL(c.last_odometer, ISNULL(c.odometer_km, 0)) AS last_odometer,
+        ISNULL(c.last_oil_change_km, 0) AS last_oil_change_km,
+        ISNULL(c.oil_change_interval_km, 10000) AS oil_change_interval_km,
+        ISNULL(c.next_oil_change_km, ISNULL(c.last_oil_change_km, 0) + ISNULL(c.oil_change_interval_km, 10000)) AS next_oil_change_km,
+        CONVERT(VARCHAR(10), c.last_oil_change_date, 120) AS last_oil_change_date,
+        (ISNULL(c.next_oil_change_km, ISNULL(c.last_oil_change_km, 0) + ISNULL(c.oil_change_interval_km, 10000)) - ISNULL(c.last_odometer, ISNULL(c.odometer_km, 0))) AS remaining_oil_km,
         CONVERT(VARCHAR(10), c.license_expiry_date, 120) AS license_expiry_date,
         ISNULL(c.status, N'نشطة') AS status,
         ISNULL(c.fuel_type, N'سولار') AS fuel_type,
@@ -75,7 +81,7 @@ router.get('/', async (req, res) => {
       FROM cars c
       LEFT JOIN representatives r ON c.driver_rep_id = r.id
       LEFT JOIN transactions t ON t.car_id = c.id
-      GROUP BY c.id, c.plate_number, c.plate_letters, c.plate_numbers, c.driver_name, c.driver_rep_id, r.name, r.code, c.vehicle_type, c.model, c.image_path, c.odometer_km, c.license_expiry_date, c.status, c.fuel_type, c.notes
+      GROUP BY c.id, c.plate_number, c.plate_letters, c.plate_numbers, c.driver_name, c.driver_rep_id, r.name, r.code, c.vehicle_type, c.model, c.image_path, c.odometer_km, c.last_odometer, c.last_oil_change_km, c.oil_change_interval_km, c.next_oil_change_km, c.last_oil_change_date, c.license_expiry_date, c.status, c.fuel_type, c.notes
       ORDER BY c.id DESC
     `);
     res.json(result.recordset);
@@ -361,8 +367,8 @@ router.get('/driver/my-car/:repId', async (req, res) => {
   }
 });
 
-// POST /api/driver/refuel - Driver Portal refuel entry
-router.post('/driver/refuel', async (req, res) => {
+// POST /api/driver/refuel - Driver Portal refuel entry (with photo upload)
+router.post('/driver/refuel', upload.single('image'), async (req, res) => {
   const { car_id, driver_rep_id, odometer_reading, fuel_type, price_per_liter, liters, total_cost, station_name, notes } = req.body;
   if (!car_id || !odometer_reading || !liters) {
     return res.status(400).json({ error: 'بيانات التفويل (العداد واللترات) مطلوبة' });
@@ -372,6 +378,7 @@ router.post('/driver/refuel', async (req, res) => {
   const ltr = parseFloat(liters);
   const price = parseFloat(price_per_liter) || 20.50;
   const cost = parseFloat(total_cost) || (ltr * price);
+  const imagePath = req.file ? `uploads/cars/${req.file.filename}` : null;
   
   try {
     const pool = getPool();
@@ -387,21 +394,77 @@ router.post('/driver/refuel', async (req, res) => {
       .input('cost', sql.Decimal(18, 2), cost)
       .input('station', sql.NVarChar(255), station_name || null)
       .input('notes', sql.NVarChar(sql.MAX), notes || null)
+      .input('imgPath', sql.NVarChar(sql.MAX), imagePath)
       .query(`
-        INSERT INTO car_fuel_logs (car_id, driver_rep_id, odometer_reading, fuel_type, price_per_liter, liters, total_cost, station_name, notes)
-        VALUES (@car_id, @driver_rep, @odo, @ftype, @price, @liters, @cost, @station, @notes)
+        INSERT INTO car_fuel_logs (car_id, driver_rep_id, odometer_reading, fuel_type, price_per_liter, liters, total_cost, station_name, notes, image_path)
+        VALUES (@car_id, @driver_rep, @odo, @ftype, @price, @liters, @cost, @station, @notes, @imgPath)
       `);
       
-    // Update car odometer_km if greater
+    // Update car odometer_km and last_odometer
     await pool.request()
       .input('car_id', sql.Int, car_id)
       .input('odo', sql.Int, odo)
-      .query(`UPDATE cars SET odometer_km = CASE WHEN @odo > ISNULL(odometer_km, 0) THEN @odo ELSE odometer_km END WHERE id = @car_id`);
+      .query(`
+        UPDATE cars 
+        SET last_odometer = CASE WHEN @odo > ISNULL(last_odometer, 0) THEN @odo ELSE last_odometer END,
+            odometer_km = CASE WHEN @odo > ISNULL(odometer_km, 0) THEN @odo ELSE odometer_km END 
+        WHERE id = @car_id
+      `);
       
-    res.status(201).json({ message: 'تم تسجيل تفويل الوقود وتحديث العداد بنجاح' });
+    res.status(201).json({ message: 'تم تسجيل تفويل الوقود وصورة العداد بنجاح' });
   } catch (error) {
     console.error('Error logging refuel:', error);
     res.status(500).json({ error: 'فشل تسجيل تفويل الوقود' });
+  }
+});
+
+// POST /api/cars/oil-change - Record new oil change from Manager panel
+router.post('/oil-change', async (req, res) => {
+  const { car_id, odometer_reading, oil_change_interval_km, cost, center_name, notes } = req.body;
+  if (!car_id || !odometer_reading) {
+    return res.status(400).json({ error: 'بيانات رقم العداد الحالي مطلوبة' });
+  }
+
+  const odo = parseInt(odometer_reading, 10);
+  const interval = oil_change_interval_km ? parseInt(oil_change_interval_km, 10) : 10000;
+  const nextKm = odo + interval;
+  const totalCost = parseFloat(cost) || 0;
+
+  try {
+    const pool = getPool();
+    await pool.request()
+      .input('car_id', sql.Int, car_id)
+      .input('mtype', sql.NVarChar(100), 'تغيير زيت موتور')
+      .input('odo', sql.Int, odo)
+      .input('nextKm', sql.Int, nextKm)
+      .input('cost', sql.Decimal(18, 2), totalCost)
+      .input('center', sql.NVarChar(255), center_name || null)
+      .input('notes', sql.NVarChar(sql.MAX), notes || null)
+      .query(`
+        INSERT INTO car_maintenance_logs (car_id, maintenance_type, odometer_reading, next_service_km, cost, center_name, notes)
+        VALUES (@car_id, @mtype, @odo, @nextKm, @cost, @center, @notes)
+      `);
+
+    await pool.request()
+      .input('car_id', sql.Int, car_id)
+      .input('odo', sql.Int, odo)
+      .input('interval', sql.Int, interval)
+      .input('nextKm', sql.Int, nextKm)
+      .query(`
+        UPDATE cars
+        SET last_oil_change_km = @odo,
+            oil_change_interval_km = @interval,
+            next_oil_change_km = @nextKm,
+            last_oil_change_date = GETDATE(),
+            last_odometer = CASE WHEN @odo > ISNULL(last_odometer, 0) THEN @odo ELSE last_odometer END,
+            odometer_km = CASE WHEN @odo > ISNULL(odometer_km, 0) THEN @odo ELSE odometer_km END
+        WHERE id = @car_id
+      `);
+
+    res.status(201).json({ message: 'تم تسجيل غيار الزيت وتحديث الموعد القادم بنجاح' });
+  } catch (error) {
+    console.error('Error recording oil change:', error);
+    res.status(500).json({ error: 'فشل تسجيل غيار الزيت' });
   }
 });
 
@@ -413,7 +476,7 @@ router.post('/driver/oil-change', async (req, res) => {
   }
   
   const odo = parseInt(odometer_reading, 10);
-  const nextKm = next_service_km ? parseInt(next_service_km, 10) : (odo + 5000);
+  const nextKm = next_service_km ? parseInt(next_service_km, 10) : (odo + 10000);
   const totalCost = parseFloat(cost) || 0;
   
   try {
@@ -434,11 +497,20 @@ router.post('/driver/oil-change', async (req, res) => {
         VALUES (@car_id, @driver_rep, @mtype, @odo, @nextKm, @cost, @center, @notes)
       `);
       
-    // Update car odometer_km if greater
+    // Update car odometer_km and oil change status
     await pool.request()
       .input('car_id', sql.Int, car_id)
       .input('odo', sql.Int, odo)
-      .query(`UPDATE cars SET odometer_km = CASE WHEN @odo > ISNULL(odometer_km, 0) THEN @odo ELSE odometer_km END WHERE id = @car_id`);
+      .input('nextKm', sql.Int, nextKm)
+      .query(`
+        UPDATE cars 
+        SET last_oil_change_km = @odo,
+            next_oil_change_km = @nextKm,
+            last_oil_change_date = GETDATE(),
+            last_odometer = CASE WHEN @odo > ISNULL(last_odometer, 0) THEN @odo ELSE last_odometer END,
+            odometer_km = CASE WHEN @odo > ISNULL(odometer_km, 0) THEN @odo ELSE odometer_km END 
+        WHERE id = @car_id
+      `);
       
     res.status(201).json({ message: 'تم تسجيل غيار الزيت والصيانة وتحديث العداد بنجاح' });
   } catch (error) {

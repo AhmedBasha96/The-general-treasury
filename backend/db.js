@@ -452,6 +452,27 @@ async function createTables() {
         ALTER TABLE cars ADD driver_rep_id INT NULL;
         ALTER TABLE cars ADD CONSTRAINT FK_cars_reps FOREIGN KEY (driver_rep_id) REFERENCES representatives(id) ON DELETE SET NULL;
       END
+
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('cars') AND name = 'last_odometer')
+      BEGIN
+        ALTER TABLE cars ADD last_odometer INT DEFAULT 0;
+      END
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('cars') AND name = 'last_oil_change_km')
+      BEGIN
+        ALTER TABLE cars ADD last_oil_change_km INT DEFAULT 0;
+      END
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('cars') AND name = 'oil_change_interval_km')
+      BEGIN
+        ALTER TABLE cars ADD oil_change_interval_km INT DEFAULT 10000;
+      END
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('cars') AND name = 'next_oil_change_km')
+      BEGIN
+        ALTER TABLE cars ADD next_oil_change_km INT DEFAULT 10000;
+      END
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('cars') AND name = 'last_oil_change_date')
+      BEGIN
+        ALTER TABLE cars ADD last_oil_change_date DATETIME NULL;
+      END
     `);
 
     // Create car_fuel_logs table if not exists
@@ -474,6 +495,11 @@ async function createTables() {
           FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE CASCADE,
           FOREIGN KEY (driver_rep_id) REFERENCES representatives(id) ON DELETE SET NULL
         );
+      END
+
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('car_fuel_logs') AND name = 'image_path')
+      BEGIN
+        ALTER TABLE car_fuel_logs ADD image_path NVARCHAR(MAX) NULL;
       END
     `);
 

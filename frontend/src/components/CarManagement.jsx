@@ -128,6 +128,22 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
   const [loading, setLoading] = useState(false);
   const [editingCar, setEditingCar] = useState(null);
 
+  // Oil Change Modal State
+  const [showOilModal, setShowOilModal] = useState(false);
+  const [oilCar, setOilCar] = useState(null);
+  const [oilOdometer, setOilOdometer] = useState('');
+  const [oilInterval, setOilInterval] = useState('10000');
+  const [oilCost, setOilCost] = useState('');
+  const [oilCenter, setOilCenter] = useState('');
+  const [oilNotes, setOilNotes] = useState('');
+  const [oilLoading, setOilLoading] = useState(false);
+
+  // Fuel Logs Modal State
+  const [showFuelLogsModal, setShowFuelLogsModal] = useState(false);
+  const [fuelLogsCar, setFuelLogsCar] = useState(null);
+  const [selectedCarFuelLogs, setSelectedCarFuelLogs] = useState([]);
+  const [activeImageModal, setActiveImageModal] = useState(null);
+
   const loadCars = async () => {
     try {
       const res = await fetch(`/api/cars?t=${new Date().getTime()}`);
@@ -153,6 +169,21 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
     loadCars();
     loadReps();
   }, []);
+
+  const handleOpenFuelLogs = async (c, e) => {
+    e.stopPropagation();
+    setFuelLogsCar(c);
+    setShowFuelLogsModal(true);
+    setSelectedCarFuelLogs([]);
+    try {
+      const res = await fetch(`/api/cars/${c.id}/fuel-logs`);
+      if (res.ok) {
+        setSelectedCarFuelLogs(await res.json());
+      }
+    } catch (err) {
+      console.error('Error fetching fuel logs:', err);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -217,6 +248,41 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
       setError('تعذر الاتصال بالخادم');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOilSubmit = async (e) => {
+    e.preventDefault();
+    if (!oilCar || !oilOdometer) return alert('يرجى كتابة رقم العداد الحالي للسيارة');
+    setOilLoading(true);
+
+    try {
+      const res = await fetch('/api/cars/oil-change', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          car_id: oilCar.id,
+          odometer_reading: oilOdometer,
+          oil_change_interval_km: oilInterval,
+          cost: oilCost,
+          center_name: oilCenter,
+          notes: oilNotes
+        })
+      });
+
+      if (res.ok) {
+        alert(`تم تسجيل غيار الزيت للسيارة (${oilCar.plate_number}) وحساب العداد المستحق القادم بنجاح! 🛢️✅`);
+        setShowOilModal(false);
+        setOilCar(null);
+        loadCars();
+      } else {
+        const d = await res.json();
+        alert(d.error || 'فشل تسجيل غيار الزيت');
+      }
+    } catch (err) {
+      alert('تعذر الاتصال بالخادم');
+    } finally {
+      setOilLoading(false);
     }
   };
 
@@ -292,6 +358,12 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
   const activeCount = cars.filter(c => c.status === 'نشطة' || !c.status).length;
   const maintenanceCount = cars.filter(c => c.status === 'صيانة').length;
 
+  // Filter cars needing oil change (remaining <= 500 km)
+  const oilAlertCars = cars.filter(c => {
+    const rem = Number(c.remaining_oil_km);
+    return !isNaN(rem) && rem <= 500;
+  });
+
   const filteredCars = cars.filter(c => {
     const matchesSearch = !searchQuery || 
       (c.plate_number && c.plate_number.includes(searchQuery)) ||
@@ -303,9 +375,8 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
     return matchesSearch && matchesStatus;
   });
 
-  // Filter representatives to only drivers if available
-  const driversOnly = representatives.filter(r => r.classification === 'driver' || r.type === 'driver');
-  const displayDrivers = driversOnly.length > 0 ? driversOnly : representatives;
+  // Display all representatives (مناديب وسائقين) for car assignment
+  const displayDrivers = representatives;
 
   return (
     <div style={{ padding: '1rem', direction: 'rtl' }}>
@@ -314,7 +385,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem', background: 'var(--bg-secondary, #1e293b)', padding: '1rem 1.25rem', borderRadius: '20px', border: '1px solid var(--border-color, #334155)' }}>
         <div>
           <h3 style={{ margin: 0, color: 'var(--text-primary, #f8fafc)', fontWeight: '800' }}>🚗 أسطول السيارات والمركبات</h3>
-          <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary, #94a3b8)' }}>إدارة وتتبع سيارات الشركة، السائقين، العدادات والمصاريف</span>
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary, #94a3b8)' }}>إدارة وتتبع سيارات الشركة، السائقين، العدادات، المحروقات وصور العدادات بالمحطة</span>
         </div>
         <button 
           onClick={() => { resetForm(); setShowModal(true); }}
@@ -323,6 +394,52 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
           ➕ إضافة سيارة جديدة للأسطول
         </button>
       </div>
+
+      {/* OIL CHANGE ALERTS BOX FROM REFUEL LOGS */}
+      {oilAlertCars.length > 0 && (
+        <div className="due-alerts-box" style={{ marginBottom: '1.5rem', background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(245, 158, 11, 0.1) 100%)', border: '1px solid rgba(239, 68, 68, 0.4)' }}>
+          <div className="due-alerts-header">
+            <span className="due-bell" style={{ fontSize: '1.8rem' }}>🛢️</span>
+            <div>
+              <h3 style={{ margin: 0, color: '#f87171', fontSize: '1.05rem', fontWeight: 800 }}>تنبيهات غيار زيت المحرك (متابعة قراءات التفويل والعدادات الحالية)</h3>
+              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>تم اكتشاف سيارات وصلت لعداد غيار الزيت المستحق من واقع قراءات التفويل الأخيرة:</p>
+            </div>
+          </div>
+          <div className="due-alerts-list">
+            {oilAlertCars.map(c => {
+              const rem = Number(c.remaining_oil_km);
+              const isOverdue = rem <= 0;
+              return (
+                <div key={c.id} className={`due-alert-item ${isOverdue ? 'overdue' : 'upcoming'}`}>
+                  <div className="due-info">
+                    <span className="due-title" style={{ fontSize: '0.95rem' }}>
+                      {isOverdue ? '🚨 مستحق غيار الزيت فوراً!' : '🟡 اقترب موعد غيار الزيت'}: السيارة ({c.plate_number}) - السائق: {c.driver_name || 'غير محدد'}
+                    </span>
+                    <span className="due-date">
+                      آخر عداد تفويل: <strong>{Number(c.last_odometer || c.odometer_km || 0).toLocaleString()} كم</strong> | العداد المستحق: <strong>{Number(c.next_oil_change_km || 10000).toLocaleString()} كم</strong>
+                    </span>
+                  </div>
+                  <div className="due-actions">
+                    <span className="due-amount" style={{ fontSize: '0.95rem', color: isOverdue ? '#f43f5e' : '#f59e0b' }}>
+                      {isOverdue ? `تجاوز الموعد بـ ${Math.abs(rem).toLocaleString()} كم` : `متبقي ${rem.toLocaleString()} كم`}
+                    </span>
+                    <button 
+                      className="btn btn-xs btn-primary"
+                      onClick={() => {
+                        setOilCar(c);
+                        setOilOdometer(String(c.last_odometer || c.odometer_km || ''));
+                        setShowOilModal(true);
+                      }}
+                    >
+                      🛢️ تسجيل غيار زيت
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Top Fleet Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
@@ -385,6 +502,9 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
             {filteredCars.map(c => {
               const totalExp = Number(c.total_expenses) || 0;
               const licAlert = getLicenseAlert(c.license_expiry_date);
+              const remOil = Number(c.remaining_oil_km);
+              const isOilOverdue = !isNaN(remOil) && remOil <= 0;
+              const isOilWarning = !isNaN(remOil) && remOil > 0 && remOil <= 500;
               
               return (
                 <div 
@@ -408,7 +528,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
                       
                       {/* Status Badge */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <span style={{
                           padding: '0.2rem 0.6rem',
                           borderRadius: '12px',
@@ -433,10 +553,23 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
 
                       {/* Odometer */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <span style={{ color: 'var(--text-secondary, #94a3b8)', fontSize: '0.85rem', fontWeight: '500' }}>🛣️ العداد:</span>
+                        <span style={{ color: 'var(--text-secondary, #94a3b8)', fontSize: '0.85rem', fontWeight: '500' }}>🛣️ العداد الحالي:</span>
                         <span style={{ color: 'var(--text-primary, #f8fafc)', fontSize: '0.95rem', fontWeight: '700' }}>
-                          {c.odometer_km ? `${Number(c.odometer_km).toLocaleString('en-US')} كم` : 'غير مسجل'}
+                          {Number(c.last_odometer || c.odometer_km || 0).toLocaleString('en-US')} كم
                         </span>
+                      </div>
+
+                      {/* Engine Oil Status Badge */}
+                      <div style={{
+                        fontSize: '0.75rem',
+                        fontWeight: '800',
+                        padding: '0.3rem 0.6rem',
+                        borderRadius: '10px',
+                        background: isOilOverdue ? 'rgba(244,63,94,0.15)' : isOilWarning ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.12)',
+                        color: isOilOverdue ? '#f43f5e' : isOilWarning ? '#f59e0b' : '#10b981',
+                        border: `1px solid ${isOilOverdue ? 'rgba(244,63,94,0.35)' : isOilWarning ? 'rgba(245,158,11,0.35)' : 'rgba(16,185,129,0.3)'}`
+                      }}>
+                        🛢️ زيت المحرك: {isOilOverdue ? `🚨 مستحق غيار الآن (تجاوز بـ ${Math.abs(remOil).toLocaleString()} كم)` : isOilWarning ? `🟡 باقي ${remOil.toLocaleString()} كم على الغيار` : `🟢 ممتاز (متبقي ${remOil.toLocaleString()} كم)`}
                       </div>
 
                       {/* Balance / Total expenses */}
@@ -507,13 +640,34 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
                     borderTop: '1px solid var(--border-color, #334155)',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between'
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '0.4rem'
                   }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #94a3b8)', fontWeight: '600' }}>
-                      {Number(c.transaction_count) || 0} عملية مسجلة
-                    </span>
+                    <div style={{ display: 'flex', gap: '0.35rem' }}>
+                      <button 
+                        onClick={(e) => handleOpenFuelLogs(c, e)}
+                        style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', border: '1px solid rgba(168,85,247,0.3)', padding: '0.35rem 0.65rem', borderRadius: '8px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer' }}
+                        title="عرض صور عداد التفويل المسجلة بالمحطة"
+                      >
+                        📷 سجل التفويل
+                      </button>
 
-                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOilCar(c);
+                          setOilOdometer(String(c.last_odometer || c.odometer_km || ''));
+                          setShowOilModal(true);
+                        }}
+                        style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16,185,129,0.3)', padding: '0.35rem 0.65rem', borderRadius: '8px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer' }}
+                        title="تسجيل تغيير زيت للمحرك"
+                      >
+                        🛢️ غيار زيت
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.35rem' }}>
                       <button 
                         onClick={(e) => { e.stopPropagation(); if (onCarClick) onCarClick(c); }}
                         style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)', padding: '0.35rem 0.65rem', borderRadius: '8px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer' }}
@@ -544,6 +698,163 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
           </div>
         )}
       </div>
+
+      {/* MODAL FORM: FUEL LOGS & METER PHOTOS VIEW (FOR MANAGER) */}
+      {showFuelLogsModal && fuelLogsCar && (
+        <div className="modal-overlay">
+          <div className="panel modal-content" style={{ maxWidth: '750px', background: '#0f172a', color: '#f8fafc' }}>
+            <div className="panel-header" style={{ borderBottom: '1px solid #334155', paddingBottom: '0.75rem' }}>
+              <h3 className="panel-title" style={{ color: '#60a5fa' }}>
+                📷 سجل التفويل وصور العدادات بالمحطة: ({fuelLogsCar.plate_number})
+              </h3>
+              <button className="btn btn-secondary" onClick={() => setShowFuelLogsModal(false)}>✕ إغلاق</button>
+            </div>
+
+            <div style={{ marginTop: '1rem', maxHeight: '60vh', overflowY: 'auto' }}>
+              {selectedCarFuelLogs.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
+                  لا توجد عمليات تفويل مسجلة لهذه السيارة حتى الآن.
+                </div>
+              ) : (
+                <table className="data-table" style={{ width: '100%', fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr>
+                      <th>التاريخ والوقت</th>
+                      <th>قراءة العداد</th>
+                      <th>الوقود واللترات</th>
+                      <th>المبلغ</th>
+                      <th>المحطة</th>
+                      <th>صورة العداد بالمحطة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedCarFuelLogs.map(log => (
+                      <tr key={log.id}>
+                        <td>{new Date(log.date).toLocaleString('ar-EG')}</td>
+                        <td><strong>{Number(log.odometer_reading).toLocaleString()} كم</strong></td>
+                        <td>{log.liters} لتر ({log.fuel_type})</td>
+                        <td><strong style={{ color: '#4ade80' }}>{Number(log.total_cost).toLocaleString()} ج.م</strong></td>
+                        <td>{log.station_name || '—'}</td>
+                        <td>
+                          {log.image_path ? (
+                            <button 
+                              className="btn btn-xs btn-primary"
+                              onClick={() => setActiveImageModal(log.image_path)}
+                              style={{ background: '#7c3aed', color: '#fff' }}
+                            >
+                              🔍 معاينة صورة العداد 📷
+                            </button>
+                          ) : (
+                            <span style={{ color: '#64748b' }}>بدون صورة</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox Image Preview Modal */}
+      {activeImageModal && (
+        <div 
+          onClick={() => setActiveImageModal(null)}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1300, padding: '1rem' }}
+        >
+          <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }}>
+            <img 
+              src={`/${activeImageModal}`} 
+              alt="صورة عداد المحطة" 
+              style={{ maxWidth: '100%', maxHeight: '85vh', borderRadius: '16px', border: '2px solid #ffffff', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }} 
+            />
+            <button 
+              onClick={() => setActiveImageModal(null)}
+              style={{ position: 'absolute', top: '-15px', right: '-15px', background: '#f43f5e', color: '#fff', border: 'none', borderRadius: '50%', width: '36px', height: '36px', fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer' }}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL FORM: OIL CHANGE REGISTRATION */}
+      {showOilModal && oilCar && (
+        <div className="modal-overlay">
+          <div className="panel modal-content" style={{ maxWidth: '500px' }}>
+            <div className="panel-header">
+              <h3 className="panel-title">🛢️ تسجيل غيار زيت جديد للسيارة ({oilCar.plate_number})</h3>
+              <button className="btn btn-secondary" onClick={() => setShowOilModal(false)}>✕ إغلاق</button>
+            </div>
+
+            <form onSubmit={handleOilSubmit}>
+              <div style={{ background: 'rgba(15, 23, 42, 0.4)', padding: '1rem', borderRadius: '12px', marginBottom: '1.25rem', border: '1px solid var(--border-color)' }}>
+                <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>السائق: <strong>{oilCar.driver_name || 'غير محدد'}</strong></div>
+                <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                  آخر عداد مسجل من التفويل: <strong>{Number(oilCar.last_odometer || oilCar.odometer_km || 0).toLocaleString()} كم</strong>
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>قراءة العداد الحالية عند تغيير الزيت (كم):*</label>
+                <input
+                  type="number"
+                  placeholder="مثال: 125000"
+                  value={oilOdometer}
+                  onChange={e => setOilOdometer(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>نوع/عمر الزيت الجديد (الكيلومترات المسموحة):*</label>
+                <select value={oilInterval} onChange={e => setOilInterval(e.target.value)}>
+                  <option value="10000">🛢️ زيت 10,000 كم (تخليقي كامل)</option>
+                  <option value="5000">🛢️ زيت 5,000 كم (نصف تخليقي)</option>
+                  <option value="3000">🛢️ زيت 3,000 كم (معدني)</option>
+                </select>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>تكلفة تغيير الزيت (ج.م - اختياري):</label>
+                <input
+                  type="number"
+                  step="any"
+                  placeholder="مثال: 1500"
+                  value={oilCost}
+                  onChange={e => setOilCost(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label>مركز الصيانة / المورّد (اختياري):</label>
+                <input
+                  type="text"
+                  placeholder="اسم المحل أو التوكيل..."
+                  value={oilCenter}
+                  onChange={e => setOilCenter(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                <label>ملاحظات إضافية:</label>
+                <input
+                  type="text"
+                  placeholder="نوع الفلتر، الماركة..."
+                  value={oilNotes}
+                  onChange={e => setOilNotes(e.target.value)}
+                />
+              </div>
+
+              <button type="submit" disabled={oilLoading} className="btn btn-primary" style={{ width: '100%' }}>
+                {oilLoading ? 'جاري الحفظ...' : 'تأكيد تسجيل غيار الزيت وتحديث العداد القادم 🛢️✅'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* SEPARATE MODAL POPUP FORM (Dark Theme Glassmorphism) */}
       {showModal && (
@@ -659,9 +970,9 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
                 </div>
               </div>
 
-              {/* Driver Account Selector (Strictly Drivers Only) */}
+              {/* Driver / Delegate Account Selector */}
               <div>
-                <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 'bold', fontSize: '0.85rem', color: '#cbd5e1' }}>تحديد قائد المركبة (السائق المسجل):</label>
+                <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 'bold', fontSize: '0.85rem', color: '#cbd5e1' }}>تحديد قائد المركبة (المندوب أو السائق المسجل):</label>
                 <select 
                   style={{ width: '100%', background: '#0f172a', color: '#f8fafc', border: '1px solid #334155', borderRadius: '10px', padding: '0.65rem' }}
                   value={driverRepId}
@@ -672,12 +983,15 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
                   }}
                   required
                 >
-                  <option value="">-- اختار السائق من قائمة السائقين المعتمدين --</option>
-                  {displayDrivers.map(r => (
-                    <option key={r.id} value={r.id}>
-                      🚚 {r.name} ({r.code})
-                    </option>
-                  ))}
+                  <option value="">-- اختر قائد المركبة من قائمة المناديب والسائقين --</option>
+                  {displayDrivers.map(r => {
+                    const isDriver = r.classification === 'driver' || r.type === 'driver';
+                    return (
+                      <option key={r.id} value={r.id}>
+                        {isDriver ? '🚚' : '👤'} {r.name} ({r.code}) {isDriver ? '[سائق]' : '[مندوب]'}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
