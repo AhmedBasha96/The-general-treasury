@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import CarManagement from './components/CarManagement';
 import DriverPortal from './components/DriverPortal';
 import AttendanceManagement from './components/AttendanceManagement';
+import AnalyticsCharts from './components/AnalyticsCharts';
+import AuditLogViewer from './components/AuditLogViewer';
 
 const compressImage = (file, maxWidth = 1000, maxHeight = 1000, quality = 0.6) => {
   return new Promise((resolve, reject) => {
@@ -607,11 +609,45 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
     setActiveTab('dashboard');
   };
 
+  const [showToastAlert, setShowToastAlert] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+
+  const playAlertChime = () => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15);
+
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start();
+      osc.stop(ctx.currentTime + 0.3);
+    } catch (e) {
+      console.log('Audio alert', e);
+    }
+  };
+
   const loadPendingTx = async () => {
     try {
       const res = await fetch('/api/transactions/pending');
       if (res.ok) {
         const data = await res.json();
+        if (currentUser && currentUser.role === 'manager' && data.length > prevPendingCount && prevPendingCount > 0) {
+          playAlertChime();
+          setToastMessage(`تنبيه: يوجد ${data.length} طلبات صرف جديدة بانتظار موافقتك!`);
+          setShowToastAlert(true);
+        }
+        setPrevPendingCount(data.length);
         setPendingTx(data);
       }
     } catch (err) {
@@ -2346,6 +2382,26 @@ const [showCarModal, setShowCarModal] = useState(false);
 
   return (
     <div className="app-container">
+      {/* LIVE TOAST ALERT BANNER */}
+      {showToastAlert && (
+        <div 
+          className="live-toast-alert" 
+          onClick={() => { setShowToastAlert(false); setActiveTab('pending-approvals'); }}
+        >
+          <div className="toast-icon">🔔</div>
+          <div className="toast-body">
+            <h4>إشعار عاجل من النظام!</h4>
+            <p>{toastMessage}</p>
+          </div>
+          <button 
+            style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer', marginRight: 'auto' }}
+            onClick={(e) => { e.stopPropagation(); setShowToastAlert(false); }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* HEADER */}
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div className="brand">
@@ -2495,6 +2551,15 @@ const [showCarModal, setShowCarModal] = useState(false);
               </button>
             )}
 
+            {currentUser.role === 'manager' && (
+              <button 
+                className={`tab-btn ${activeTab === 'audit-logs' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('audit-logs'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+              >
+                📜 سجل الحركة والتعديلات
+              </button>
+            )}
+
             <button 
               className={`tab-btn ${activeTab === 'reps' ? 'active' : ''}`}
               onClick={() => { setActiveTab('reps'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
@@ -2529,6 +2594,7 @@ const [showCarModal, setShowCarModal] = useState(false);
       {/* DASHBOARD TAB */}
       {activeTab === 'dashboard' && (
         <>
+          <AnalyticsCharts />
           {/* INITIAL BALANCE BANNER - AUTO CALCULATION */}
           {currentUser.role === 'manager' && !dashboardData.summary.safeInitialBalanceSet && (
             <div style={{
@@ -7188,6 +7254,11 @@ const [showCarModal, setShowCarModal] = useState(false);
             </form>
           </div>
         </div>
+      )}
+
+      {/* AUDIT LOGS TAB */}
+      {activeTab === 'audit-logs' && currentUser.role === 'manager' && (
+        <AuditLogViewer />
       )}
 
       {/* EDIT USER OVERLAY MODAL */}

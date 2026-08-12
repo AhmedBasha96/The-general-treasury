@@ -560,12 +560,69 @@ async function createTables() {
             FOREIGN KEY (rep_id) REFERENCES representatives(id) ON DELETE SET NULL
           );
         END
+        
+        -- Create audit_logs table (سجل حركة ونشاط المستخدمين والتدقيق)
+        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'audit_logs')
+        BEGIN
+          CREATE TABLE audit_logs (
+            id INT IDENTITY(1,1) PRIMARY KEY,
+            user_id INT NULL,
+            user_name NVARCHAR(100) NULL,
+            user_role VARCHAR(50) NULL,
+            action NVARCHAR(100) NOT NULL,
+            entity_type NVARCHAR(50) NULL,
+            entity_id INT NULL,
+            details NVARCHAR(MAX) NULL,
+            created_at DATETIME DEFAULT GETDATE()
+          );
+        END
       `);
 
-    console.log('Database tables verified/created (including ZKTeco Attendance).');
+    console.log('Database tables verified/created (including ZKTeco Attendance & Audit Logs).');
   } catch (error) {
     console.error('Failed to create tables:', error);
     throw error;
+  }
+}
+
+async function logAuditLog(req, action, entityType = null, entityId = null, details = null) {
+  try {
+    const p = getPool();
+    let userId = null;
+    let userName = 'أمين الخزينة';
+    let userRole = 'accountant';
+
+    if (req) {
+      const roleHeader = req.headers['x-user-role'];
+      const idHeader = req.headers['x-user-id'];
+      if (idHeader) userId = parseInt(idHeader, 10);
+      if (roleHeader) userRole = roleHeader;
+
+      if (userId) {
+        const uRes = await p.request().input('uid', sql.Int, userId).query('SELECT username, role FROM users WHERE id = @uid');
+        if (uRes.recordset.length > 0) {
+          userName = uRes.recordset[0].username;
+          userRole = uRes.recordset[0].role;
+        }
+      }
+    }
+
+    const detailsStr = typeof details === 'object' ? JSON.stringify(details) : (details || '');
+
+    await p.request()
+      .input('userId', sql.Int, userId)
+      .input('userName', sql.NVarChar, userName)
+      .input('userRole', sql.VarChar, userRole)
+      .input('action', sql.NVarChar, action)
+      .input('entityType', sql.NVarChar, entityType)
+      .input('entityId', sql.Int, entityId)
+      .input('details', sql.NVarChar, detailsStr)
+      .query(`
+        INSERT INTO audit_logs (user_id, user_name, user_role, action, entity_type, entity_id, details)
+        VALUES (@userId, @userName, @userRole, @action, @entityType, @entityId, @details)
+      `);
+  } catch (err) {
+    console.error('Audit log error:', err.message);
   }
 }
 

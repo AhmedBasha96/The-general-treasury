@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 require('dotenv').config();
-const { connectDB, getPool, sql } = require('./db');
+const { connectDB, getPool, logAuditLog, sql } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -242,6 +242,108 @@ async function getSafeInitialBalance(txOrPool) {
   const data = await getSafeInitialData(txOrPool);
   return data.safeInitialBalance;
 }
+
+// GET /api/analytics/dashboard - Analytics & KPI metrics
+app.get('/api/analytics/dashboard', async (req, res) => {
+  try {
+    const pool = getPool();
+
+    // 1. Monthly Daily Flow (Current Month: deposits vs withdrawals per day)
+    const dailyFlowRes = await pool.request().query(`
+      SELECT 
+        CONVERT(VARCHAR(10), date, 120) AS day_date,
+        ISNULL(SUM(CASE WHEN type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL) THEN amount ELSE 0 END), 0) AS total_deposits,
+        ISNULL(SUM(CASE WHEN (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL)) OR (type = 'company_transfer' AND (status = 'approved' OR status IS NULL)) THEN amount ELSE 0 END), 0) AS total_withdrawals
+      FROM transactions
+      WHERE date >= DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0)
+      GROUP BY CONVERT(VARCHAR(10), date, 120)
+      ORDER BY day_date ASC
+    `);
+
+    // 2. Expenses Distribution by Category (Current Month)
+    const expensesCatRes = await pool.request().query(`
+      SELECT 
+        ISNULL(withdrawal_sub_type, N'أخرى') AS sub_type,
+        ISNULL(SUM(amount), 0) AS total_amount
+      FROM transactions
+      WHERE type IN ('withdrawal', 'company_transfer')
+        AND (status IN ('approved', 'disbursed') OR status IS NULL)
+        AND date >= DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0)
+      GROUP BY ISNULL(withdrawal_sub_type, N'أخرى')
+      ORDER BY total_amount DESC
+    `);
+
+    // 3. Top Representative by Deposits (Current Month)
+    const topRepRes = await pool.request().query(`
+      SELECT TOP 1 
+        r.name AS rep_name, r.code AS rep_code,
+        SUM(t.amount) AS total_deposited
+      FROM transactions t
+      JOIN representatives r ON t.rep_id = r.id
+      WHERE t.type = 'deposit' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL)
+        AND t.date >= DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0)
+      GROUP BY r.name, r.code
+      ORDER BY total_deposited DESC
+    `);
+
+    // 4. Top Car Expense (Current Month)
+    const topCarRes = await pool.request().query(`
+      SELECT TOP 1 
+        c.plate_number, c.driver_name,
+        SUM(ISNULL(fl.total_cost, 0) + ISNULL(ml.cost, 0)) AS total_expense
+      FROM cars c
+      LEFT JOIN car_fuel_logs fl ON c.id = fl.car_id AND fl.date >= DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0)
+      LEFT JOIN car_maintenance_logs ml ON c.id = ml.car_id AND ml.date >= DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0)
+      GROUP BY c.plate_number, c.driver_name
+      HAVING SUM(ISNULL(fl.total_cost, 0) + ISNULL(ml.cost, 0)) > 0
+      ORDER BY total_expense DESC
+    `);
+
+    // 5. Average Daily Expense & Active Days (Current Month)
+    const avgExpenseRes = await pool.request().query(`
+      SELECT 
+        COUNT(DISTINCT CONVERT(VARCHAR(10), date, 120)) AS active_days,
+        ISNULL(SUM(amount), 0) AS total_withdrawals
+      FROM transactions
+      WHERE type IN ('withdrawal', 'company_transfer')
+        AND (status IN ('approved', 'disbursed') OR status IS NULL)
+        AND date >= DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0)
+    `);
+
+    const activeDays = Number(avgExpenseRes.recordset[0]?.active_days) || 1;
+    const totalMonthWithdrawals = Number(avgExpenseRes.recordset[0]?.total_withdrawals) || 0;
+    const avgDailyExpense = Math.round(totalMonthWithdrawals / Math.max(activeDays, 1));
+
+    res.json({
+      monthlyFlow: dailyFlowRes.recordset,
+      expensesByCategory: expensesCatRes.recordset,
+      topRep: topRepRes.recordset[0] || null,
+      topCar: topCarRes.recordset[0] || null,
+      avgDailyExpense,
+      activeDays,
+      totalMonthWithdrawals
+    });
+  } catch (error) {
+    console.error('Error fetching analytics:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء جلب تحليلات النظام' });
+  }
+});
+
+// GET /api/audit-logs - User Action Audit Logs
+app.get('/api/audit-logs', async (req, res) => {
+  try {
+    const pool = getPool();
+    const result = await pool.request().query(`
+      SELECT TOP 100 id, user_id, user_name, user_role, action, entity_type, entity_id, details, created_at
+      FROM audit_logs
+      ORDER BY created_at DESC
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error('Error fetching audit logs:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء جلب سجل الحركة والتدقيق' });
+  }
+});
 
 // 1. GET /api/dashboard
 app.get('/api/dashboard', async (req, res) => {
@@ -2785,6 +2887,7 @@ app.post('/api/transactions/:id/approve', async (req, res) => {
         `);
         
       await transaction.commit();
+      logAuditLog(req, 'موافقة المدير على العملية', 'transaction', parseInt(txId), { status: 'approved' });
       res.json({ message: 'تمت الموافقة على العملية بنجاح' });
     } catch (err) {
       await transaction.rollback();
@@ -2817,6 +2920,7 @@ app.post('/api/transactions/:id/reject', async (req, res) => {
       .input('txId', sql.Int, txId)
       .query("UPDATE transactions SET status = 'rejected' WHERE id = @txId");
       
+    logAuditLog(req, 'رفض طلب العملية', 'transaction', parseInt(txId), { status: 'rejected' });
     res.json({ message: 'تم رفض العملية بنجاح' });
   } catch (error) {
     console.error('Error rejecting transaction:', error);
