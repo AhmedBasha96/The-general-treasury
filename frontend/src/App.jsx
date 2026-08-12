@@ -2513,8 +2513,8 @@ const [showCarModal, setShowCarModal] = useState(false);
 
             {currentUser.role === 'manager' && (
               <button 
-                className={`tab-btn ${activeTab === 'pending-approvals' && approvalSubTab === 'pending' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('pending-approvals'); setApprovalSubTab('pending'); loadPendingTx(); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+                className={`tab-btn ${activeTab === 'pending-approvals' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('pending-approvals'); loadPendingTx(); loadRejectedTx(); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
                 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
               >
                 📥 طلبات الصرف المعلقة
@@ -2527,26 +2527,6 @@ const [showCarModal, setShowCarModal] = useState(false);
                     animation: 'pulse 1.5s infinite' 
                   }}>
                     {pendingTx.length}
-                  </span>
-                )}
-              </button>
-            )}
-
-            {(currentUser.role === 'manager' || currentUser.role === 'accountant') && (
-              <button 
-                className={`tab-btn ${activeTab === 'pending-approvals' && approvalSubTab === 'rejected' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('pending-approvals'); setApprovalSubTab('rejected'); loadRejectedTx(); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-                style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-              >
-                🚫 الطلبات المرفوضة
-                {rejectedTx.length > 0 && (
-                  <span style={{ 
-                    background: 'rgba(244, 63, 94, 0.2)', color: '#f43f5e', 
-                    border: '1px solid rgba(244, 63, 94, 0.3)',
-                    fontSize: '0.75rem', fontWeight: 'bold', 
-                    padding: '0.15rem 0.45rem', borderRadius: '50px'
-                  }}>
-                    {rejectedTx.length}
                   </span>
                 )}
               </button>
