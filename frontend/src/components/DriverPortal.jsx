@@ -79,6 +79,56 @@ function EgyptianLicensePlate({ letters, numbers, vehicleType }) {
   );
 }
 
+// Compress client-side camera images to fast-uploading JPG (< 300KB)
+const compressImage = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.75) => {
+  return new Promise((resolve) => {
+    if (!file || !file.type || !file.type.startsWith('image/')) {
+      return resolve(file);
+    }
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (e) => {
+      const img = new Image();
+      img.src = e.target.result;
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) return resolve(file);
+            const compressedFile = new File([blob], file.name || 'odometer.jpg', {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            });
+            resolve(compressedFile);
+          },
+          'image/jpeg',
+          quality
+        );
+      };
+      img.onerror = () => resolve(file);
+    };
+    reader.onerror = () => resolve(file);
+  });
+};
+
 export default function DriverPortal({ user, onLogout }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -100,6 +150,7 @@ export default function DriverPortal({ user, onLogout }) {
   const [stationName, setStationName] = useState('');
   const [fuelNotes, setFuelNotes] = useState('');
   const [fuelImage, setFuelImage] = useState(null);
+  const [compressingImage, setCompressingImage] = useState(false);
 
   // Oil/Maintenance Form state
   const [maintenanceType, setMaintenanceType] = useState('تغيير زيت موتور وفلاتر (10,000 كم)');
@@ -213,6 +264,25 @@ export default function DriverPortal({ user, onLogout }) {
     }
   };
 
+  // Handle camera photo selection with automatic client-side compression
+  const handleImageSelect = async (e) => {
+    const rawFile = e.target.files[0];
+    if (!rawFile) {
+      setFuelImage(null);
+      return;
+    }
+    setCompressingImage(true);
+    try {
+      const compressed = await compressImage(rawFile);
+      setFuelImage(compressed);
+    } catch (err) {
+      console.error('Failed to compress image:', err);
+      setFuelImage(rawFile);
+    } finally {
+      setCompressingImage(false);
+    }
+  };
+
   // Submit Refuel Entry (with mandatory photo)
   const handleFuelSubmit = async (e) => {
     e.preventDefault();
@@ -226,6 +296,12 @@ export default function DriverPortal({ user, onLogout }) {
 
     setFormLoading(true);
     try {
+      let imageToUpload = fuelImage;
+      if (imageToUpload && imageToUpload.size > 1024 * 1024) {
+        setFormMessage('⚡ جاري تجهيز وضغط صورة العداد لتسريع الرفع...');
+        imageToUpload = await compressImage(imageToUpload);
+      }
+
       const formData = new FormData();
       formData.append('car_id', data.car.id);
       formData.append('driver_rep_id', user.id);
@@ -236,7 +312,7 @@ export default function DriverPortal({ user, onLogout }) {
       formData.append('total_cost', totalCost);
       formData.append('station_name', stationName);
       formData.append('notes', fuelNotes);
-      formData.append('image', fuelImage);
+      formData.append('image', imageToUpload);
 
       const res = await fetch('/api/cars/driver/refuel', {
         method: 'POST',
@@ -252,7 +328,8 @@ export default function DriverPortal({ user, onLogout }) {
         alert(result.error || 'فشل حفظ عملية الوقود');
       }
     } catch (err) {
-      alert('تعذر الاتصال بالخادم');
+      console.error('Refuel upload error:', err);
+      alert('تعذر الاتصال بالخادم. يرجى التحقق من اتصال الإنترنت أو المحاولة مرة أخرى.');
     } finally {
       setFormLoading(false);
     }
@@ -533,7 +610,7 @@ export default function DriverPortal({ user, onLogout }) {
                 />
               </div>
 
-              {/* Photo Input (Mandatory Live Camera Capture Button) */}
+              {/* Photo Input (Mandatory Live Camera Capture Button with Auto-Compression) */}
               <div style={{ background: fuelImage ? '#f0fdf4' : '#fff1f2', padding: '1rem', borderRadius: '16px', border: fuelImage ? '2px solid #22c55e' : '2px dashed #f43f5e', textAlign: 'center' }}>
                 <label style={{ display: 'block', marginBottom: '0.6rem', fontWeight: '900', fontSize: '0.9rem', color: fuelImage ? '#15803d' : '#be123c' }}>
                   📸 تصوير عداد شاشة البنزين بالمحطة (إجباري بالكاميرا 📷)*
@@ -557,7 +634,11 @@ export default function DriverPortal({ user, onLogout }) {
                     width: '100%'
                   }}
                 >
-                  {fuelImage ? '📸 إعادة تصوير العداد بالكاميرا' : '📷 اضغط هنا لفتح كاميرا الموبايل وتصوير العداد حياً'}
+                  {compressingImage 
+                    ? '⏳ جاري ضغط ومعالجة صورة العداد...' 
+                    : fuelImage 
+                    ? '📸 إعادة تصوير العداد بالكاميرا' 
+                    : '📷 اضغط هنا لفتح كاميرا الموبايل وتصوير العداد حياً'}
                 </label>
 
                 <input 
@@ -565,13 +646,18 @@ export default function DriverPortal({ user, onLogout }) {
                   type="file" 
                   accept="image/*"
                   capture="environment"
-                  onChange={(e) => setFuelImage(e.target.files[0] || null)}
+                  onChange={handleImageSelect}
                   style={{ display: 'none' }}
-                  required
                 />
 
                 <div style={{ color: fuelImage ? '#16a34a' : '#e11d48', fontSize: '0.8rem', marginTop: '0.5rem', fontWeight: '800' }}>
-                  {fuelImage ? `✅ تم التقاط صورة العداد بنجاح!` : '⚠️ اضغط الزر الأحمر أعلاه لفتح الكاميرا والتقاط صورة حية لعداد المحطة'}
+                  {compressingImage ? (
+                    '⏳ جاري تحسين جودة الصورة وضغط الحجم للرفع السريع...'
+                  ) : fuelImage ? (
+                    `✅ تم التقاط صورة العداد جاهزة للرفع السريع (${Math.round(fuelImage.size / 1024)} كيلوبايت)`
+                  ) : (
+                    '⚠️ اضغط الزر الأحمر أعلاه لفتح الكاميرا والتقاط صورة حية لعداد المحطة'
+                  )}
                 </div>
               </div>
 
