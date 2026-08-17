@@ -13,20 +13,41 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Multer storage configuration
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    const unique = Date.now() + '_' + file.originalname.replace(/\s+/g, '_');
-    cb(null, unique);
-  }
-});
+// Multer memory storage configuration for sharp processing
+const storage = multer.memoryStorage();
 const upload = multer({ 
   storage: storage,
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB max file size
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB max upload buffer
 });
+
+// Helper function to compress and convert images to WebP (~30-50KB) on the fly during upload
+async function processAndSaveImage(file) {
+  if (!file || !file.buffer) return null;
+
+  const filename = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.webp`;
+  const targetPath = path.join(uploadsDir, filename);
+
+  try {
+    let sharp;
+    try { sharp = require('sharp'); } catch (e) {}
+
+    if (sharp) {
+      await sharp(file.buffer)
+        .resize({ width: 1000, height: 1000, fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 70 })
+        .toFile(targetPath);
+      return `uploads/cars/${filename}`.replace(/\\/g, '/');
+    }
+  } catch (err) {
+    console.error('Error during sharp image compression:', err);
+  }
+
+  // Fallback if sharp fails
+  const fallbackName = `${Date.now()}_${(file.originalname || 'image.jpg').replace(/\s+/g, '_')}`;
+  const fallbackPath = path.join(uploadsDir, fallbackName);
+  fs.writeFileSync(fallbackPath, file.buffer);
+  return `uploads/cars/${fallbackName}`.replace(/\\/g, '/');
+}
 
 const fixUtf8String = (str) => {
   if (!str) return '';
@@ -148,7 +169,7 @@ router.post('/', upload.single('image'), async (req, res) => {
     return res.status(400).json({ error: 'رقم اللوحة مطلوب' });
   }
 
-  const imagePath = req.file ? `uploads/cars/${req.file.filename}` : null;
+  const imagePath = req.file ? await processAndSaveImage(req.file) : null;
   try {
     const pool = getPool();
     // Check duplicate plate
@@ -286,7 +307,7 @@ router.put('/:id', upload.single('image'), async (req, res) => {
     return res.status(400).json({ error: 'رقم اللوحة مطلوب' });
   }
 
-  const imagePath = req.file ? `uploads/cars/${req.file.filename}` : null;
+  const imagePath = req.file ? await processAndSaveImage(req.file) : null;
   
   try {
     const pool = getPool();
@@ -426,7 +447,7 @@ router.post('/driver/refuel', upload.single('image'), async (req, res) => {
   const ltr = parseFloat(liters);
   const price = parseFloat(price_per_liter) || 20.50;
   const cost = parseFloat(total_cost) || (ltr * price);
-  const imagePath = `uploads/cars/${req.file.filename}`.replace(/\\/g, '/');
+  const imagePath = await processAndSaveImage(req.file);
   
   try {
     const pool = getPool();
@@ -589,6 +610,71 @@ router.delete('/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting car:', error);
     res.status(500).json({ error: 'فشل حذف السيارة' });
+  }
+});
+
+// POST /api/cars/compress-existing-images - Retroactive compression of existing images in uploads/cars to WebP
+router.post('/compress-existing-images', async (req, res) => {
+  try {
+    let sharp;
+    try { sharp = require('sharp'); } catch (e) {}
+    if (!sharp) {
+      return res.status(400).json({ error: 'مكتبة sharp غير متوفرة بالسيرفر' });
+    }
+
+    const files = fs.readdirSync(uploadsDir);
+    let convertedCount = 0;
+    let bytesSaved = 0;
+
+    for (const filename of files) {
+      if (filename.endsWith('.webp')) continue; // already webp
+      const ext = path.extname(filename).toLowerCase();
+      if (!['.jpg', '.jpeg', '.png', '.bmp'].includes(ext)) continue;
+
+      const oldPath = path.join(uploadsDir, filename);
+      const stats = fs.statSync(oldPath);
+      const originalSize = stats.size;
+
+      const newFilename = filename.substring(0, filename.lastIndexOf('.')) + '_' + Date.now() + '.webp';
+      const newPath = path.join(uploadsDir, newFilename);
+
+      await sharp(oldPath)
+        .resize({ width: 1000, height: 1000, fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 70 })
+        .toFile(newPath);
+
+      const newStats = fs.statSync(newPath);
+      bytesSaved += (originalSize - newStats.size);
+
+      // Remove old file
+      try { fs.unlinkSync(oldPath); } catch (e) {}
+
+      // Update paths in DB
+      const oldRelPath = `uploads/cars/${filename}`;
+      const newRelPath = `uploads/cars/${newFilename}`;
+      const pool = getPool();
+
+      await pool.request()
+        .input('oldRel', sql.NVarChar(sql.MAX), oldRelPath)
+        .input('newRel', sql.NVarChar(sql.MAX), newRelPath)
+        .query(`UPDATE car_fuel_logs SET image_path = @newRel WHERE image_path = @oldRel OR image_path = REPLACE(@oldRel, '/', '\\')`);
+
+      await pool.request()
+        .input('oldRel', sql.NVarChar(sql.MAX), oldRelPath)
+        .input('newRel', sql.NVarChar(sql.MAX), newRelPath)
+        .query(`UPDATE cars SET image_path = @newRel WHERE image_path = @oldRel OR image_path = REPLACE(@oldRel, '/', '\\')`);
+
+      convertedCount++;
+    }
+
+    res.json({
+      message: `تم ضغط وتصغير ${convertedCount} صورة قديمة إلى صيغة WebP بنجاح`,
+      convertedCount,
+      mbSaved: (bytesSaved / (1024 * 1024)).toFixed(2)
+    });
+  } catch (error) {
+    console.error('Error compressing existing images:', error);
+    res.status(500).json({ error: 'فشل ضغط الصور القديمة' });
   }
 });
 

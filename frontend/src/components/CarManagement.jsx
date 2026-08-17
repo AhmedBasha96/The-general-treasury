@@ -103,7 +103,7 @@ function getLicenseAlert(expiryDateStr) {
 const getCleanImageUrl = (pathStr) => {
   if (!pathStr) return '';
   let cleanPath = String(pathStr).replace(/\\/g, '/');
-  if (cleanPath.startsWith('http://') || cleanPath.startsWith('https://')) {
+  if (cleanPath.startsWith('http://') || cleanPath.startsWith('https://') || cleanPath.startsWith('data:')) {
     return cleanPath;
   }
   if (!cleanPath.startsWith('/')) {
@@ -734,11 +734,33 @@ export default function CarManagement({ user, onCarClick, onCarAdded }) {
       {showFuelLogsModal && fuelLogsCar && (
         <div className="modal-overlay">
           <div className="panel modal-content" style={{ maxWidth: '750px', background: '#0f172a', color: '#f8fafc' }}>
-            <div className="panel-header" style={{ borderBottom: '1px solid #334155', paddingBottom: '0.75rem' }}>
-              <h3 className="panel-title" style={{ color: '#60a5fa' }}>
+            <div className="panel-header" style={{ borderBottom: '1px solid #334155', paddingBottom: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 className="panel-title" style={{ color: '#60a5fa', margin: 0 }}>
                 📷 سجل التفويل وصور العدادات بالمحطة: ({fuelLogsCar.plate_number})
               </h3>
-              <button className="btn btn-secondary" onClick={() => setShowFuelLogsModal(false)}>✕ إغلاق</button>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button 
+                  className="btn btn-xs btn-primary"
+                  style={{ background: '#2563eb', padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
+                  onClick={async () => {
+                    if (!window.confirm('هل تريد ضغط جميع الصور القديمة المخزنة بالسيرفر وتحويلها لصيغة WebP لتوفير المساحة دون حذف أي صورة؟')) return;
+                    try {
+                      const res = await fetch('/api/cars/compress-existing-images', { method: 'POST' });
+                      const data = await res.json();
+                      if (res.ok) {
+                        alert(`✅ ${data.message} (تم توفير ${data.mbSaved} ميجابايت من السيرفر)`);
+                      } else {
+                        alert(data.error || 'فشل ضغط الصور');
+                      }
+                    } catch (e) {
+                      alert('تعذر الاتصال بالخادم');
+                    }
+                  }}
+                >
+                  ⚡ ضغط الصور القديمة بالسيرفر
+                </button>
+                <button className="btn btn-secondary" onClick={() => setShowFuelLogsModal(false)}>✕ إغلاق</button>
+              </div>
             </div>
 
             <div style={{ marginTop: '1rem', maxHeight: '60vh', overflowY: 'auto' }}>

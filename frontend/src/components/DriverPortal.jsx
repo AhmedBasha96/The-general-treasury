@@ -126,10 +126,13 @@ const compressImage = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.75) 
       img.onerror = () => resolve(file);
     };
     reader.onerror = () => resolve(file);
+  });
+};
+
 const getCleanImageUrl = (pathStr) => {
   if (!pathStr) return '';
   let cleanPath = String(pathStr).replace(/\\/g, '/');
-  if (cleanPath.startsWith('http://') || cleanPath.startsWith('https://')) {
+  if (cleanPath.startsWith('http://') || cleanPath.startsWith('https://') || cleanPath.startsWith('data:')) {
     return cleanPath;
   }
   if (!cleanPath.startsWith('/')) {
