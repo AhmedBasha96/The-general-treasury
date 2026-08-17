@@ -426,7 +426,7 @@ router.post('/driver/refuel', upload.single('image'), async (req, res) => {
   const ltr = parseFloat(liters);
   const price = parseFloat(price_per_liter) || 20.50;
   const cost = parseFloat(total_cost) || (ltr * price);
-  const imagePath = `uploads/cars/${req.file.filename}`;
+  const imagePath = `uploads/cars/${req.file.filename}`.replace(/\\/g, '/');
   
   try {
     const pool = getPool();

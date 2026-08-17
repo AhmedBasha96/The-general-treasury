@@ -100,7 +100,19 @@ function getLicenseAlert(expiryDateStr) {
   return { type: 'ok', label: `رخصة صالحة (${expiryDateStr})`, bg: 'rgba(16,185,129,0.15)', color: '#86efac' };
 }
 
-export default function CarManagement({ onCarAdded, onCarClick }) {
+const getCleanImageUrl = (pathStr) => {
+  if (!pathStr) return '';
+  let cleanPath = String(pathStr).replace(/\\/g, '/');
+  if (cleanPath.startsWith('http://') || cleanPath.startsWith('https://')) {
+    return cleanPath;
+  }
+  if (!cleanPath.startsWith('/')) {
+    cleanPath = '/' + cleanPath;
+  }
+  return cleanPath;
+};
+
+export default function CarManagement({ user, onCarClick, onCarAdded }) {
   const [cars, setCars] = useState([]);
   const [representatives, setRepresentatives] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -785,7 +797,7 @@ export default function CarManagement({ onCarAdded, onCarClick }) {
         >
           <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }}>
             <img 
-              src={`/${activeImageModal}`} 
+              src={getCleanImageUrl(activeImageModal)} 
               alt="صورة عداد المحطة" 
               style={{ maxWidth: '100%', maxHeight: '85vh', borderRadius: '16px', border: '2px solid #ffffff', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }} 
             />

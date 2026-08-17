@@ -126,7 +126,16 @@ const compressImage = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.75) 
       img.onerror = () => resolve(file);
     };
     reader.onerror = () => resolve(file);
-  });
+const getCleanImageUrl = (pathStr) => {
+  if (!pathStr) return '';
+  let cleanPath = String(pathStr).replace(/\\/g, '/');
+  if (cleanPath.startsWith('http://') || cleanPath.startsWith('https://')) {
+    return cleanPath;
+  }
+  if (!cleanPath.startsWith('/')) {
+    cleanPath = '/' + cleanPath;
+  }
+  return cleanPath;
 };
 
 export default function DriverPortal({ user, onLogout }) {
@@ -722,7 +731,7 @@ export default function DriverPortal({ user, onLogout }) {
         >
           <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }}>
             <img 
-              src={`/${activeImageModal}`} 
+              src={getCleanImageUrl(activeImageModal)} 
               alt="صورة عداد المحطة" 
               style={{ maxWidth: '100%', maxHeight: '85vh', borderRadius: '16px', border: '2px solid #ffffff', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }} 
             />
