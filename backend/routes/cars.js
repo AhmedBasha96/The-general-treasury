@@ -69,10 +69,29 @@ const fixUtf8String = (str) => {
     if (/[\u0600-\u06FF]/.test(decoded)) {
       return decoded;
     }
-    return str;
   } catch (e) {
     return str;
   }
+};
+
+const parseSafeInt = (val) => {
+  if (val === null || val === undefined || val === '') return null;
+  const westernVal = String(val)
+    .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+    .replace(/[^\d]/g, '');
+  if (!westernVal) return null;
+  const parsed = parseInt(westernVal, 10);
+  return isNaN(parsed) ? null : parsed;
+};
+
+const parseSafeFloat = (val) => {
+  if (val === null || val === undefined || val === '') return null;
+  const westernVal = String(val)
+    .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+    .replace(/[^\d.]/g, '');
+  if (!westernVal) return null;
+  const parsed = parseFloat(westernVal);
+  return isNaN(parsed) ? null : parsed;
 };
 
 // GET /api/cars - list all cars with expense aggregations and driver assignment
@@ -449,19 +468,32 @@ router.post('/driver/refuel', upload.single('image'), async (req, res) => {
     return res.status(400).json({ error: '⚠️ صورة عداد المحطة إلزامية بالكاميرا للتمكن من حفظ عملية التفويل' });
   }
   
-  const carIdNum = parseInt(car_id, 10);
-  const odo = parseInt(odometer_reading, 10);
-  const ltr = parseFloat(liters);
-  const price = parseFloat(price_per_liter) || 20.50;
-  const cost = parseFloat(total_cost) || (ltr * price);
+  const carIdNum = parseSafeInt(car_id);
+  const odo = parseSafeInt(odometer_reading);
+  const ltr = parseSafeFloat(liters);
+  const price = parseSafeFloat(price_per_liter) || 20.50;
+  const cost = parseSafeFloat(total_cost) || ((ltr || 0) * price);
 
-  if (isNaN(carIdNum) || isNaN(odo) || isNaN(ltr)) {
-    return res.status(400).json({ error: 'بيانات التفويل غير صحيحة' });
+  if (!carIdNum || odo === null || !ltr) {
+    return res.status(400).json({ error: 'يرجى كتابة قراءة العداد وعدد اللترات بشكل أرقام صحيحة' });
   }
   
   try {
-    const imagePath = await processAndSaveImage(req.file);
     const pool = getPool();
+
+    // Verify odometer reading is not less than last recorded odometer
+    const carCheck = await pool.request()
+      .input('car_id', sql.Int, carIdNum)
+      .query(`SELECT ISNULL(last_odometer, ISNULL(odometer_km, 0)) AS lastOdo FROM cars WHERE id = @car_id`);
+
+    const lastOdo = carCheck.recordset[0]?.lastOdo || 0;
+    if (lastOdo > 0 && odo < lastOdo) {
+      return res.status(400).json({ 
+        error: `⚠️ قراءة العداد المدخلة (${odo.toLocaleString()} كم) أقل من أحدث قراءة مسجلة للسيارة (${lastOdo.toLocaleString()} كم). يرجى التأكد من قراءة العداد الصحيحة.` 
+      });
+    }
+
+    const imagePath = await processAndSaveImage(req.file);
     
     // Safely check if driver_rep_id exists in representatives table
     let validRepId = null;
@@ -513,19 +545,34 @@ router.post('/driver/refuel', upload.single('image'), async (req, res) => {
 // POST /api/cars/oil-change - Record new oil change from Manager panel
 router.post('/oil-change', async (req, res) => {
   const { car_id, odometer_reading, oil_change_interval_km, cost, center_name, notes } = req.body;
-  if (!car_id || !odometer_reading) {
-    return res.status(400).json({ error: 'بيانات رقم العداد الحالي مطلوبة' });
+  const carIdNum = parseSafeInt(car_id);
+  const odo = parseSafeInt(odometer_reading);
+
+  if (!carIdNum || odo === null) {
+    return res.status(400).json({ error: 'بيانات رقم العداد الحالي مطلوبة بشكل صحيح' });
   }
 
-  const odo = parseInt(odometer_reading, 10);
-  const interval = oil_change_interval_km ? parseInt(oil_change_interval_km, 10) : 10000;
+  const interval = oil_change_interval_km ? parseSafeInt(oil_change_interval_km) || 10000 : 10000;
   const nextKm = odo + interval;
-  const totalCost = parseFloat(cost) || 0;
+  const totalCost = parseSafeFloat(cost) || 0;
 
   try {
     const pool = getPool();
+
+    // Verify odometer reading is not less than last recorded odometer
+    const carCheck = await pool.request()
+      .input('car_id', sql.Int, carIdNum)
+      .query(`SELECT ISNULL(last_odometer, ISNULL(odometer_km, 0)) AS lastOdo FROM cars WHERE id = @car_id`);
+
+    const lastOdo = carCheck.recordset[0]?.lastOdo || 0;
+    if (lastOdo > 0 && odo < lastOdo) {
+      return res.status(400).json({ 
+        error: `⚠️ قراءة العداد المدخلة (${odo.toLocaleString()} كم) أقل من أحدث قراءة مسجلة للسيارة (${lastOdo.toLocaleString()} كم). يرجى التأكد من قراءة العداد الصحيحة.` 
+      });
+    }
+
     await pool.request()
-      .input('car_id', sql.Int, car_id)
+      .input('car_id', sql.Int, carIdNum)
       .input('mtype', sql.NVarChar(100), `تغيير زيت موتور وفلاتر (${interval.toLocaleString()} كم)`)
       .input('odo', sql.Int, odo)
       .input('nextKm', sql.Int, nextKm)
@@ -538,7 +585,7 @@ router.post('/oil-change', async (req, res) => {
       `);
 
     await pool.request()
-      .input('car_id', sql.Int, car_id)
+      .input('car_id', sql.Int, carIdNum)
       .input('odo', sql.Int, odo)
       .input('interval', sql.Int, interval)
       .input('nextKm', sql.Int, nextKm)
@@ -563,15 +610,28 @@ router.post('/oil-change', async (req, res) => {
 // POST /api/driver/oil-change - Driver Portal oil entry (Enforcing management oil interval)
 router.post('/driver/oil-change', async (req, res) => {
   const { car_id, driver_rep_id, odometer_reading, next_service_km, cost, center_name, notes } = req.body;
-  if (!car_id || !odometer_reading) {
-    return res.status(400).json({ error: 'بيانات العداد قراءة الصيانة مطلوبة' });
+  const carIdNum = parseSafeInt(car_id);
+  const odo = parseSafeInt(odometer_reading);
+  const totalCost = parseSafeFloat(cost) || 0;
+
+  if (!carIdNum || odo === null) {
+    return res.status(400).json({ error: 'بيانات العداد ورقم السيارة مطلوبة بشكل صحيح' });
   }
-  
-  const odo = parseInt(odometer_reading, 10);
-  const totalCost = parseFloat(cost) || 0;
   
   try {
     const pool = getPool();
+
+    // Verify odometer reading is not less than last recorded odometer
+    const carCheck = await pool.request()
+      .input('car_id', sql.Int, carIdNum)
+      .query(`SELECT ISNULL(last_odometer, ISNULL(odometer_km, 0)) AS lastOdo FROM cars WHERE id = @car_id`);
+
+    const lastOdo = carCheck.recordset[0]?.lastOdo || 0;
+    if (lastOdo > 0 && odo < lastOdo) {
+      return res.status(400).json({ 
+        error: `⚠️ قراءة العداد المدخلة (${odo.toLocaleString()} كم) أقل من أحدث قراءة مسجلة للسيارة (${lastOdo.toLocaleString()} كم). يرجى التأكد من قراءة العداد الصحيحة.` 
+      });
+    }
     
     // Fetch management designated oil interval for this car
     const carRes = await pool.request()
