@@ -671,6 +671,17 @@ export default function DriverPortal({ user, onLogout }) {
                     '⚠️ اضغط الزر الأحمر أعلاه لفتح الكاميرا والتقاط صورة حية لعداد المحطة'
                   )}
                 </div>
+
+                {fuelImage && !compressingImage && (
+                  <div style={{ marginTop: '0.75rem', textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.75rem', color: '#15803d', fontWeight: 'bold', marginBottom: '0.25rem' }}>📷 معاينة الصورة الملتقطة:</div>
+                    <img 
+                      src={URL.createObjectURL(fuelImage)} 
+                      alt="معاينة صورة العداد" 
+                      style={{ maxWidth: '100%', maxHeight: '180px', borderRadius: '12px', border: '2px solid #22c55e', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', objectFit: 'cover' }} 
+                    />
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
