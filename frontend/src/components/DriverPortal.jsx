@@ -736,8 +736,25 @@ export default function DriverPortal({ user, onLogout }) {
             <img 
               src={getCleanImageUrl(activeImageModal)} 
               alt="صورة عداد المحطة" 
-              style={{ maxWidth: '100%', maxHeight: '85vh', borderRadius: '16px', border: '2px solid #ffffff', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }} 
+              onError={(e) => {
+                if (!e.target.dataset.fallbackTried) {
+                  e.target.dataset.fallbackTried = 'true';
+                  const clean = getCleanImageUrl(activeImageModal);
+                  const host = window.location.hostname || 'localhost';
+                  e.target.src = `http://${host}:5000${clean}`;
+                } else {
+                  e.target.style.display = 'none';
+                  const errBox = document.getElementById('driver-image-error-box');
+                  if (errBox) errBox.style.display = 'block';
+                }
+              }}
+              style={{ maxWidth: '100%', maxHeight: '85vh', borderRadius: '16px', border: '2px solid #ffffff', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', display: 'block' }} 
             />
+            <div id="driver-image-error-box" style={{ display: 'none', background: '#1e293b', padding: '2rem 2.5rem', borderRadius: '20px', color: '#f8fafc', textAlign: 'center', border: '2px solid #334155', boxShadow: '0 20px 40px rgba(0,0,0,0.5)' }}>
+              <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>📷</div>
+              <h4 style={{ margin: '0 0 0.5rem 0', color: '#f43f5e', fontWeight: 'bold' }}>تعذر فتح ملف صورة العداد</h4>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#94a3b8' }}>ملف الصورة غير متوفر بالسيرفر لهذه العملية.</p>
+            </div>
             <button 
               onClick={() => setActiveImageModal(null)}
               style={{ position: 'absolute', top: '-15px', right: '-15px', background: '#f43f5e', color: '#fff', border: 'none', borderRadius: '50%', width: '36px', height: '36px', fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer' }}
