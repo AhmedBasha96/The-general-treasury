@@ -672,7 +672,7 @@ router.post('/compress-existing-images', async (req, res) => {
       const newFilename = filename.substring(0, filename.lastIndexOf('.')) + '_' + Date.now() + '.webp';
       const newPath = path.join(uploadsDir, newFilename);
 
-      await sharp(oldPath)
+      await sharpInstance(oldPath)
         .resize({ width: 1000, height: 1000, fit: 'inside', withoutEnlargement: true })
         .webp({ quality: 70 })
         .toFile(newPath);
@@ -708,7 +708,7 @@ router.post('/compress-existing-images', async (req, res) => {
     });
   } catch (error) {
     console.error('Error compressing existing images:', error);
-    res.status(500).json({ error: 'فشل ضغط الصور القديمة' });
+    res.status(500).json({ error: 'فشل ضغط الصور القديمة: ' + (error.message || '') });
   }
 });
 
