@@ -722,4 +722,215 @@ router.post('/compress-existing-images', async (req, res) => {
   }
 });
 
+// PUT /api/cars/fuel-logs/:logId - Edit a fuel log record (Admin / Manager)
+router.put('/fuel-logs/:logId', upload.single('image'), async (req, res) => {
+  const { logId } = req.params;
+  const { odometer_reading, fuel_type, price_per_liter, liters, total_cost, station_name, notes, date } = req.body;
+  const idNum = parseInt(logId, 10);
+  if (isNaN(idNum)) return res.status(400).json({ error: 'معرف السجل غير صحيح' });
+
+  try {
+    const pool = getPool();
+    let imagePath = null;
+    if (req.file) {
+      imagePath = await processAndSaveImage(req.file);
+    }
+
+    const odo = parseInt(odometer_reading, 10);
+    const ltr = parseFloat(liters);
+    const price = parseFloat(price_per_liter);
+    const cost = parseFloat(total_cost);
+
+    let query = `
+      UPDATE car_fuel_logs
+      SET odometer_reading = ISNULL(@odo, odometer_reading),
+          fuel_type = ISNULL(@ftype, fuel_type),
+          price_per_liter = ISNULL(@price, price_per_liter),
+          liters = ISNULL(@liters, liters),
+          total_cost = ISNULL(@cost, total_cost),
+          station_name = @station,
+          notes = @notes
+    `;
+    if (imagePath) query += `, image_path = @imgPath`;
+    if (date) query += `, date = @date`;
+    query += ` WHERE id = @id; SELECT car_id FROM car_fuel_logs WHERE id = @id;`;
+
+    const reqQuery = pool.request()
+      .input('id', sql.Int, idNum)
+      .input('odo', sql.Int, isNaN(odo) ? null : odo)
+      .input('ftype', sql.NVarChar(50), fuel_type || null)
+      .input('price', sql.Decimal(18, 2), isNaN(price) ? null : price)
+      .input('liters', sql.Decimal(18, 2), isNaN(ltr) ? null : ltr)
+      .input('cost', sql.Decimal(18, 2), isNaN(cost) ? null : cost)
+      .input('station', sql.NVarChar(255), station_name || null)
+      .input('notes', sql.NVarChar(sql.MAX), notes || null);
+
+    if (imagePath) reqQuery.input('imgPath', sql.NVarChar(sql.MAX), imagePath);
+    if (date) reqQuery.input('date', sql.DateTime, new Date(date));
+
+    const result = await reqQuery.query(query);
+    const carId = result.recordset[0]?.car_id;
+
+    if (carId && !isNaN(odo)) {
+      await pool.request()
+        .input('car_id', sql.Int, carId)
+        .query(`
+          UPDATE cars
+          SET last_odometer = (SELECT MAX(odometer_reading) FROM car_fuel_logs WHERE car_id = @car_id),
+              odometer_km = (SELECT MAX(odometer_reading) FROM car_fuel_logs WHERE car_id = @car_id)
+          WHERE id = @car_id
+        `);
+    }
+
+    res.json({ message: 'تم تعديل سجل التفويل بنجاح' });
+  } catch (error) {
+    console.error('Error updating fuel log:', error);
+    res.status(500).json({ error: 'فشل تعديل سجل التفويل' });
+  }
+});
+
+// DELETE /api/cars/fuel-logs/:logId - Delete a fuel log record (Admin / Manager)
+router.delete('/fuel-logs/:logId', async (req, res) => {
+  const { logId } = req.params;
+  const idNum = parseInt(logId, 10);
+  if (isNaN(idNum)) return res.status(400).json({ error: 'معرف السجل غير صحيح' });
+
+  try {
+    const pool = getPool();
+    const fetchRes = await pool.request()
+      .input('id', sql.Int, idNum)
+      .query('SELECT car_id, image_path FROM car_fuel_logs WHERE id = @id');
+
+    if (fetchRes.recordset.length === 0) {
+      return res.status(404).json({ error: 'سجل التفويل غير موجود' });
+    }
+
+    const { car_id, image_path } = fetchRes.recordset[0];
+
+    await pool.request()
+      .input('id', sql.Int, idNum)
+      .query('DELETE FROM car_fuel_logs WHERE id = @id');
+
+    if (image_path) {
+      try {
+        const fullImgPath = path.join(__dirname, '..', image_path);
+        if (fs.existsSync(fullImgPath)) fs.unlinkSync(fullImgPath);
+      } catch (e) {}
+    }
+
+    if (car_id) {
+      await pool.request()
+        .input('car_id', sql.Int, car_id)
+        .query(`
+          UPDATE cars
+          SET last_odometer = (SELECT MAX(odometer_reading) FROM car_fuel_logs WHERE car_id = @car_id),
+              odometer_km = (SELECT MAX(odometer_reading) FROM car_fuel_logs WHERE car_id = @car_id)
+          WHERE id = @car_id
+        `);
+    }
+
+    res.json({ message: 'تم حذف سجل التفويل بنجاح' });
+  } catch (error) {
+    console.error('Error deleting fuel log:', error);
+    res.status(500).json({ error: 'فشل حذف سجل التفويل' });
+  }
+});
+
+// PUT /api/cars/maintenance-logs/:logId - Edit a maintenance/oil log record (Admin / Manager)
+router.put('/maintenance-logs/:logId', async (req, res) => {
+  const { logId } = req.params;
+  const { maintenance_type, odometer_reading, next_service_km, cost, center_name, notes, date } = req.body;
+  const idNum = parseInt(logId, 10);
+  if (isNaN(idNum)) return res.status(400).json({ error: 'معرف السجل غير صحيح' });
+
+  try {
+    const pool = getPool();
+    const odo = parseInt(odometer_reading, 10);
+    const nextKm = parseInt(next_service_km, 10);
+    const totalCost = parseFloat(cost);
+
+    let query = `
+      UPDATE car_maintenance_logs
+      SET maintenance_type = ISNULL(@mtype, maintenance_type),
+          odometer_reading = ISNULL(@odo, odometer_reading),
+          next_service_km = ISNULL(@nextKm, next_service_km),
+          cost = ISNULL(@cost, cost),
+          center_name = @center,
+          notes = @notes
+    `;
+    if (date) query += `, date = @date`;
+    query += ` WHERE id = @id; SELECT car_id FROM car_maintenance_logs WHERE id = @id;`;
+
+    const reqQuery = pool.request()
+      .input('id', sql.Int, idNum)
+      .input('mtype', sql.NVarChar(100), maintenance_type || null)
+      .input('odo', sql.Int, isNaN(odo) ? null : odo)
+      .input('nextKm', sql.Int, isNaN(nextKm) ? null : nextKm)
+      .input('cost', sql.Decimal(18, 2), isNaN(totalCost) ? null : totalCost)
+      .input('center', sql.NVarChar(255), center_name || null)
+      .input('notes', sql.NVarChar(sql.MAX), notes || null);
+
+    if (date) reqQuery.input('date', sql.DateTime, new Date(date));
+
+    const result = await reqQuery.query(query);
+    const carId = result.recordset[0]?.car_id;
+
+    if (carId && (!isNaN(odo) || !isNaN(nextKm))) {
+      await pool.request()
+        .input('car_id', sql.Int, carId)
+        .query(`
+          UPDATE cars
+          SET last_oil_change_km = (SELECT MAX(odometer_reading) FROM car_maintenance_logs WHERE car_id = @car_id),
+              next_oil_change_km = (SELECT MAX(next_service_km) FROM car_maintenance_logs WHERE car_id = @car_id)
+          WHERE id = @car_id
+        `);
+    }
+
+    res.json({ message: 'تم تعديل سجل الصيانة بنجاح' });
+  } catch (error) {
+    console.error('Error updating maintenance log:', error);
+    res.status(500).json({ error: 'فشل تعديل سجل الصيانة' });
+  }
+});
+
+// DELETE /api/cars/maintenance-logs/:logId - Delete a maintenance/oil log record (Admin / Manager)
+router.delete('/maintenance-logs/:logId', async (req, res) => {
+  const { logId } = req.params;
+  const idNum = parseInt(logId, 10);
+  if (isNaN(idNum)) return res.status(400).json({ error: 'معرف السجل غير صحيح' });
+
+  try {
+    const pool = getPool();
+    const fetchRes = await pool.request()
+      .input('id', sql.Int, idNum)
+      .query('SELECT car_id FROM car_maintenance_logs WHERE id = @id');
+
+    if (fetchRes.recordset.length === 0) {
+      return res.status(404).json({ error: 'سجل الصيانة غير موجود' });
+    }
+
+    const { car_id } = fetchRes.recordset[0];
+
+    await pool.request()
+      .input('id', sql.Int, idNum)
+      .query('DELETE FROM car_maintenance_logs WHERE id = @id');
+
+    if (car_id) {
+      await pool.request()
+        .input('car_id', sql.Int, car_id)
+        .query(`
+          UPDATE cars
+          SET last_oil_change_km = (SELECT MAX(odometer_reading) FROM car_maintenance_logs WHERE car_id = @car_id),
+              next_oil_change_km = (SELECT MAX(next_service_km) FROM car_maintenance_logs WHERE car_id = @car_id)
+          WHERE id = @car_id
+        `);
+    }
+
+    res.json({ message: 'تم حذف سجل الصيانة بنجاح' });
+  } catch (error) {
+    console.error('Error deleting maintenance log:', error);
+    res.status(500).json({ error: 'فشل حذف سجل الصيانة' });
+  }
+});
+
 module.exports = router;

@@ -157,6 +157,28 @@ export default function CarManagement({ user, onCarClick, onCarAdded }) {
   const [selectedCarFuelLogs, setSelectedCarFuelLogs] = useState([]);
   const [activeImageModal, setActiveImageModal] = useState(null);
 
+  // Fuel Log Edit & Delete State
+  const [editingFuelLog, setEditingFuelLog] = useState(null);
+  const [editFuelOdo, setEditFuelOdo] = useState('');
+  const [editFuelLiters, setEditFuelLiters] = useState('');
+  const [editFuelType, setEditFuelType] = useState('سولار');
+  const [editFuelPrice, setEditFuelPrice] = useState('');
+  const [editFuelCost, setEditFuelCost] = useState('');
+  const [editFuelStation, setEditFuelStation] = useState('');
+  const [editFuelNotes, setEditFuelNotes] = useState('');
+
+  // Maintenance / Oil Logs Modal State
+  const [showMaintModal, setShowMaintModal] = useState(false);
+  const [maintLogsCar, setMaintLogsCar] = useState(null);
+  const [selectedCarMaintLogs, setSelectedCarMaintLogs] = useState([]);
+  const [editingMaintLog, setEditingMaintLog] = useState(null);
+  const [editMaintType, setEditMaintType] = useState('تغيير زيت موتور وفلاتر');
+  const [editMaintOdo, setEditMaintOdo] = useState('');
+  const [editMaintNextKm, setEditMaintNextKm] = useState('');
+  const [editMaintCost, setEditMaintCost] = useState('');
+  const [editMaintCenter, setEditMaintCenter] = useState('');
+  const [editMaintNotes, setEditMaintNotes] = useState('');
+
   const loadCars = async () => {
     try {
       const res = await fetch(`/api/cars?t=${new Date().getTime()}`);
@@ -183,18 +205,142 @@ export default function CarManagement({ user, onCarClick, onCarAdded }) {
     loadReps();
   }, []);
 
+  const reloadFuelLogs = async (carId) => {
+    try {
+      const res = await fetch(`/api/cars/${carId}/fuel-logs?t=${new Date().getTime()}`);
+      if (res.ok) setSelectedCarFuelLogs(await res.json());
+      loadCars();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const reloadMaintLogs = async (carId) => {
+    try {
+      const res = await fetch(`/api/cars/${carId}/maintenance-logs?t=${new Date().getTime()}`);
+      if (res.ok) setSelectedCarMaintLogs(await res.json());
+      loadCars();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleOpenFuelLogs = async (c, e) => {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
     setFuelLogsCar(c);
     setShowFuelLogsModal(true);
     setSelectedCarFuelLogs([]);
+    setEditingFuelLog(null);
     try {
-      const res = await fetch(`/api/cars/${c.id}/fuel-logs`);
+      const res = await fetch(`/api/cars/${c.id}/fuel-logs?t=${new Date().getTime()}`);
       if (res.ok) {
         setSelectedCarFuelLogs(await res.json());
       }
     } catch (err) {
       console.error('Error fetching fuel logs:', err);
+    }
+  };
+
+  const handleOpenMaintLogs = async (c, e) => {
+    if (e) e.stopPropagation();
+    setMaintLogsCar(c);
+    setShowMaintModal(true);
+    setSelectedCarMaintLogs([]);
+    setEditingMaintLog(null);
+    try {
+      const res = await fetch(`/api/cars/${c.id}/maintenance-logs?t=${new Date().getTime()}`);
+      if (res.ok) {
+        setSelectedCarMaintLogs(await res.json());
+      }
+    } catch (err) {
+      console.error('Error fetching maintenance logs:', err);
+    }
+  };
+
+  const handleDeleteFuelLog = async (logId) => {
+    if (!window.confirm('⚠️ هل أنت محدد لحذف سجل التفويل هذا نهائياً من السيستم؟')) return;
+    try {
+      const res = await fetch(`/api/cars/fuel-logs/${logId}`, { method: 'DELETE' });
+      if (res.ok) {
+        if (fuelLogsCar) reloadFuelLogs(fuelLogsCar.id);
+      } else {
+        const d = await res.json();
+        alert(d.error || 'فشل حذف السجل');
+      }
+    } catch (e) {
+      alert('خطأ في الاتصال بالسيرفر');
+    }
+  };
+
+  const handleSaveFuelLogEdit = async (e) => {
+    e.preventDefault();
+    if (!editingFuelLog) return;
+    try {
+      const res = await fetch(`/api/cars/fuel-logs/${editingFuelLog.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          odometer_reading: editFuelOdo,
+          fuel_type: editFuelType,
+          price_per_liter: editFuelPrice,
+          liters: editFuelLiters,
+          total_cost: editFuelCost,
+          station_name: editFuelStation,
+          notes: editFuelNotes
+        })
+      });
+      if (res.ok) {
+        setEditingFuelLog(null);
+        if (fuelLogsCar) reloadFuelLogs(fuelLogsCar.id);
+      } else {
+        const d = await res.json();
+        alert(d.error || 'فشل تعديل سجل التفويل');
+      }
+    } catch (err) {
+      alert('خطأ في الاتصال بالسيرفر');
+    }
+  };
+
+  const handleDeleteMaintLog = async (logId) => {
+    if (!window.confirm('⚠️ هل أنت محدد لحذف سجل الصيانة/الزيت هذا نهائياً؟')) return;
+    try {
+      const res = await fetch(`/api/cars/maintenance-logs/${logId}`, { method: 'DELETE' });
+      if (res.ok) {
+        if (maintLogsCar) reloadMaintLogs(maintLogsCar.id);
+      } else {
+        const d = await res.json();
+        alert(d.error || 'فشل حذف سجل الصيانة');
+      }
+    } catch (e) {
+      alert('خطأ في الاتصال بالسيرفر');
+    }
+  };
+
+  const handleSaveMaintLogEdit = async (e) => {
+    e.preventDefault();
+    if (!editingMaintLog) return;
+    try {
+      const res = await fetch(`/api/cars/maintenance-logs/${editingMaintLog.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          maintenance_type: editMaintType,
+          odometer_reading: editMaintOdo,
+          next_service_km: editMaintNextKm,
+          cost: editMaintCost,
+          center_name: editMaintCenter,
+          notes: editMaintNotes
+        })
+      });
+      if (res.ok) {
+        setEditingMaintLog(null);
+        if (maintLogsCar) reloadMaintLogs(maintLogsCar.id);
+      } else {
+        const d = await res.json();
+        alert(d.error || 'فشل تعديل سجل الصيانة');
+      }
+    } catch (err) {
+      alert('خطأ في الاتصال بالسيرفر');
     }
   };
 
@@ -685,6 +831,14 @@ export default function CarManagement({ user, onCarClick, onCarAdded }) {
                       </button>
 
                       <button 
+                        onClick={(e) => handleOpenMaintLogs(c, e)}
+                        style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.3)', padding: '0.35rem 0.65rem', borderRadius: '8px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer' }}
+                        title="عرض وإدارة سجلات الزيت والصيانة"
+                      >
+                        📋 سجل الزيت
+                      </button>
+
+                      <button 
                         onClick={(e) => {
                           e.stopPropagation();
                           setOilCar(c);
@@ -692,9 +846,9 @@ export default function CarManagement({ user, onCarClick, onCarAdded }) {
                           setShowOilModal(true);
                         }}
                         style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16,185,129,0.3)', padding: '0.35rem 0.65rem', borderRadius: '8px', fontSize: '0.78rem', fontWeight: '700', cursor: 'pointer' }}
-                        title="تسجيل تغيير زيت للمحرك"
+                        title="تسجيل تغيير زيت جديد للمحرك"
                       >
-                        🛢️ غيار زيت
+                        🛢️ + غيار زيت
                       </button>
                     </div>
 
@@ -730,62 +884,129 @@ export default function CarManagement({ user, onCarClick, onCarAdded }) {
         )}
       </div>
 
-      {/* MODAL FORM: FUEL LOGS & METER PHOTOS VIEW (FOR MANAGER) */}
+      {/* MODAL FORM: FUEL LOGS & METER PHOTOS VIEW (FOR MANAGER) WITH EDIT & DELETE */}
       {showFuelLogsModal && fuelLogsCar && (
         <div className="modal-overlay">
-          <div className="panel modal-content" style={{ maxWidth: '750px', background: '#0f172a', color: '#f8fafc' }}>
-            <div className="panel-header" style={{ borderBottom: '1px solid #334155', paddingBottom: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 className="panel-title" style={{ color: '#60a5fa', margin: 0 }}>
-                📷 سجل التفويل وصور العدادات بالمحطة: ({fuelLogsCar.plate_number})
-              </h3>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button 
-                  className="btn btn-xs btn-primary"
-                  style={{ background: '#2563eb', padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
-                  onClick={async () => {
-                    if (!window.confirm('هل تريد ضغط جميع الصور القديمة المخزنة بالسيرفر وتحويلها لصيغة WebP لتوفير المساحة دون حذف أي صورة؟')) return;
-                    try {
-                      const res = await fetch('/api/cars/compress-existing-images', { method: 'POST' });
-                      const data = await res.json();
-                      if (res.ok) {
-                        alert(`✅ ${data.message} (تم توفير ${data.mbSaved} ميجابايت من السيرفر)`);
-                      } else {
-                        alert(data.error || 'فشل ضغط الصور');
-                      }
-                    } catch (e) {
-                      alert('تعذر الاتصال بالخادم');
-                    }
-                  }}
-                >
-                  ⚡ ضغط الصور القديمة بالسيرفر
-                </button>
-                <button className="btn btn-secondary" onClick={() => setShowFuelLogsModal(false)}>✕ إغلاق</button>
+          <div className="panel modal-content" style={{ maxWidth: '920px', background: 'linear-gradient(145deg, #0f172a 0%, #1e293b 100%)', color: '#f8fafc', borderRadius: '24px', border: '1px solid #334155', boxShadow: '0 25px 60px rgba(0,0,0,0.6)', padding: '1.5rem' }}>
+            <div className="panel-header" style={{ borderBottom: '1px solid #334155', paddingBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 className="panel-title" style={{ color: '#60a5fa', margin: 0, fontSize: '1.25rem', fontWeight: '800' }}>
+                  📷 سجل تفويل الوقود وصور العدادات
+                </h3>
+                <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '0.2rem' }}>
+                  السيارة: <strong style={{ color: '#f8fafc' }}>{fuelLogsCar.plate_number}</strong> | السائق: {fuelLogsCar.driver_name || 'غير محدد'}
+                </div>
               </div>
+              <button className="btn btn-secondary" onClick={() => setShowFuelLogsModal(false)} style={{ borderRadius: '12px' }}>✕ إغلاق</button>
             </div>
 
-            <div style={{ marginTop: '1rem', maxHeight: '60vh', overflowY: 'auto' }}>
+            {/* Summary Stat Cards Header */}
+            {selectedCarFuelLogs.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', margin: '1rem 0' }}>
+                <div style={{ background: 'rgba(59, 130, 246, 0.12)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '16px', padding: '0.85rem 1rem', textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.8rem', color: '#93c5fd' }}>⛽ إجمالي التفويلات</div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: '900', color: '#38bdf8' }}>
+                    {selectedCarFuelLogs.reduce((sum, l) => sum + (parseFloat(l.liters) || 0), 0).toLocaleString()} <span style={{ fontSize: '0.8rem' }}>لتر</span>
+                  </div>
+                </div>
+
+                <div style={{ background: 'rgba(34, 197, 94, 0.12)', border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: '16px', padding: '0.85rem 1rem', textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.8rem', color: '#86efac' }}>💰 إجمالي التكلفة</div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: '900', color: '#4ade80' }}>
+                    {selectedCarFuelLogs.reduce((sum, l) => sum + (parseFloat(l.total_cost) || 0), 0).toLocaleString()} <span style={{ fontSize: '0.8rem' }}>ج.م</span>
+                  </div>
+                </div>
+
+                <div style={{ background: 'rgba(168, 85, 247, 0.12)', border: '1px solid rgba(168, 85, 247, 0.3)', borderRadius: '16px', padding: '0.85rem 1rem', textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.8rem', color: '#d8b4fe' }}>🛣️ أحدث قراءة عداد</div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: '900', color: '#c084fc' }}>
+                    {Math.max(...selectedCarFuelLogs.map(l => parseInt(l.odometer_reading, 10) || 0), 0).toLocaleString()} <span style={{ fontSize: '0.8rem' }}>كم</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Inline Edit Form Overlay if editing a log */}
+            {editingFuelLog && (
+              <form onSubmit={handleSaveFuelLogEdit} style={{ background: '#1e293b', border: '2px solid #3b82f6', borderRadius: '16px', padding: '1rem', marginBottom: '1rem' }}>
+                <h4 style={{ margin: '0 0 0.75rem 0', color: '#60a5fa', fontSize: '0.95rem' }}>✏️ تعديل سجل التفويل (رقم #{editingFuelLog.id})</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.6rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>العداد (كم):</label>
+                    <input type="number" className="form-input" value={editFuelOdo} onChange={e=>setEditFuelOdo(e.target.value)} required />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>عدد اللترات:</label>
+                    <input type="number" step="0.1" className="form-input" value={editFuelLiters} onChange={e=>setEditFuelLiters(e.target.value)} required />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>نوع الوقود:</label>
+                    <select className="form-input" value={editFuelType} onChange={e=>setEditFuelType(e.target.value)}>
+                      <option value="سولار">سولار</option>
+                      <option value="بنزين 92">بنزين 92</option>
+                      <option value="بنزين 95">بنزين 95</option>
+                      <option value="بنزين 80">بنزين 80</option>
+                      <option value="غاز">غاز طبيعي</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>سعر اللتر (ج.م):</label>
+                    <input type="number" step="0.1" className="form-input" value={editFuelPrice} onChange={e=>{
+                      setEditFuelPrice(e.target.value);
+                      if (editFuelLiters && e.target.value) setEditFuelCost(parseFloat(editFuelLiters) * parseFloat(e.target.value));
+                    }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>إجمالي التكلفة (ج.م):</label>
+                    <input type="number" step="0.1" className="form-input" value={editFuelCost} onChange={e=>setEditFuelCost(e.target.value)} required />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>اسم المحطة:</label>
+                    <input type="text" className="form-input" value={editFuelStation} onChange={e=>setEditFuelStation(e.target.value)} />
+                  </div>
+                </div>
+                <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setEditingFuelLog(null)}>إلغاء</button>
+                  <button type="submit" className="btn btn-primary btn-sm" style={{ background: '#16a34a' }}>حفظ التعديلات ✅</button>
+                </div>
+              </form>
+            )}
+
+            {/* Main Logs Table */}
+            <div style={{ maxHeight: '55vh', overflowY: 'auto' }}>
               {selectedCarFuelLogs.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>
+                <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#64748b' }}>
+                  <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>⛽</div>
                   لا توجد عمليات تفويل مسجلة لهذه السيارة حتى الآن.
                 </div>
               ) : (
                 <table className="data-table" style={{ width: '100%', fontSize: '0.85rem' }}>
                   <thead>
-                    <tr>
+                    <tr style={{ background: '#1e293b', color: '#94a3b8' }}>
                       <th>التاريخ والوقت</th>
-                      <th>قراءة العداد</th>
-                      <th>الوقود واللترات</th>
-                      <th>المبلغ</th>
+                      <th>العداد</th>
+                      <th>نوع الوقود واللترات</th>
+                      <th>المبلغ الإجمالي</th>
                       <th>المحطة</th>
-                      <th>صورة العداد بالمحطة</th>
+                      <th>صورة العداد</th>
+                      <th style={{ textAlign: 'center' }}>العمليات (أدمن)</th>
                     </tr>
                   </thead>
                   <tbody>
                     {selectedCarFuelLogs.map(log => (
-                      <tr key={log.id}>
-                        <td>{new Date(log.date).toLocaleString('ar-EG')}</td>
-                        <td><strong>{Number(log.odometer_reading).toLocaleString()} كم</strong></td>
-                        <td>{log.liters} لتر ({log.fuel_type})</td>
+                      <tr key={log.id} style={{ borderBottom: '1px solid #334155' }}>
+                        <td style={{ whiteSpace: 'nowrap' }}>{new Date(log.date).toLocaleString('ar-EG')}</td>
+                        <td><strong style={{ color: '#38bdf8' }}>{Number(log.odometer_reading).toLocaleString()} كم</strong></td>
+                        <td>
+                          <span style={{ 
+                            background: log.fuel_type === 'سولار' ? 'rgba(245,158,11,0.2)' : 'rgba(59,130,246,0.2)',
+                            color: log.fuel_type === 'سولار' ? '#fde047' : '#93c5fd',
+                            padding: '0.2rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '700' 
+                          }}>
+                            {log.fuel_type || 'سولار'}
+                          </span>
+                          <span style={{ marginRight: '0.4rem', fontWeight: 'bold' }}>{log.liters} لتر</span>
+                        </td>
                         <td><strong style={{ color: '#4ade80' }}>{Number(log.total_cost).toLocaleString()} ج.م</strong></td>
                         <td>{log.station_name || '—'}</td>
                         <td>
@@ -793,13 +1014,186 @@ export default function CarManagement({ user, onCarClick, onCarAdded }) {
                             <button 
                               className="btn btn-xs btn-primary"
                               onClick={() => setActiveImageModal(log.image_path)}
-                              style={{ background: '#7c3aed', color: '#fff' }}
+                              style={{ background: '#7c3aed', color: '#fff', padding: '0.25rem 0.6rem', fontSize: '0.75rem' }}
                             >
-                              🔍 معاينة صورة العداد 📷
+                              🔍 معاينة الصورة 📷
                             </button>
                           ) : (
-                            <span style={{ color: '#64748b' }}>بدون صورة</span>
+                            <span style={{ color: '#64748b', fontSize: '0.75rem' }}>بدون صورة</span>
                           )}
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'center' }}>
+                            <button 
+                              onClick={() => {
+                                setEditingFuelLog(log);
+                                setEditFuelOdo(log.odometer_reading || '');
+                                setEditFuelLiters(log.liters || '');
+                                setEditFuelType(log.fuel_type || 'سولار');
+                                setEditFuelPrice(log.price_per_liter || '');
+                                setEditFuelCost(log.total_cost || '');
+                                setEditFuelStation(log.station_name || '');
+                                setEditFuelNotes(log.notes || '');
+                              }}
+                              style={{ background: 'rgba(245,158,11,0.2)', color: '#fde047', border: '1px solid rgba(245,158,11,0.4)', borderRadius: '6px', padding: '0.25rem 0.5rem', fontSize: '0.75rem', cursor: 'pointer' }}
+                              title="تعديل تفويل"
+                            >
+                              ✏️ تعديل
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteFuelLog(log.id)}
+                              style={{ background: 'rgba(239,68,68,0.2)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.4)', borderRadius: '6px', padding: '0.25rem 0.5rem', fontSize: '0.75rem', cursor: 'pointer' }}
+                              title="حذف تفويل"
+                            >
+                              🗑️ حذف
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL FORM: MAINTENANCE & OIL LOGS VIEW (FOR MANAGER) WITH EDIT & DELETE */}
+      {showMaintModal && maintLogsCar && (
+        <div className="modal-overlay">
+          <div className="panel modal-content" style={{ maxWidth: '920px', background: 'linear-gradient(145deg, #0f172a 0%, #1e293b 100%)', color: '#f8fafc', borderRadius: '24px', border: '1px solid #334155', boxShadow: '0 25px 60px rgba(0,0,0,0.6)', padding: '1.5rem' }}>
+            <div className="panel-header" style={{ borderBottom: '1px solid #334155', paddingBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 className="panel-title" style={{ color: '#34d399', margin: 0, fontSize: '1.25rem', fontWeight: '800' }}>
+                  🛢️ سجل غيار الزيت والصيانة الدورية
+                </h3>
+                <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '0.2rem' }}>
+                  السيارة: <strong style={{ color: '#f8fafc' }}>{maintLogsCar.plate_number}</strong> | السائق: {maintLogsCar.driver_name || 'غير محدد'}
+                </div>
+              </div>
+              <button className="btn btn-secondary" onClick={() => setShowMaintModal(false)} style={{ borderRadius: '12px' }}>✕ إغلاق</button>
+            </div>
+
+            {/* Oil Progress Bar Card Header */}
+            {(() => {
+              const currentOdo = maintLogsCar.last_odometer || maintLogsCar.odometer_km || 0;
+              const lastOilKm = maintLogsCar.last_oil_change_km || currentOdo;
+              const interval = maintLogsCar.oil_change_interval_km || 10000;
+              const nextOilKm = maintLogsCar.next_oil_change_km || (lastOilKm + interval);
+              const remaining = nextOilKm - currentOdo;
+              const isOverdue = remaining <= 0;
+              const progressPct = Math.min(100, Math.max(0, ((currentOdo - lastOilKm) / interval) * 100));
+
+              return (
+                <div style={{ background: isOverdue ? 'rgba(239,68,68,0.12)' : remaining <= 2000 ? 'rgba(245,158,11,0.12)' : 'rgba(16,185,129,0.12)', border: `1px solid ${isOverdue ? '#ef4444' : remaining <= 2000 ? '#f59e0b' : '#10b981'}`, borderRadius: '16px', padding: '1rem', margin: '1rem 0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <div style={{ fontWeight: '800', color: isOverdue ? '#fca5a5' : remaining <= 2000 ? '#fde047' : '#6ee7b7' }}>
+                      {isOverdue ? '⚠️ تنبيه: موعد غيار الزيت متأخر ويحتاج تغيير فوراً!' : remaining <= 2000 ? '⚠️ تنبيه: اقترب موعد تغيير الزيت' : '✅ حالة الزيت صالحة'}
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
+                      متبقي: <strong style={{ fontSize: '1.1rem', color: '#f8fafc' }}>{remaining.toLocaleString()} كم</strong> (كل {interval.toLocaleString()} كم)
+                    </div>
+                  </div>
+                  <div style={{ background: '#334155', borderRadius: '10px', height: '10px', overflow: 'hidden' }}>
+                    <div style={{ width: `${progressPct}%`, background: isOverdue ? '#ef4444' : remaining <= 2000 ? '#f59e0b' : '#10b981', height: '100%', borderRadius: '10px', transition: 'width 0.5s ease' }} />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.4rem' }}>
+                    <span>آخر غيار: {lastOilKm.toLocaleString()} كم</span>
+                    <span>العداد الحالي: {currentOdo.toLocaleString()} كم</span>
+                    <span>الموعد القادم: {nextOilKm.toLocaleString()} كم</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Inline Edit Form Overlay if editing maintenance log */}
+            {editingMaintLog && (
+              <form onSubmit={handleSaveMaintLogEdit} style={{ background: '#1e293b', border: '2px solid #10b981', borderRadius: '16px', padding: '1rem', marginBottom: '1rem' }}>
+                <h4 style={{ margin: '0 0 0.75rem 0', color: '#34d399', fontSize: '0.95rem' }}>✏️ تعديل سجل الصيانة/الزيت (رقم #{editingMaintLog.id})</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.6rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>نوع الصيانة:</label>
+                    <input type="text" className="form-input" value={editMaintType} onChange={e=>setEditMaintType(e.target.value)} required />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>العداد وقت الصيانة:</label>
+                    <input type="number" className="form-input" value={editMaintOdo} onChange={e=>setEditMaintOdo(e.target.value)} required />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>العداد المستهدف القادم:</label>
+                    <input type="number" className="form-input" value={editMaintNextKm} onChange={e=>setEditMaintNextKm(e.target.value)} required />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>التكلفة (ج.م):</label>
+                    <input type="number" step="0.1" className="form-input" value={editMaintCost} onChange={e=>setEditMaintCost(e.target.value)} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', color: '#94a3b8' }}>مركز الصيانة / الورشة:</label>
+                    <input type="text" className="form-input" value={editMaintCenter} onChange={e=>setEditMaintCenter(e.target.value)} />
+                  </div>
+                </div>
+                <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setEditingMaintLog(null)}>إلغاء</button>
+                  <button type="submit" className="btn btn-primary btn-sm" style={{ background: '#16a34a' }}>حفظ التعديلات ✅</button>
+                </div>
+              </form>
+            )}
+
+            {/* Main Maintenance Logs Table */}
+            <div style={{ maxHeight: '55vh', overflowY: 'auto' }}>
+              {selectedCarMaintLogs.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '3rem 1rem', color: '#64748b' }}>
+                  <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🛢️</div>
+                  لا توجد عمليات صيانة أو غيار زيت مسجلة لهذه السيارة حتى الآن.
+                </div>
+              ) : (
+                <table className="data-table" style={{ width: '100%', fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr style={{ background: '#1e293b', color: '#94a3b8' }}>
+                      <th>التاريخ والوقت</th>
+                      <th>نوع الصيانة</th>
+                      <th>العداد وقت الصيانة</th>
+                      <th>العداد القادم</th>
+                      <th>التكلفة</th>
+                      <th>مركز الصيانة</th>
+                      <th style={{ textAlign: 'center' }}>العمليات (أدمن)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedCarMaintLogs.map(log => (
+                      <tr key={log.id} style={{ borderBottom: '1px solid #334155' }}>
+                        <td style={{ whiteSpace: 'nowrap' }}>{new Date(log.date).toLocaleString('ar-EG')}</td>
+                        <td><strong style={{ color: '#34d399' }}>{log.maintenance_type || 'غيار زيت'}</strong></td>
+                        <td><strong>{Number(log.odometer_reading).toLocaleString()} كم</strong></td>
+                        <td><strong style={{ color: '#fb923c' }}>{Number(log.next_service_km).toLocaleString()} كم</strong></td>
+                        <td><strong style={{ color: '#4ade80' }}>{Number(log.cost || 0).toLocaleString()} ج.م</strong></td>
+                        <td>{log.center_name || '—'}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'center' }}>
+                            <button 
+                              onClick={() => {
+                                setEditingMaintLog(log);
+                                setEditMaintType(log.maintenance_type || 'تغيير زيت موتور وفلاتر');
+                                setEditMaintOdo(log.odometer_reading || '');
+                                setEditMaintNextKm(log.next_service_km || '');
+                                setEditMaintCost(log.cost || '');
+                                setEditMaintCenter(log.center_name || '');
+                                setEditMaintNotes(log.notes || '');
+                              }}
+                              style={{ background: 'rgba(245,158,11,0.2)', color: '#fde047', border: '1px solid rgba(245,158,11,0.4)', borderRadius: '6px', padding: '0.25rem 0.5rem', fontSize: '0.75rem', cursor: 'pointer' }}
+                              title="تعديل صيانة"
+                            >
+                              ✏️ تعديل
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteMaintLog(log.id)}
+                              style={{ background: 'rgba(239,68,68,0.2)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.4)', borderRadius: '6px', padding: '0.25rem 0.5rem', fontSize: '0.75rem', cursor: 'pointer' }}
+                              title="حذف صيانة"
+                            >
+                              🗑️ حذف
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
