@@ -22,7 +22,13 @@ const upload = multer({
 
 // Helper function to compress and convert images to WebP (~30-50KB) on the fly during upload
 async function processAndSaveImage(file) {
-  if (!file || !file.buffer) return null;
+  if (!file) return null;
+
+  let fileBuffer = file.buffer;
+  if (!fileBuffer && file.path && fs.existsSync(file.path)) {
+    try { fileBuffer = fs.readFileSync(file.path); } catch (e) {}
+  }
+  if (!fileBuffer) return null;
 
   const filename = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.webp`;
   const targetPath = path.join(uploadsDir, filename);
@@ -32,7 +38,7 @@ async function processAndSaveImage(file) {
     try { sharp = require('sharp'); } catch (e) {}
 
     if (sharp) {
-      await sharp(file.buffer)
+      await sharp(fileBuffer)
         .resize({ width: 1000, height: 1000, fit: 'inside', withoutEnlargement: true })
         .webp({ quality: 70 })
         .toFile(targetPath);
@@ -45,7 +51,7 @@ async function processAndSaveImage(file) {
   // Fallback if sharp fails
   const fallbackName = `${Date.now()}_${(file.originalname || 'image.jpg').replace(/\s+/g, '_')}`;
   const fallbackPath = path.join(uploadsDir, fallbackName);
-  fs.writeFileSync(fallbackPath, file.buffer);
+  fs.writeFileSync(fallbackPath, fileBuffer);
   return `uploads/cars/${fallbackName}`.replace(/\\/g, '/');
 }
 
@@ -443,19 +449,36 @@ router.post('/driver/refuel', upload.single('image'), async (req, res) => {
     return res.status(400).json({ error: '⚠️ صورة عداد المحطة إلزامية بالكاميرا للتمكن من حفظ عملية التفويل' });
   }
   
+  const carIdNum = parseInt(car_id, 10);
   const odo = parseInt(odometer_reading, 10);
   const ltr = parseFloat(liters);
   const price = parseFloat(price_per_liter) || 20.50;
   const cost = parseFloat(total_cost) || (ltr * price);
-  const imagePath = await processAndSaveImage(req.file);
+
+  if (isNaN(carIdNum) || isNaN(odo) || isNaN(ltr)) {
+    return res.status(400).json({ error: 'بيانات التفويل غير صحيحة' });
+  }
   
   try {
+    const imagePath = await processAndSaveImage(req.file);
     const pool = getPool();
     
+    // Safely check if driver_rep_id exists in representatives table
+    let validRepId = null;
+    const repIdNum = driver_rep_id ? parseInt(driver_rep_id, 10) : null;
+    if (repIdNum && !isNaN(repIdNum)) {
+      const repCheck = await pool.request()
+        .input('repid', sql.Int, repIdNum)
+        .query('SELECT id FROM representatives WHERE id = @repid');
+      if (repCheck.recordset.length > 0) {
+        validRepId = repIdNum;
+      }
+    }
+
     // Insert into car_fuel_logs
     await pool.request()
-      .input('car_id', sql.Int, car_id)
-      .input('driver_rep', sql.Int, driver_rep_id || null)
+      .input('car_id', sql.Int, carIdNum)
+      .input('driver_rep', sql.Int, validRepId)
       .input('odo', sql.Int, odo)
       .input('ftype', sql.NVarChar(50), fuel_type || 'سولار')
       .input('price', sql.Decimal(18, 2), price)
@@ -471,7 +494,7 @@ router.post('/driver/refuel', upload.single('image'), async (req, res) => {
       
     // Update car odometer_km and last_odometer
     await pool.request()
-      .input('car_id', sql.Int, car_id)
+      .input('car_id', sql.Int, carIdNum)
       .input('odo', sql.Int, odo)
       .query(`
         UPDATE cars 
@@ -483,7 +506,7 @@ router.post('/driver/refuel', upload.single('image'), async (req, res) => {
     res.status(201).json({ message: 'تم تسجيل تفويل الوقود وصورة العداد بنجاح' });
   } catch (error) {
     console.error('Error logging refuel:', error);
-    res.status(500).json({ error: 'فشل تسجيل تفويل الوقود' });
+    res.status(500).json({ error: 'فشل تسجيل تفويل الوقود: ' + (error.message || '') });
   }
 });
 
@@ -559,10 +582,22 @@ router.post('/driver/oil-change', async (req, res) => {
     const nextKm = next_service_km ? parseInt(next_service_km, 10) : (odo + interval);
     const mtype = `تغيير زيت موتور وفلاتر (${interval.toLocaleString()} كم)`;
 
+    // Safely check if driver_rep_id exists in representatives table
+    let validRepId = null;
+    const repIdNum = driver_rep_id ? parseInt(driver_rep_id, 10) : null;
+    if (repIdNum && !isNaN(repIdNum)) {
+      const repCheck = await pool.request()
+        .input('repid', sql.Int, repIdNum)
+        .query('SELECT id FROM representatives WHERE id = @repid');
+      if (repCheck.recordset.length > 0) {
+        validRepId = repIdNum;
+      }
+    }
+
     // Insert into car_maintenance_logs
     await pool.request()
       .input('car_id', sql.Int, car_id)
-      .input('driver_rep', sql.Int, driver_rep_id || null)
+      .input('driver_rep', sql.Int, validRepId)
       .input('mtype', sql.NVarChar(100), mtype)
       .input('odo', sql.Int, odo)
       .input('nextKm', sql.Int, nextKm)
