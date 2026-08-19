@@ -5,6 +5,8 @@ const router = express.Router();
 const path = require('path');
 const multer = require('multer');
 const { getPool, sql } = require('../db');
+let sharp;
+try { sharp = require('sharp'); } catch (e) { console.warn('sharp not loaded yet:', e.message); }
 
 // Ensure uploads folder exists
 const uploadsDir = path.join(__dirname, '..', 'uploads', 'cars');
@@ -34,11 +36,9 @@ async function processAndSaveImage(file) {
   const targetPath = path.join(uploadsDir, filename);
 
   try {
-    let sharp;
-    try { sharp = require('sharp'); } catch (e) {}
-
-    if (sharp) {
-      await sharp(fileBuffer)
+    const sharpInstance = sharp || require('sharp');
+    if (sharpInstance) {
+      await sharpInstance(fileBuffer)
         .resize({ width: 1000, height: 1000, fit: 'inside', withoutEnlargement: true })
         .webp({ quality: 70 })
         .toFile(targetPath);
@@ -651,9 +651,8 @@ router.delete('/:id', async (req, res) => {
 // POST /api/cars/compress-existing-images - Retroactive compression of existing images in uploads/cars to WebP
 router.post('/compress-existing-images', async (req, res) => {
   try {
-    let sharp;
-    try { sharp = require('sharp'); } catch (e) {}
-    if (!sharp) {
+    const sharpInstance = sharp || require('sharp');
+    if (!sharpInstance) {
       return res.status(400).json({ error: 'مكتبة sharp غير متوفرة بالسيرفر' });
     }
 
