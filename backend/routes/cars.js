@@ -648,12 +648,22 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+function getSharpInstance() {
+  try {
+    return sharp || require('sharp');
+  } catch (e) {
+    return null;
+  }
+}
+
 // POST /api/cars/compress-existing-images - Retroactive compression of existing images in uploads/cars to WebP
 router.post('/compress-existing-images', async (req, res) => {
   try {
-    const sharpInstance = sharp || require('sharp');
+    const sharpInstance = getSharpInstance();
     if (!sharpInstance) {
-      return res.status(400).json({ error: 'مكتبة sharp غير متوفرة بالسيرفر' });
+      return res.status(400).json({ 
+        error: 'مكتبة sharp تتطلب تحديث الإصدار بالسيرفر إلى sharp v0.32.6 المتوافق مع Node 18. تم تحديث package.json، يرجى رفع الملفات للسيرفر وتحديث npm install.' 
+      });
     }
 
     const files = fs.readdirSync(uploadsDir);
