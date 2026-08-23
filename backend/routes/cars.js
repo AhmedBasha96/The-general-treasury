@@ -411,7 +411,7 @@ router.put('/:id', upload.single('image'), async (req, res) => {
           SET plate_number = @plate, plate_letters = @letters, plate_numbers = @numbers, 
               driver_name = @driver, driver_rep_id = @driver_rep, vehicle_type = @vtype, 
               model = @model, image_path = @img, odometer_km = @odo, 
-              last_odometer = CASE WHEN @odo > ISNULL(last_odometer, 0) THEN @odo ELSE last_odometer END,
+              last_odometer = CASE WHEN @odo > 0 THEN @odo ELSE ISNULL(last_odometer, 0) END,
               license_expiry_date = @expiry, status = @status, fuel_type = @ftype, notes = @notes,
               oil_change_interval_km = @oil_interval,
               next_oil_change_km = CASE WHEN last_oil_change_km IS NOT NULL THEN last_oil_change_km + @oil_interval ELSE NULL END
@@ -438,7 +438,7 @@ router.put('/:id', upload.single('image'), async (req, res) => {
           SET plate_number = @plate, plate_letters = @letters, plate_numbers = @numbers, 
               driver_name = @driver, driver_rep_id = @driver_rep, vehicle_type = @vtype, 
               model = @model, odometer_km = @odo, 
-              last_odometer = CASE WHEN @odo > ISNULL(last_odometer, 0) THEN @odo ELSE last_odometer END,
+              last_odometer = CASE WHEN @odo > 0 THEN @odo ELSE ISNULL(last_odometer, 0) END,
               license_expiry_date = @expiry, status = @status, fuel_type = @ftype, notes = @notes,
               oil_change_interval_km = @oil_interval,
               next_oil_change_km = CASE WHEN last_oil_change_km IS NOT NULL THEN last_oil_change_km + @oil_interval ELSE NULL END
