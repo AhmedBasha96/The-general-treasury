@@ -23,20 +23,34 @@ const upload = multer({
 });
 
 // Helper function to compress and convert images to WebP (~30-50KB) on the fly during upload
-async function processAndSaveImage(file) {
-  if (!file) return null;
+async function processAndSaveImage(file, base64Str) {
+  let fileBuffer = null;
+  let originalName = 'odometer.jpg';
 
-  let fileBuffer = file.buffer;
-  if (!fileBuffer && file.path && fs.existsSync(file.path)) {
-    try { fileBuffer = fs.readFileSync(file.path); } catch (e) {}
+  if (file) {
+    fileBuffer = file.buffer;
+    originalName = file.originalname || 'odometer.jpg';
+    if (!fileBuffer && file.path && fs.existsSync(file.path)) {
+      try { fileBuffer = fs.readFileSync(file.path); } catch (e) {}
+    }
   }
-  if (!fileBuffer) return null;
+
+  if (!fileBuffer && base64Str) {
+    try {
+      const cleanBase64 = String(base64Str).replace(/^data:image\/\w+;base64,/, '');
+      fileBuffer = Buffer.from(cleanBase64, 'base64');
+    } catch (e) {
+      console.error('Error decoding base64 image:', e);
+    }
+  }
+
+  if (!fileBuffer || fileBuffer.length === 0) return null;
 
   const filename = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.webp`;
   const targetPath = path.join(uploadsDir, filename);
 
   try {
-    const sharpInstance = sharp || require('sharp');
+    const sharpInstance = getSharpInstance();
     if (sharpInstance) {
       await sharpInstance(fileBuffer)
         .resize({ width: 1000, height: 1000, fit: 'inside', withoutEnlargement: true })
@@ -49,28 +63,31 @@ async function processAndSaveImage(file) {
   }
 
   // Fallback if sharp fails
-  const fallbackName = `${Date.now()}_${(file.originalname || 'image.jpg').replace(/\s+/g, '_')}`;
+  const fallbackName = `${Date.now()}_${originalName.replace(/\s+/g, '_')}`;
   const fallbackPath = path.join(uploadsDir, fallbackName);
   fs.writeFileSync(fallbackPath, fileBuffer);
   return `uploads/cars/${fallbackName}`.replace(/\\/g, '/');
 }
 
 const fixUtf8String = (str) => {
-  if (!str) return '';
+  if (str === null || str === undefined) return '';
+  let s = String(str);
+  if (!s.trim()) return '';
   try {
-    if (str.includes('%')) {
-      return decodeURIComponent(str);
+    if (s.includes('%')) {
+      return decodeURIComponent(s);
     }
     // If str is already valid Arabic text, keep it as is
-    if (/[\u0600-\u06FF]/.test(str)) {
-      return str;
+    if (/[\u0600-\u06FF]/.test(s)) {
+      return s;
     }
-    const decoded = Buffer.from(str, 'latin1').toString('utf8');
+    const decoded = Buffer.from(s, 'latin1').toString('utf8');
     if (/[\u0600-\u06FF]/.test(decoded)) {
       return decoded;
     }
+    return s;
   } catch (e) {
-    return str;
+    return s;
   }
 };
 
@@ -180,11 +197,12 @@ router.post('/', upload.single('image'), async (req, res) => {
   let vehicle_type = fixUtf8String(req.body?.vehicle_type).trim();
   let model = fixUtf8String(req.body?.model).trim();
   let odometer_km = req.body?.odometer_km !== undefined && req.body?.odometer_km !== '' ? parseInt(req.body.odometer_km, 10) : 0;
-  let license_expiry_date = req.body?.license_expiry_date ? req.body.license_expiry_date.trim() : null;
+  let license_expiry_date = (req.body?.license_expiry_date && String(req.body.license_expiry_date).trim() !== '' && String(req.body.license_expiry_date).trim() !== 'null') ? String(req.body.license_expiry_date).trim() : null;
   let status = fixUtf8String(req.body?.status).trim() || 'نشطة';
   let fuel_type = fixUtf8String(req.body?.fuel_type).trim() || 'سولار';
   let notes = fixUtf8String(req.body?.notes).trim();
   let oil_change_interval_km = req.body?.oil_change_interval_km ? parseInt(req.body.oil_change_interval_km, 10) : 10000;
+  if (isNaN(oil_change_interval_km) || oil_change_interval_km <= 0) oil_change_interval_km = 10000;
 
   if (!plate_number && (plate_letters || plate_numbers)) {
     plate_number = [plate_letters, plate_numbers].filter(Boolean).join(' ');
@@ -204,18 +222,30 @@ router.post('/', upload.single('image'), async (req, res) => {
     if (dup.recordset.length > 0) {
       return res.status(400).json({ error: 'رقم اللوحة مسجل مسبقاً' });
     }
-    const odoVal = isNaN(odometer_km) ? 0 : odometer_km;
+    const odoVal = (isNaN(odometer_km) || odometer_km < 0) ? 0 : odometer_km;
+
+    // Verify driver_rep_id exists in representatives table to avoid FK constraint violations
+    let validRepId = null;
+    if (driver_rep_id && !isNaN(driver_rep_id) && driver_rep_id > 0) {
+      const repCheck = await pool.request()
+        .input('repid', sql.Int, driver_rep_id)
+        .query('SELECT id FROM representatives WHERE id = @repid');
+      if (repCheck.recordset.length > 0) {
+        validRepId = driver_rep_id;
+      }
+    }
+
     await pool.request()
       .input('plate', sql.NVarChar(255), plate_number)
       .input('letters', sql.NVarChar(50), plate_letters || null)
       .input('numbers', sql.NVarChar(50), plate_numbers || null)
       .input('driver', sql.NVarChar(255), driver_name || null)
-      .input('driver_rep', sql.Int, isNaN(driver_rep_id) ? null : driver_rep_id)
+      .input('driver_rep', sql.Int, validRepId)
       .input('vtype', sql.NVarChar(100), vehicle_type || 'نقل')
       .input('model', sql.NVarChar(100), model || 'سوزوكي')
       .input('img', sql.NVarChar(sql.MAX), imagePath)
       .input('odo', sql.Int, odoVal)
-      .input('expiry', sql.Date, license_expiry_date || null)
+      .input('expiry', sql.Date, license_expiry_date)
       .input('status', sql.NVarChar(50), status)
       .input('ftype', sql.NVarChar(50), fuel_type)
       .input('notes', sql.NVarChar(sql.MAX), notes || null)
@@ -318,11 +348,12 @@ router.put('/:id', upload.single('image'), async (req, res) => {
   let vehicle_type = fixUtf8String(req.body?.vehicle_type).trim();
   let model = fixUtf8String(req.body?.model).trim();
   let odometer_km = req.body?.odometer_km !== undefined && req.body?.odometer_km !== '' ? parseInt(req.body.odometer_km, 10) : 0;
-  let license_expiry_date = req.body?.license_expiry_date ? req.body.license_expiry_date.trim() : null;
+  let license_expiry_date = (req.body?.license_expiry_date && String(req.body.license_expiry_date).trim() !== '' && String(req.body.license_expiry_date).trim() !== 'null') ? String(req.body.license_expiry_date).trim() : null;
   let status = fixUtf8String(req.body?.status).trim() || 'نشطة';
   let fuel_type = fixUtf8String(req.body?.fuel_type).trim() || 'سولار';
   let notes = fixUtf8String(req.body?.notes).trim();
   let oil_change_interval_km = req.body?.oil_change_interval_km ? parseInt(req.body.oil_change_interval_km, 10) : 10000;
+  if (isNaN(oil_change_interval_km) || oil_change_interval_km <= 0) oil_change_interval_km = 10000;
 
   if (!plate_number && (plate_letters || plate_numbers)) {
     plate_number = [plate_letters, plate_numbers].filter(Boolean).join(' ');
@@ -345,7 +376,18 @@ router.put('/:id', upload.single('image'), async (req, res) => {
       return res.status(400).json({ error: 'رقم اللوحة مسجل لسيارة أخرى' });
     }
 
-    const odoVal = isNaN(odometer_km) ? 0 : odometer_km;
+    const odoVal = (isNaN(odometer_km) || odometer_km < 0) ? 0 : odometer_km;
+
+    // Verify driver_rep_id exists in representatives table to avoid FK constraint violations
+    let validRepId = null;
+    if (driver_rep_id && !isNaN(driver_rep_id) && driver_rep_id > 0) {
+      const repCheck = await pool.request()
+        .input('repid', sql.Int, driver_rep_id)
+        .query('SELECT id FROM representatives WHERE id = @repid');
+      if (repCheck.recordset.length > 0) {
+        validRepId = driver_rep_id;
+      }
+    }
 
     if (imagePath) {
       await pool.request()
@@ -354,12 +396,12 @@ router.put('/:id', upload.single('image'), async (req, res) => {
         .input('letters', sql.NVarChar(50), plate_letters || null)
         .input('numbers', sql.NVarChar(50), plate_numbers || null)
         .input('driver', sql.NVarChar(255), driver_name || null)
-        .input('driver_rep', sql.Int, isNaN(driver_rep_id) ? null : driver_rep_id)
+        .input('driver_rep', sql.Int, validRepId)
         .input('vtype', sql.NVarChar(100), vehicle_type || 'نقل')
         .input('model', sql.NVarChar(100), model || 'سوزوكي')
         .input('img', sql.NVarChar(sql.MAX), imagePath)
         .input('odo', sql.Int, odoVal)
-        .input('expiry', sql.Date, license_expiry_date || null)
+        .input('expiry', sql.Date, license_expiry_date)
         .input('status', sql.NVarChar(50), status)
         .input('ftype', sql.NVarChar(50), fuel_type)
         .input('notes', sql.NVarChar(sql.MAX), notes || null)
@@ -382,11 +424,11 @@ router.put('/:id', upload.single('image'), async (req, res) => {
         .input('letters', sql.NVarChar(50), plate_letters || null)
         .input('numbers', sql.NVarChar(50), plate_numbers || null)
         .input('driver', sql.NVarChar(255), driver_name || null)
-        .input('driver_rep', sql.Int, isNaN(driver_rep_id) ? null : driver_rep_id)
+        .input('driver_rep', sql.Int, validRepId)
         .input('vtype', sql.NVarChar(100), vehicle_type || 'نقل')
         .input('model', sql.NVarChar(100), model || 'سوزوكي')
         .input('odo', sql.Int, odoVal)
-        .input('expiry', sql.Date, license_expiry_date || null)
+        .input('expiry', sql.Date, license_expiry_date)
         .input('status', sql.NVarChar(50), status)
         .input('ftype', sql.NVarChar(50), fuel_type)
         .input('notes', sql.NVarChar(sql.MAX), notes || null)
@@ -464,7 +506,7 @@ router.post('/driver/refuel', upload.single('image'), async (req, res) => {
   if (!car_id || !odometer_reading || !liters) {
     return res.status(400).json({ error: 'بيانات التفويل (العداد واللترات) مطلوبة' });
   }
-  if (!req.file) {
+  if (!req.file && !req.body.image_base64) {
     return res.status(400).json({ error: '⚠️ صورة عداد المحطة إلزامية بالكاميرا للتمكن من حفظ عملية التفويل' });
   }
   
@@ -493,7 +535,7 @@ router.post('/driver/refuel', upload.single('image'), async (req, res) => {
       });
     }
 
-    const imagePath = await processAndSaveImage(req.file);
+    const imagePath = await processAndSaveImage(req.file, req.body.image_base64);
     
     // Safely check if driver_rep_id exists in representatives table
     let validRepId = null;

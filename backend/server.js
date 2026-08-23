@@ -7,11 +7,15 @@ const { connectDB, getPool, logAuditLog, sql } = require('./db');
 const app = express();
 const PORT = process.env.PORT || 5000;
 const path = require('path');
-// Serve uploaded car images statically
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-
 app.use(cors());
+
+// Serve uploaded car images statically with CORS support
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  maxAge: '1d',
+  setHeaders: (res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+}));
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ limit: '5mb', extended: true }));
 

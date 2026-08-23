@@ -395,7 +395,12 @@ export default function CarManagement({ user, onCarClick, onCarAdded }) {
       }
 
       const res = await fetch(url, { method, headers, body: reqBody });
-      const data = await res.json();
+      let data = {};
+      try {
+        data = await res.json();
+      } catch (e) {
+        console.error('Failed to parse JSON response:', e);
+      }
       if (res.ok) {
         resetForm();
         setShowModal(false);
@@ -1219,8 +1224,8 @@ export default function CarManagement({ user, onCarClick, onCarAdded }) {
                 if (!e.target.dataset.fallbackTried) {
                   e.target.dataset.fallbackTried = 'true';
                   const clean = getCleanImageUrl(activeImageModal);
-                  const host = window.location.hostname || 'localhost';
-                  e.target.src = `http://${host}:5000${clean}`;
+                  const origin = window.location.origin || '';
+                  e.target.src = `${origin}${clean}?t=${Date.now()}`;
                 } else {
                   e.target.style.display = 'none';
                   const errBox = document.getElementById('car-image-error-box');
@@ -1404,7 +1409,6 @@ export default function CarManagement({ user, onCarClick, onCarAdded }) {
                     value={plateL1}
                     onChange={(e) => setPlateL1(e.target.value.slice(0, 1))}
                     placeholder="ح١"
-                    required
                   />
                 </div>
               </div>
@@ -1448,7 +1452,6 @@ export default function CarManagement({ user, onCarClick, onCarAdded }) {
                     const found = representatives.find(r => String(r.id) === e.target.value);
                     setDriverName(found ? found.name : '');
                   }}
-                  required
                 >
                   <option value="">-- اختر قائد المركبة من قائمة المناديب والسائقين --</option>
                   {displayDrivers.map(r => {

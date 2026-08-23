@@ -324,7 +324,9 @@ export default function DriverPortal({ user, onLogout }) {
       formData.append('total_cost', totalCost);
       formData.append('station_name', stationName);
       formData.append('notes', fuelNotes);
-      formData.append('image', imageToUpload);
+      if (imageToUpload) {
+        formData.append('image', imageToUpload, imageToUpload.name || 'odometer.jpg');
+      }
 
       const res = await fetch('/api/cars/driver/refuel', {
         method: 'POST',
@@ -751,8 +753,8 @@ export default function DriverPortal({ user, onLogout }) {
                 if (!e.target.dataset.fallbackTried) {
                   e.target.dataset.fallbackTried = 'true';
                   const clean = getCleanImageUrl(activeImageModal);
-                  const host = window.location.hostname || 'localhost';
-                  e.target.src = `http://${host}:5000${clean}`;
+                  const origin = window.location.origin || '';
+                  e.target.src = `${origin}${clean}?t=${Date.now()}`;
                 } else {
                   e.target.style.display = 'none';
                   const errBox = document.getElementById('driver-image-error-box');
