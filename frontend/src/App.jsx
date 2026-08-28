@@ -5042,7 +5042,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                           style={{ flex: 1 }}
                           onClick={() => { setTxSourceType('bank'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
                         >
-                          🏦 صرف لبنك
+                          🏦 صرف من بنك
                         </button>
                         <button 
                           type="button" 
