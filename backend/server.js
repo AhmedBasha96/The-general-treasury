@@ -1243,15 +1243,16 @@ app.get('/api/banks', async (req, res) => {
           ELSE 0 END), 0) AS total_withdrawals,
         b.initial_balance + 
         ISNULL(SUM(CASE
-          WHEN t.type = 'withdrawal' THEN t.amount
+          WHEN t.type = 'withdrawal' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) THEN t.amount
           WHEN t.type = 'deposit' AND t.payment_method = 'bank_transfer' THEN t.amount
           WHEN t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) THEN -t.amount
           WHEN t.type = 'company_transfer' THEN -t.amount
+          WHEN t.type = 'withdrawal' AND t.payment_method = 'bank_transfer' THEN -t.amount
           ELSE 0 END), 0) AS balance
       FROM banks b
       LEFT JOIN transactions t ON b.id = t.bank_id AND (
          (t.type = 'deposit' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
-         OR (t.type = 'withdrawal' AND (t.status = 'disbursed' OR t.status IS NULL))
+         OR (t.type = 'withdrawal' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
          OR (t.type = 'company_transfer' AND (t.status = 'approved' OR t.status IS NULL))
       )
       GROUP BY b.id, b.code, b.name, b.account_number, b.account_name, b.branch, b.initial_balance, b.created_at
@@ -1411,8 +1412,12 @@ app.get('/api/banks/:id/transactions', async (req, res) => {
     let totalWithdrawals = 0; // outflows from bank (cash deposits coming from bank + transfers to companies)
     
     txResult.recordset.forEach(tx => {
-      if (tx.type === 'withdrawal' && (tx.status === 'disbursed' || tx.status === null)) {
-        totalDeposits += Number(tx.amount);
+      if (tx.type === 'withdrawal' && (tx.status === 'approved' || tx.status === 'disbursed' || tx.status === null)) {
+        if (tx.payment_method === 'bank_transfer') {
+          totalWithdrawals += Number(tx.amount);
+        } else {
+          totalDeposits += Number(tx.amount);
+        }
       } else if (tx.type === 'deposit') {
         if (tx.status === 'approved' || tx.status === 'disbursed' || tx.status === null) {
           if (tx.payment_method === 'bank_transfer') {
@@ -2122,13 +2127,13 @@ app.get('/api/reports/daily', async (req, res) => {
         .input('startDate', sql.VarChar, startDate)
         .query(`
           SELECT ISNULL(SUM(CASE
-            WHEN type = 'withdrawal' THEN amount
+            WHEN type = 'withdrawal' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount
             WHEN type = 'deposit' AND payment_method = 'bank_transfer' THEN amount
             ELSE 0 END), 0) AS total
           FROM transactions
           WHERE bank_id = @bankId AND CAST(date AS DATE) < CAST(@startDate AS DATE) AND (
             (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
-            OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+            OR (type = 'withdrawal' AND (status IN ('approved', 'disbursed') OR status IS NULL))
           )
         `);
       const bankBeforeWd = await pool.request()
@@ -2138,11 +2143,13 @@ app.get('/api/reports/daily', async (req, res) => {
           SELECT ISNULL(SUM(CASE
             WHEN type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount
             WHEN type = 'company_transfer' THEN amount
+            WHEN type = 'withdrawal' AND payment_method = 'bank_transfer' THEN amount
             ELSE 0 END), 0) AS total
           FROM transactions
           WHERE bank_id = @bankId AND CAST(date AS DATE) < CAST(@startDate AS DATE) AND (
             (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
             OR (type = 'company_transfer' AND (status = 'approved' OR status IS NULL))
+            OR (type = 'withdrawal' AND (status IN ('approved', 'disbursed') OR status IS NULL))
           )
         `);
       const openingBankBalance = Number(bank.initial_balance) + Number(bankBeforeDep.recordset[0].total) - Number(bankBeforeWd.recordset[0].total);
@@ -2153,7 +2160,7 @@ app.get('/api/reports/daily', async (req, res) => {
         .reduce((sum, t) => sum + Number(t.amount), 0);
       
       const dayBankWithdrawalFromSafe = dayTransactions.recordset
-        .filter(t => t.bank_id === bank.id && t.type === 'withdrawal' && (t.status === 'disbursed' || t.status === null))
+        .filter(t => t.bank_id === bank.id && t.type === 'withdrawal' && (t.payment_method === 'cash' || t.payment_method === null) && (t.status === 'disbursed' || t.status === null))
         .reduce((sum, t) => sum + Number(t.amount), 0);
 
       const dayBankCashedOut = dayTransactions.recordset
@@ -2164,8 +2171,12 @@ app.get('/api/reports/daily', async (req, res) => {
         .filter(t => t.bank_id === bank.id && t.type === 'company_transfer' && (t.status === 'approved' || t.status === null))
         .reduce((sum, t) => sum + Number(t.amount), 0);
 
+      const dayBankExpenseWithdrawal = dayTransactions.recordset
+        .filter(t => t.bank_id === bank.id && t.type === 'withdrawal' && t.payment_method === 'bank_transfer' && (t.status === 'approved' || t.status === 'disbursed' || t.status === null))
+        .reduce((sum, t) => sum + Number(t.amount), 0);
+
       const totalDepositsThisDay = dayBankDep + dayBankWithdrawalFromSafe;
-      const totalWithdrawalsThisDay = dayBankCashedOut + dayBankCompanyTransfer;
+      const totalWithdrawalsThisDay = dayBankCashedOut + dayBankCompanyTransfer + dayBankExpenseWithdrawal;
       const closingBankBalance = openingBankBalance + totalDepositsThisDay - totalWithdrawalsThisDay;
 
       banksSummary.push({
@@ -2702,8 +2713,8 @@ app.post('/api/transactions', async (req, res) => {
     }
 
     const transactionAmount = Number(amount);
-    const txPaymentMethod = (type === 'company_transfer')
-      ? (payment_method === 'cash' ? 'cash' : 'bank_transfer')
+    const txPaymentMethod = (type === 'company_transfer' || type === 'withdrawal')
+      ? (payment_method === 'bank_transfer' ? 'bank_transfer' : 'cash')
       : ((type === 'deposit' && payment_method === 'bank_transfer') ? 'bank_transfer' : 'cash');
     let d200 = 0, d100 = 0, d50 = 0, d20 = 0, d10 = 0, d5 = 0, d1 = 0;
     if (txPaymentMethod === 'cash') {
@@ -2747,6 +2758,63 @@ app.post('/api/transactions', async (req, res) => {
         if (bankCheck.recordset.length === 0) {
           await transaction.rollback();
           return res.status(404).json({ error: 'الحساب البنكي المحدد غير موجود' });
+        }
+      }
+
+      // Check bank balance for bank transfer withdrawals
+      if (type === 'withdrawal' && txPaymentMethod === 'bank_transfer') {
+        if (!bank_id) {
+          await transaction.rollback();
+          return res.status(400).json({ error: 'يجب تحديد الحساب البنكي المصدر للصرف البنكي' });
+        }
+        
+        const depRes = await transaction.request()
+          .input('bankId', sql.Int, bank_id)
+          .query(`
+            SELECT ISNULL(SUM(CASE
+              WHEN type = 'withdrawal' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount
+              WHEN type = 'deposit' AND payment_method = 'bank_transfer' THEN amount
+              ELSE 0 END), 0) AS total
+            FROM transactions WITH (UPDLOCK, TABLOCKX)
+            WHERE bank_id = @bankId AND (
+              (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+              OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+            )
+          `);
+        const wdRes = await transaction.request()
+          .input('bankId', sql.Int, bank_id)
+          .query(`
+            SELECT ISNULL(SUM(CASE 
+              WHEN type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount 
+              WHEN type = 'company_transfer' THEN amount
+              WHEN type = 'withdrawal' AND payment_method = 'bank_transfer' THEN amount
+              ELSE 0 END), 0) AS total
+            FROM transactions
+            WHERE bank_id = @bankId AND (
+              (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+              OR (type = 'company_transfer' AND (status = 'approved' OR status IS NULL))
+              OR (type = 'withdrawal' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+            )
+          `);
+        const bankRes = await transaction.request()
+          .input('bankId', sql.Int, bank_id)
+          .query('SELECT initial_balance FROM banks WHERE id = @bankId');
+        
+        if (bankRes.recordset.length === 0) {
+          await transaction.rollback();
+          return res.status(404).json({ error: 'الحساب البنكي المحدد غير موجود' });
+        }
+        
+        const initialBal = Number(bankRes.recordset[0].initial_balance) || 0;
+        const totalDeposits = Number(depRes.recordset[0].total) || 0;
+        const totalWithdrawals = Number(wdRes.recordset[0].total) || 0;
+        const currentBankBalance = initialBal + totalDeposits - totalWithdrawals;
+
+        if (currentBankBalance < transactionAmount) {
+          await transaction.rollback();
+          return res.status(400).json({
+            error: `رصيد الحساب البنكي المتاح هو ${currentBankBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} جنيه مصري، وهو غير كافٍ لإتمام عملية الصرف البنكي بقيمة ${transactionAmount.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} جنيه مصري.`
+          });
         }
       }
 
@@ -2823,7 +2891,7 @@ app.post('/api/transactions', async (req, res) => {
       }
 
       // 2. Verify CASH safe balance if it is a cash withdrawal or a cash company transfer that is approved
-      const isCashOut = (type === 'withdrawal' && (statusVal === 'approved' || statusVal === 'disbursed')) ||
+      const isCashOut = (type === 'withdrawal' && txPaymentMethod === 'cash' && (statusVal === 'approved' || statusVal === 'disbursed')) ||
                         (type === 'company_transfer' && txPaymentMethod === 'cash' && (statusVal === 'approved' || statusVal === null));
       if (isCashOut) {
         const cashDepositsResult = await transaction.request().query(`
@@ -3009,28 +3077,78 @@ app.post('/api/transactions/:id/approve', async (req, res) => {
         return res.status(400).json({ error: 'هذه العملية تم البت فيها بالفعل' });
       }
       
-      // Balance check for cash safe withdrawals
+      // Balance check for withdrawals
       if (tx.type === 'withdrawal') {
-        const cashDepositsResult = await transaction.request().query(`
-          SELECT ISNULL(SUM(amount), 0) AS total 
-          FROM transactions WITH (UPDLOCK, TABLOCKX) 
-          WHERE type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved', 'disbursed') OR status IS NULL)
-        `);
-        const withdrawalsResult = await transaction.request().query(`
-          SELECT ISNULL(SUM(amount), 0) AS total 
-          FROM transactions 
-          WHERE (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
-             OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status = 'approved' OR status IS NULL))
-        `);
-        
-        const safeInitialBalance = await getSafeInitialBalance(transaction);
-        const currentCashBalance = safeInitialBalance + Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
-        
-        if (currentCashBalance < Number(tx.amount)) {
-          await transaction.rollback();
-          return res.status(400).json({ 
-            error: `لا يمكن الموافقة. رصيد الخزينة الحالي (${currentCashBalance.toLocaleString('ar-EG')} ج.م) أقل من مبلغ الصرف (${Number(tx.amount).toLocaleString('ar-EG')} ج.م).`
-          });
+        if (tx.payment_method === 'bank_transfer') {
+          if (!tx.bank_id) {
+            await transaction.rollback();
+            return res.status(400).json({ error: 'الحساب البنكي غير محدد للعملية' });
+          }
+          const depRes = await transaction.request()
+            .input('bankId', sql.Int, tx.bank_id)
+            .query(`
+              SELECT ISNULL(SUM(CASE
+                WHEN type = 'withdrawal' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount
+                WHEN type = 'deposit' AND payment_method = 'bank_transfer' THEN amount
+                ELSE 0 END), 0) AS total
+              FROM transactions WITH (UPDLOCK, TABLOCKX)
+              WHERE bank_id = @bankId AND (
+                (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+                OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+              )
+            `);
+          const wdRes = await transaction.request()
+            .input('bankId', sql.Int, tx.bank_id)
+            .query(`
+              SELECT ISNULL(SUM(CASE 
+                WHEN type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount 
+                WHEN type = 'company_transfer' THEN amount
+                WHEN type = 'withdrawal' AND payment_method = 'bank_transfer' THEN amount
+                ELSE 0 END), 0) AS total
+              FROM transactions
+              WHERE bank_id = @bankId AND (
+                (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+                OR (type = 'company_transfer' AND (status = 'approved' OR status IS NULL))
+                OR (type = 'withdrawal' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+              )
+            `);
+          const bankRes = await transaction.request()
+            .input('bankId', sql.Int, tx.bank_id)
+            .query('SELECT initial_balance FROM banks WHERE id = @bankId');
+          
+          const initialBal = Number(bankRes.recordset[0]?.initial_balance) || 0;
+          const totalDeposits = Number(depRes.recordset[0]?.total) || 0;
+          const totalWithdrawals = Number(wdRes.recordset[0]?.total) || 0;
+          const currentBankBalance = initialBal + totalDeposits - totalWithdrawals;
+
+          if (currentBankBalance < Number(tx.amount)) {
+            await transaction.rollback();
+            return res.status(400).json({ 
+              error: `لا يمكن الموافقة. رصيد الحساب البنكي الحالي (${currentBankBalance.toLocaleString('ar-EG')} ج.م) أقل من مبلغ الصرف (${Number(tx.amount).toLocaleString('ar-EG')} ج.م).`
+            });
+          }
+        } else {
+          const cashDepositsResult = await transaction.request().query(`
+            SELECT ISNULL(SUM(amount), 0) AS total 
+            FROM transactions WITH (UPDLOCK, TABLOCKX) 
+            WHERE type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved', 'disbursed') OR status IS NULL)
+          `);
+          const withdrawalsResult = await transaction.request().query(`
+            SELECT ISNULL(SUM(amount), 0) AS total 
+            FROM transactions 
+            WHERE (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+               OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status = 'approved' OR status IS NULL))
+          `);
+          
+          const safeInitialBalance = await getSafeInitialBalance(transaction);
+          const currentCashBalance = safeInitialBalance + Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
+          
+          if (currentCashBalance < Number(tx.amount)) {
+            await transaction.rollback();
+            return res.status(400).json({ 
+              error: `لا يمكن الموافقة. رصيد الخزينة الحالي (${currentCashBalance.toLocaleString('ar-EG')} ج.م) أقل من مبلغ الصرف (${Number(tx.amount).toLocaleString('ar-EG')} ج.م).`
+            });
+          }
         }
       }
       // Balance check for cash safe exchanges
@@ -3316,54 +3434,115 @@ app.post('/api/transactions/:id/disburse', async (req, res) => {
         return res.status(400).json({ error: 'يجب أن تكون العملية معتمدة من المدير أولاً لإتمام صرفها' });
       }
 
-      if (!denominations) {
-        await transaction.rollback();
-        return res.status(400).json({ error: 'يجب تحديد الفئات النقدية لإتمام عملية الصرف' });
-      }
-
-      const d200 = Number(denominations.denom_200) || 0;
-      const d100 = Number(denominations.denom_100) || 0;
-      const d50 = Number(denominations.denom_50) || 0;
-      const d20 = Number(denominations.denom_20) || 0;
-      const d10 = Number(denominations.denom_10) || 0;
-      const d5 = Number(denominations.denom_5) || 0;
-      const d1 = Number(denominations.denom_1) || 0;
-
-      if (d200 < 0 || d100 < 0 || d50 < 0 || d20 < 0 || d10 < 0 || d5 < 0 || d1 < 0) {
-        await transaction.rollback();
-        return res.status(400).json({ error: 'لا يمكن إدخال قيم سالبة لفئات النقود' });
-      }
-      
-      // Perform balance check at the time of final disbursement (only disbursed withdrawals reduce balance)
-      const cashDepositsResult = await transaction.request().query(`
-        SELECT ISNULL(SUM(amount), 0) AS total 
-        FROM transactions WITH (UPDLOCK, TABLOCKX) 
-        WHERE type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved', 'disbursed') OR status IS NULL)
-      `);
-      const withdrawalsResult = await transaction.request().query(`
-        SELECT ISNULL(SUM(amount), 0) AS total 
-        FROM transactions 
-        WHERE (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
-           OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status = 'approved' OR status IS NULL))
-      `);
-      
-      const safeInitialBalance = await getSafeInitialBalance(transaction);
-      const currentCashBalance = safeInitialBalance + Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
       const txAmount = Number(tx.amount);
+      const isBankOut = tx.payment_method === 'bank_transfer';
+      let d200 = 0, d100 = 0, d50 = 0, d20 = 0, d10 = 0, d5 = 0, d1 = 0;
 
-      const calculatedTotal = (d200 * 200) + (d100 * 100) + (d50 * 50) + (d20 * 20) + (d10 * 10) + (d5 * 5) + (d1 * 1);
-      if (Math.abs(calculatedTotal - txAmount) > 0.01) {
-        await transaction.rollback();
-        return res.status(400).json({
-          error: `مجموع الفئات النقدية (${calculatedTotal.toLocaleString('ar-EG')} ج.م) لا يطابق قيمة المبلغ المراد صرفه (${txAmount.toLocaleString('ar-EG')} ج.م).`
-        });
-      }
-      
-      if (currentCashBalance < txAmount) {
-        await transaction.rollback();
-        return res.status(400).json({
-          error: `تعذر إتمام الصرف. رصيد الخزينة الحالي (${currentCashBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م) أقل من قيمة المبلغ المطلوب تسليمه (${txAmount.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م).`
-        });
+      if (!isBankOut) {
+        if (!denominations) {
+          await transaction.rollback();
+          return res.status(400).json({ error: 'يجب تحديد الفئات النقدية لإتمام عملية الصرف النقدي' });
+        }
+
+        d200 = Number(denominations.denom_200) || 0;
+        d100 = Number(denominations.denom_100) || 0;
+        d50 = Number(denominations.denom_50) || 0;
+        d20 = Number(denominations.denom_20) || 0;
+        d10 = Number(denominations.denom_10) || 0;
+        d5 = Number(denominations.denom_5) || 0;
+        d1 = Number(denominations.denom_1) || 0;
+
+        if (d200 < 0 || d100 < 0 || d50 < 0 || d20 < 0 || d10 < 0 || d5 < 0 || d1 < 0) {
+          await transaction.rollback();
+          return res.status(400).json({ error: 'لا يمكن إدخال قيم سالبة لفئات النقود' });
+        }
+
+        const calculatedTotal = (d200 * 200) + (d100 * 100) + (d50 * 50) + (d20 * 20) + (d10 * 10) + (d5 * 5) + (d1 * 1);
+        if (Math.abs(calculatedTotal - txAmount) > 0.01) {
+          await transaction.rollback();
+          return res.status(400).json({
+            error: `مجموع الفئات النقدية (${calculatedTotal.toLocaleString('ar-EG')} ج.م) لا يطابق قيمة المبلغ المراد صرفه (${txAmount.toLocaleString('ar-EG')} ج.م).`
+          });
+        }
+        
+        const cashDepositsResult = await transaction.request().query(`
+          SELECT ISNULL(SUM(amount), 0) AS total 
+          FROM transactions WITH (UPDLOCK, TABLOCKX) 
+          WHERE type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved', 'disbursed') OR status IS NULL)
+        `);
+        const withdrawalsResult = await transaction.request().query(`
+          SELECT ISNULL(SUM(amount), 0) AS total 
+          FROM transactions 
+          WHERE (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+             OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status = 'approved' OR status IS NULL))
+        `);
+        
+        const safeInitialBalance = await getSafeInitialBalance(transaction);
+        const currentCashBalance = safeInitialBalance + Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
+
+        if (currentCashBalance < txAmount) {
+          await transaction.rollback();
+          return res.status(400).json({
+            error: `تعذر إتمام الصرف. رصيد الخزينة الحالي (${currentCashBalance.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م) أقل من قيمة المبلغ المطلوب تسليمه (${txAmount.toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م).`
+          });
+        }
+      } else {
+        if (denominations) {
+          d200 = Number(denominations.denom_200) || 0;
+          d100 = Number(denominations.denom_100) || 0;
+          d50 = Number(denominations.denom_50) || 0;
+          d20 = Number(denominations.denom_20) || 0;
+          d10 = Number(denominations.denom_10) || 0;
+          d5 = Number(denominations.denom_5) || 0;
+          d1 = Number(denominations.denom_1) || 0;
+        }
+        if (!tx.bank_id) {
+          await transaction.rollback();
+          return res.status(400).json({ error: 'الحساب البنكي غير محدد للعملية' });
+        }
+        const depRes = await transaction.request()
+          .input('bankId', sql.Int, tx.bank_id)
+          .query(`
+            SELECT ISNULL(SUM(CASE
+              WHEN type = 'withdrawal' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount
+              WHEN type = 'deposit' AND payment_method = 'bank_transfer' THEN amount
+              ELSE 0 END), 0) AS total
+            FROM transactions WITH (UPDLOCK, TABLOCKX)
+            WHERE bank_id = @bankId AND (
+              (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+              OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+            )
+          `);
+        const wdRes = await transaction.request()
+          .input('bankId', sql.Int, tx.bank_id)
+          .query(`
+            SELECT ISNULL(SUM(CASE 
+              WHEN type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount 
+              WHEN type = 'company_transfer' THEN amount
+              WHEN type = 'withdrawal' AND payment_method = 'bank_transfer' THEN amount
+              ELSE 0 END), 0) AS total
+            FROM transactions
+            WHERE bank_id = @bankId AND (
+              (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+              OR (type = 'company_transfer' AND (status = 'approved' OR status IS NULL))
+              OR (type = 'withdrawal' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+            )
+          `);
+        const bankRes = await transaction.request()
+          .input('bankId', sql.Int, tx.bank_id)
+          .query('SELECT initial_balance FROM banks WHERE id = @bankId');
+        
+        const initialBal = Number(bankRes.recordset[0]?.initial_balance) || 0;
+        const totalDeposits = Number(depRes.recordset[0]?.total) || 0;
+        const totalWithdrawals = Number(wdRes.recordset[0]?.total) || 0;
+        const currentBankBalance = initialBal + totalDeposits - totalWithdrawals;
+
+        if (currentBankBalance < txAmount) {
+          await transaction.rollback();
+          return res.status(400).json({ 
+            error: `لا يمكن الصرف. رصيد الحساب البنكي الحالي (${currentBankBalance.toLocaleString('ar-EG')} ج.م) أقل من مبلغ الصرف (${txAmount.toLocaleString('ar-EG')} ج.م).`
+          });
+        }
       }
       
       // Update status to disbursed and save the denominations

@@ -320,7 +320,7 @@ export default function App() {
       ? 'إيصال تسوية فئات الخزينة (فك عملة)'
       : tx.type === 'deposit'
         ? (tx.payment_method === 'bank_transfer' ? 'إيصال إيداع تحويل بنكي' : 'إيصال توريد نقدية (وارد)')
-        : 'إيصال صرف نقدية (منصرف)';
+        : (tx.payment_method === 'bank_transfer' ? 'إيصال صرف تحويل بنكي / شيك' : 'إيصال صرف نقدية (منصرف)');
 
     const statusLabel = tx.type === 'exchange'
       ? (tx.status === 'pending' ? 'قيد المراجعة والموافقة' : 'مكتمل - تم التبديل')
@@ -1903,11 +1903,30 @@ const [showCarModal, setShowCarModal] = useState(false);
         return;
       }
 
-      if (newTx.type === 'withdrawal' && amountNum > dashboardData.summary.safeBalance) {
-        const msg = `رصيد الخزينة الحالي (${dashboardData.summary.safeBalance.toLocaleString()} ج.م) غير كافٍ لإتمام عملية الصرف!`;
-        setTxError(msg);
-        alert(msg);
-        return;
+      if (newTx.type === 'withdrawal') {
+        if (txSourceType === 'bank') {
+          if (!newTx.bankId) {
+            const msg = 'يرجى اختيار الحساب البنكي المصدر للصرف أولاً';
+            setTxError(msg);
+            alert(msg);
+            return;
+          }
+          const selectedBank = banks.find(b => b.id === Number(newTx.bankId));
+          const bankBal = selectedBank ? Number(selectedBank.balance || 0) : 0;
+          if (amountNum > bankBal) {
+            const msg = `رصيد الحساب البنكي المحدد (${bankBal.toLocaleString()} ج.م) غير كافٍ لإتمام عملية الصرف!`;
+            setTxError(msg);
+            alert(msg);
+            return;
+          }
+        } else {
+          if (amountNum > dashboardData.summary.safeBalance) {
+            const msg = `رصيد الخزينة الحالي (${dashboardData.summary.safeBalance.toLocaleString()} ج.م) غير كافٍ لإتمام عملية الصرف!`;
+            setTxError(msg);
+            alert(msg);
+            return;
+          }
+        }
       }
 
       if (newTx.type === 'withdrawal' && newTx.withdrawal_sub_type && newTx.withdrawal_sub_type.startsWith('car') && !newTx.carId) {
@@ -1946,7 +1965,7 @@ const [showCarModal, setShowCarModal] = useState(false);
           type: newTx.type,
           amount: amountNum,
           notes: newTx.notes,
-          payment_method: 'cash'
+          payment_method: (txSourceType === 'bank' || newTx.payment_method === 'bank_transfer') ? 'bank_transfer' : 'cash'
         };
         
         if (newTx.type === 'withdrawal') {
@@ -5344,7 +5363,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                         </select>
                       </div>
                       <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                        <label>البنك المحول إليه <span style={{ color: 'var(--danger)' }}>*</span></label>
+                        <label>البنك المصدر للصرف <span style={{ color: 'var(--danger)' }}>*</span></label>
                         <select 
                           value={newTx.bankId || ''}
                           onChange={(e) => setNewTx(prev => ({ ...prev, bankId: e.target.value }))}
