@@ -5038,17 +5038,9 @@ const [showCarModal, setShowCarModal] = useState(false);
                       <>
                         <button 
                           type="button" 
-                          className={`btn ${txSourceType === 'bank' ? 'btn-primary' : 'btn-secondary'}`}
-                          style={{ flex: 1 }}
-                          onClick={() => { setTxSourceType('bank'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
-                        >
-                          🏦 صرف من بنك
-                        </button>
-                        <button 
-                          type="button" 
                           className={`btn ${txSourceType === 'direct' ? 'btn-primary' : 'btn-secondary'}`}
                           style={{ flex: 1 }}
-                          onClick={() => { setTxSourceType('direct'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
+                          onClick={() => { setTxSourceType('direct'); setNewTx(prev => ({ ...prev, repId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
                         >
                           💸 صرف مباشر (نثريات)
                         </button>
@@ -5347,22 +5339,33 @@ const [showCarModal, setShowCarModal] = useState(false);
               ) : newTx.type === 'withdrawal' ? (
                 /* WITHDRAWAL SINGLE AMOUNT FIELD */
                 <>
-                  {/* Bank/Agency Selection - only for bank source type withdrawals */}
-                  {txSourceType === 'bank' && (
-                    <>
-                      <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                        <label>التوكيل المنصرف منه</label>
-                        <select 
-                          value={newTx.agencyId || ''}
-                          onChange={(e) => setNewTx(prev => ({ ...prev, agencyId: e.target.value }))}
-                        >
-                          <option value="">🏛️ الخزنة العامة (بدون توكيل)</option>
-                          {agencies.map(a => (
-                            <option key={a.id} value={a.id}>{a.name} ({a.code})</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  {/* Payment Method Switcher (Cash vs Bank Transfer) */}
+                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                    <label>طريقة / وسيلة الصرف <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                      <button 
+                        type="button" 
+                        className={`btn ${newTx.payment_method !== 'bank_transfer' ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{ flex: 1, background: newTx.payment_method !== 'bank_transfer' ? 'var(--success)' : '' }}
+                        onClick={() => setNewTx(prev => ({ ...prev, payment_method: 'cash', bankId: '' }))}
+                      >
+                        💵 نقدي (من الخزنة العامة)
+                      </button>
+                      <button 
+                        type="button" 
+                        className={`btn ${newTx.payment_method === 'bank_transfer' ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{ flex: 1, background: newTx.payment_method === 'bank_transfer' ? '#7c3aed' : '' }}
+                        onClick={() => setNewTx(prev => ({ ...prev, payment_method: 'bank_transfer' }))}
+                      >
+                        🏦 تحويل بنكي (من الحساب البنكي)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Withdrawal Form Layout - Side by Side Grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: newTx.payment_method === 'bank_transfer' ? '1fr 1fr' : '1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                    {newTx.payment_method === 'bank_transfer' && (
+                      <div className="form-group">
                         <label>البنك المصدر للصرف <span style={{ color: 'var(--danger)' }}>*</span></label>
                         <select 
                           value={newTx.bankId || ''}
@@ -5375,34 +5378,33 @@ const [showCarModal, setShowCarModal] = useState(false);
                           ))}
                         </select>
                       </div>
-                    </>
-                  )}
+                    )}
 
-                  {/* Withdrawal Sub Type Selection */}
-                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                    <label>نوع الصرف <span style={{ color: 'var(--danger)' }}>*</span></label>
-                    <select 
-                      value={newTx.withdrawal_sub_type && newTx.withdrawal_sub_type.startsWith('car') ? 'car' : (newTx.withdrawal_sub_type || '')}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val === 'car') {
-                          setNewTx(prev => ({ ...prev, withdrawal_sub_type: 'car_gas' })); // Default to car_gas
-                        } else {
-                          setNewTx(prev => ({ ...prev, withdrawal_sub_type: val }));
-                        }
-                      }}
-                      required
-                    >
-                      <option value="">اختر نوع الصرف...</option>
-                      {getWithdrawalSubTypes().map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
+                    <div className="form-group">
+                      <label>نوع الصرف <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <select 
+                        value={newTx.withdrawal_sub_type && newTx.withdrawal_sub_type.startsWith('car') ? 'car' : (newTx.withdrawal_sub_type || '')}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === 'car') {
+                            setNewTx(prev => ({ ...prev, withdrawal_sub_type: 'car_gas' }));
+                          } else {
+                            setNewTx(prev => ({ ...prev, withdrawal_sub_type: val }));
+                          }
+                        }}
+                        required
+                      >
+                        <option value="">اختر نوع الصرف...</option>
+                        {getWithdrawalSubTypes().map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
                   {newTx.withdrawal_sub_type && newTx.withdrawal_sub_type.startsWith('car') && (
-                    <>
-                      <div className="form-group" style={{ marginBottom: '1.5rem', paddingRight: '1rem', borderRight: '3px solid var(--primary)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem', paddingRight: '0.75rem', borderRight: '3px solid var(--primary)' }}>
+                      <div className="form-group">
                         <label>السيارة <span style={{ color: 'var(--danger)' }}>*</span></label>
                         <select 
                           value={newTx.carId || ''}
@@ -5418,36 +5420,53 @@ const [showCarModal, setShowCarModal] = useState(false);
                           ))}
                         </select>
                       </div>
-                      <div className="form-group" style={{ marginBottom: '1.5rem', paddingRight: '1rem', borderRight: '3px solid var(--primary)' }}>
+                      <div className="form-group">
                         <label>بند مصروفات السيارة <span style={{ color: 'var(--danger)' }}>*</span></label>
                         <select 
                           value={newTx.withdrawal_sub_type}
                           onChange={(e) => setNewTx(prev => ({ ...prev, withdrawal_sub_type: e.target.value }))}
                           required
                         >
-                          <option value="car_gas">جاز</option>
-                          <option value="car_oil">زيت</option>
-                          <option value="car_other">مصاريف أخرى</option>
+                          <option value="car_gas">⛽ جاز</option>
+                          <option value="car_oil">🛢️ زيت</option>
+                          <option value="car_other">🔧 مصاريف أخرى</option>
                         </select>
                       </div>
-                    </>
+                    </div>
                   )}
 
-                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                    <label>قيمة المبلغ المطلوب صرفه <span style={{ color: 'var(--danger)' }}>*</span></label>
-                    <div style={{ position: 'relative', marginTop: '0.25rem' }}>
-                      <input 
-                        type="number" 
-                        step="0.01" 
-                        min="0.01"
-                        placeholder="0.00"
-                        value={newTx.amount}
-                        onChange={(e) => setNewTx(prev => ({ ...prev, amount: e.target.value }))}
-                        required
-                        style={{ width: '100%', paddingLeft: '3.5rem' }}
-                      />
-                      <span style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontWeight: 'bold' }}>ج.م</span>
+                  <div style={{ display: 'grid', gridTemplateColumns: newTx.payment_method === 'bank_transfer' ? '1fr 1fr' : '1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                    <div className="form-group">
+                      <label>قيمة المبلغ المطلوب صرفه <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <div style={{ position: 'relative', marginTop: '0.25rem' }}>
+                        <input 
+                          type="number" 
+                          step="0.01" 
+                          min="0.01"
+                          placeholder="0.00"
+                          value={newTx.amount}
+                          onChange={(e) => setNewTx(prev => ({ ...prev, amount: e.target.value }))}
+                          required
+                          style={{ width: '100%', paddingLeft: '3.5rem' }}
+                        />
+                        <span style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontWeight: 'bold' }}>ج.م</span>
+                      </div>
                     </div>
+
+                    {newTx.payment_method === 'bank_transfer' && (
+                      <div className="form-group">
+                        <label>التوكيل (اختياري)</label>
+                        <select 
+                          value={newTx.agencyId || ''}
+                          onChange={(e) => setNewTx(prev => ({ ...prev, agencyId: e.target.value }))}
+                        >
+                          <option value="">🏛️ الخزنة العامة (عام للشركة)</option>
+                          {agencies.map(a => (
+                            <option key={a.id} value={a.id}>{a.name} ({a.code})</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
                 </>
               ) : newTx.type === 'company_transfer' ? (
