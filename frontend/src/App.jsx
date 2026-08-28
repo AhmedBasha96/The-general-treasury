@@ -5379,61 +5379,57 @@ const [showCarModal, setShowCarModal] = useState(false);
                   )}
 
                   {/* Withdrawal Sub Type Selection */}
-                  {(txSourceType === 'rep' || txSourceType === 'direct') && (
+                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                    <label>نوع الصرف <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <select 
+                      value={newTx.withdrawal_sub_type && newTx.withdrawal_sub_type.startsWith('car') ? 'car' : (newTx.withdrawal_sub_type || '')}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === 'car') {
+                          setNewTx(prev => ({ ...prev, withdrawal_sub_type: 'car_gas' })); // Default to car_gas
+                        } else {
+                          setNewTx(prev => ({ ...prev, withdrawal_sub_type: val }));
+                        }
+                      }}
+                      required
+                    >
+                      <option value="">اختر نوع الصرف...</option>
+                      {getWithdrawalSubTypes().map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {newTx.withdrawal_sub_type && newTx.withdrawal_sub_type.startsWith('car') && (
                     <>
-                      <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                        <label>نوع الصرف <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <div className="form-group" style={{ marginBottom: '1.5rem', paddingRight: '1rem', borderRight: '3px solid var(--primary)' }}>
+                        <label>السيارة <span style={{ color: 'var(--danger)' }}>*</span></label>
                         <select 
-                          value={newTx.withdrawal_sub_type && newTx.withdrawal_sub_type.startsWith('car') ? 'car' : (newTx.withdrawal_sub_type || '')}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === 'car') {
-                              setNewTx(prev => ({ ...prev, withdrawal_sub_type: 'car_gas' })); // Default to car_gas
-                            } else {
-                              setNewTx(prev => ({ ...prev, withdrawal_sub_type: val }));
-                            }
-                          }}
+                          value={newTx.carId || ''}
+                          onChange={(e) => setNewTx(prev => ({ ...prev, carId: e.target.value }))}
                           required
                         >
-                          <option value="">اختر نوع الصرف...</option>
-                          {getWithdrawalSubTypes().map(opt => (
-                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          <option value="">اختر السيارة...</option>
+                          {carsList.map(c => (
+                            <option key={c.id} value={c.id}>
+                              {c.plate_letters && c.plate_numbers ? `${c.plate_letters} - ${c.plate_numbers}` : c.plate_number}
+                              {c.driver_name ? ` — 👤 ${c.driver_name}` : ''}
+                            </option>
                           ))}
                         </select>
                       </div>
-
-                      {newTx.withdrawal_sub_type && newTx.withdrawal_sub_type.startsWith('car') && (
-                        <>
-                          <div className="form-group" style={{ marginBottom: '1.5rem', paddingRight: '1rem', borderRight: '3px solid var(--primary)' }}>
-                            <label>السيارة <span style={{ color: 'var(--danger)' }}>*</span></label>
-                            <select 
-                              value={newTx.carId || ''}
-                              onChange={(e) => setNewTx(prev => ({ ...prev, carId: e.target.value }))}
-                              required
-                            >
-                              <option value="">اختر السيارة...</option>
-                              {carsList.map(c => (
-                                <option key={c.id} value={c.id}>
-                                  {c.plate_letters && c.plate_numbers ? `${c.plate_letters} - ${c.plate_numbers}` : c.plate_number}
-                                  {c.driver_name ? ` — 👤 ${c.driver_name}` : ''}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="form-group" style={{ marginBottom: '1.5rem', paddingRight: '1rem', borderRight: '3px solid var(--primary)' }}>
-                            <label>بند مصروفات السيارة <span style={{ color: 'var(--danger)' }}>*</span></label>
-                            <select 
-                              value={newTx.withdrawal_sub_type}
-                              onChange={(e) => setNewTx(prev => ({ ...prev, withdrawal_sub_type: e.target.value }))}
-                              required
-                            >
-                              <option value="car_gas">جاز</option>
-                              <option value="car_oil">زيت</option>
-                              <option value="car_other">مصاريف أخرى</option>
-                            </select>
-                          </div>
-                        </>
-                      )}
+                      <div className="form-group" style={{ marginBottom: '1.5rem', paddingRight: '1rem', borderRight: '3px solid var(--primary)' }}>
+                        <label>بند مصروفات السيارة <span style={{ color: 'var(--danger)' }}>*</span></label>
+                        <select 
+                          value={newTx.withdrawal_sub_type}
+                          onChange={(e) => setNewTx(prev => ({ ...prev, withdrawal_sub_type: e.target.value }))}
+                          required
+                        >
+                          <option value="car_gas">جاز</option>
+                          <option value="car_oil">زيت</option>
+                          <option value="car_other">مصاريف أخرى</option>
+                        </select>
+                      </div>
                     </>
                   )}
 
