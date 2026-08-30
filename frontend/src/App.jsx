@@ -5360,28 +5360,34 @@ const [showCarModal, setShowCarModal] = useState(false);
               ) : newTx.type === 'withdrawal' ? (
                 /* WITHDRAWAL SINGLE AMOUNT FIELD */
                 <>
-                  {/* Payment Method Switcher (Cash vs Bank Transfer) */}
-                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                    <label>طريقة / وسيلة الصرف <span style={{ color: 'var(--danger)' }}>*</span></label>
-                    <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                      <button 
-                        type="button" 
-                        className={`btn ${newTx.payment_method !== 'bank_transfer' ? 'btn-primary' : 'btn-secondary'}`}
-                        style={{ flex: 1, background: newTx.payment_method !== 'bank_transfer' ? 'var(--success)' : '' }}
-                        onClick={() => setNewTx(prev => ({ ...prev, payment_method: 'cash', bankId: '' }))}
-                      >
-                        💵 نقدي (من الخزنة العامة)
-                      </button>
-                      <button 
-                        type="button" 
-                        className={`btn ${newTx.payment_method === 'bank_transfer' ? 'btn-primary' : 'btn-secondary'}`}
-                        style={{ flex: 1, background: newTx.payment_method === 'bank_transfer' ? '#7c3aed' : '' }}
-                        onClick={() => setNewTx(prev => ({ ...prev, payment_method: 'bank_transfer' }))}
-                      >
-                        🏦 تحويل بنكي (من الحساب البنكي)
-                      </button>
+                  {/* Payment Method Switcher (Only shown if NOT depositing to bank) */}
+                  {txSourceType !== 'bank' ? (
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                      <label>طريقة / وسيلة الصرف <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                        <button 
+                          type="button" 
+                          className={`btn ${newTx.payment_method !== 'bank_transfer' ? 'btn-primary' : 'btn-secondary'}`}
+                          style={{ flex: 1, background: newTx.payment_method !== 'bank_transfer' ? 'var(--success)' : '' }}
+                          onClick={() => setNewTx(prev => ({ ...prev, payment_method: 'cash', bankId: '' }))}
+                        >
+                          💵 نقدي (من الخزنة العامة)
+                        </button>
+                        <button 
+                          type="button" 
+                          className={`btn ${newTx.payment_method === 'bank_transfer' ? 'btn-primary' : 'btn-secondary'}`}
+                          style={{ flex: 1, background: newTx.payment_method === 'bank_transfer' ? '#7c3aed' : '' }}
+                          onClick={() => setNewTx(prev => ({ ...prev, payment_method: 'bank_transfer' }))}
+                        >
+                          🏦 تحويل بنكي (من الحساب البنكي)
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div style={{ marginBottom: '1.5rem', padding: '0.85rem 1rem', background: 'rgba(6, 182, 212, 0.08)', borderRadius: '8px', border: '1px solid rgba(6, 182, 212, 0.3)', color: '#22d3ee', fontSize: '0.9rem' }}>
+                      ℹ️ سيتم خروج المبلغ نقداً من <strong>الخزينة العامة</strong> وإيداعه مباشرة في <strong>الحساب البنكي المختار</strong>.
+                    </div>
+                  )}
 
                   {/* Withdrawal Form Layout - Side by Side Grid */}
                   {txSourceType === 'bank' && newTx.payment_method !== 'bank_transfer' && (
