@@ -5060,7 +5060,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                           type="button" 
                           className={`btn ${txSourceType === 'bank' ? 'btn-primary' : 'btn-secondary'}`}
                           style={{ flex: 1 }}
-                          onClick={() => { setTxSourceType('bank'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
+                          onClick={() => { setTxSourceType('bank'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '', payment_method: 'cash' })); setSearchRepQuery(''); }}
                         >
                           🏦 إيداع في بنك
                         </button>
@@ -5068,7 +5068,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                           type="button" 
                           className={`btn ${txSourceType === 'direct' ? 'btn-primary' : 'btn-secondary'}`}
                           style={{ flex: 1 }}
-                          onClick={() => { setTxSourceType('direct'); setNewTx(prev => ({ ...prev, repId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
+                          onClick={() => { setTxSourceType('direct'); setNewTx(prev => ({ ...prev, repId: '', agencyId: '', withdrawal_sub_type: '', payment_method: 'cash' })); setSearchRepQuery(''); }}
                         >
                           💸 صرف مباشر (نثريات)
                         </button>
@@ -5397,7 +5397,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                   )}
 
                   {/* Withdrawal Form Layout - Side by Side Grid */}
-                  {txSourceType === 'bank' && newTx.payment_method !== 'bank_transfer' && (
+                  {txSourceType === 'bank' && (
                     <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                       <label>الحساب البنكي المودَع فيه (إيداع نقدية الخزينة) <span style={{ color: 'var(--danger)' }}>*</span></label>
                       <select 
@@ -5413,8 +5413,8 @@ const [showCarModal, setShowCarModal] = useState(false);
                     </div>
                   )}
 
-                  <div style={{ display: 'grid', gridTemplateColumns: newTx.payment_method === 'bank_transfer' ? '1fr 1fr' : '1fr', gap: '1rem', marginBottom: '1.5rem' }}>
-                    {newTx.payment_method === 'bank_transfer' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: (newTx.payment_method === 'bank_transfer' && txSourceType !== 'bank') ? '1fr 1fr' : '1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                    {newTx.payment_method === 'bank_transfer' && txSourceType !== 'bank' && (
                       <div className="form-group">
                         <label>البنك المصدر للصرف <span style={{ color: 'var(--danger)' }}>*</span></label>
                         <select 
