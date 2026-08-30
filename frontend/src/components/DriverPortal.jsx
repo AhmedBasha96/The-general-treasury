@@ -152,6 +152,46 @@ export default function DriverPortal({ user, onLogout }) {
   const [activeImageModal, setActiveImageModal] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formMessage, setFormMessage] = useState('');
+  const [gpsCheckinStatus, setGpsCheckinStatus] = useState('');
+
+  // 1-Click Mobile GPS Attendance Checkin for Drivers & Reps
+  const handleGPSCheckin = async () => {
+    if (!navigator.geolocation) {
+      return alert('خاصية تحديد الموقع الجغرافي (GPS) غير مدعومة في متصفحك/هاتفك');
+    }
+    setGpsCheckinStatus('⏳ جاري تحديد موقعك وقراءة الـ GPS...');
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const res = await fetch('/api/attendance/mobile-checkin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              rep_id: user?.id,
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude
+            })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setGpsCheckinStatus(`🟢 ${data.message}`);
+            alert(data.message || '🟢 تم إثبات الحضور بنجاح عبر الـ GPS!');
+          } else {
+            setGpsCheckinStatus(`⚠️ ${data.error}`);
+            alert(`⚠️ ${data.error}`);
+          }
+        } catch (e) {
+          setGpsCheckinStatus('❌ تعذر الاتصال بالسيرفر لإثبات الحضور');
+          alert('تعذر الاتصال بالسيرفر لإثبات الحضور');
+        }
+      },
+      (err) => {
+        setGpsCheckinStatus('⚠️ يرجى التكرم بتفعيل السماح بالموقع الجغرافي (GPS)');
+        alert('⚠️ يرجى التكرم بتفعيل السماح بالموقع الجغرافي (GPS) من إعدادات المتصفح');
+      },
+      { enableHighAccuracy: true, timeout: 12000 }
+    );
+  };
 
   // Fuel Form state
   const [fuelType, setFuelType] = useState('سولار');
@@ -422,14 +462,23 @@ export default function DriverPortal({ user, onLogout }) {
     <div style={{ padding: '1rem', maxWidth: '900px', margin: '0 auto', direction: 'rtl' }}>
       
       {/* Header Bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', padding: '1rem 1.5rem', borderRadius: '20px', border: '1px solid #e2e8f0', marginBottom: '1.5rem', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', padding: '1rem 1.5rem', borderRadius: '20px', border: '1px solid #e2e8f0', marginBottom: '1.5rem', boxShadow: '0 2px 10px rgba(0,0,0,0.02)', flexWrap: 'wrap', gap: '0.75rem' }}>
         <div>
-          <h3 style={{ margin: 0, color: '#0f172a', fontWeight: '800' }}>مرحباً يا قائد المركبة، {user?.name || user?.username} 👋</h3>
-          <span style={{ fontSize: '0.85rem', color: '#64748b' }}>بوابة متابعة السيارة والتفويل وغيار الزيت وتصوير العدادات</span>
+          <h3 style={{ margin: 0, color: '#0f172a', fontWeight: '800' }}>مرحباً، {user?.name || user?.username} 👋</h3>
+          <span style={{ fontSize: '0.85rem', color: '#64748b' }}>بوابة المتابعة والحضور الجغرافي والسيارة</span>
         </div>
-        <button onClick={onLogout} className="btn btn-secondary" style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>
-          🔒 خروج
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <button 
+            onClick={handleGPSCheckin} 
+            className="btn btn-primary" 
+            style={{ padding: '0.55rem 1.15rem', fontSize: '0.9rem', background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none', borderRadius: '12px', fontWeight: 'bold', boxShadow: '0 4px 12px rgba(16,185,129,0.3)', cursor: 'pointer' }}
+          >
+            📍 اثبات حضور بالـ GPS
+          </button>
+          <button onClick={onLogout} className="btn btn-secondary" style={{ padding: '0.55rem 1rem', fontSize: '0.85rem', borderRadius: '12px' }}>
+            🔒 خروج
+          </button>
+        </div>
       </div>
 
       {/* PROMINENT DRIVER OIL CHANGE ALERT BANNER */}
