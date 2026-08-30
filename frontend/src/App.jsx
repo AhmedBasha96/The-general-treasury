@@ -1973,12 +1973,18 @@ const [showCarModal, setShowCarModal] = useState(false);
         }
       }
 
-      try {
+        let calculatedPaymentMethod = 'cash';
+        if (newTx.type === 'deposit') {
+          calculatedPaymentMethod = txSourceType === 'bank' ? 'bank_transfer' : 'cash';
+        } else if (newTx.type === 'withdrawal') {
+          calculatedPaymentMethod = (txSourceType !== 'bank' && newTx.payment_method === 'bank_transfer') ? 'bank_transfer' : 'cash';
+        }
+
         const requestBody = {
           type: newTx.type,
           amount: amountNum,
           notes: newTx.notes,
-          payment_method: (txSourceType === 'bank' || newTx.payment_method === 'bank_transfer') ? 'bank_transfer' : 'cash'
+          payment_method: calculatedPaymentMethod
         };
         
         if (newTx.type === 'withdrawal') {
