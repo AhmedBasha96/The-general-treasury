@@ -3938,6 +3938,614 @@ app.post('/api/settings/reset-safe-initial', async (req, res) => {
   }
 });
 
+// ==================== PAYROLL MANAGEMENT API ENDPOINTS ====================
+
+// GET /api/payroll/profiles - Get salary profiles for all representatives
+app.get('/api/payroll/profiles', async (req, res) => {
+  try {
+    const pool = getPool();
+    const result = await pool.request().query(`
+      SELECT 
+        r.id AS rep_id, r.code AS rep_code, r.name AS rep_name, r.phone AS rep_phone, r.classification, r.zk_user_id,
+        ISNULL(p.basic_salary, 0) AS basic_salary,
+        ISNULL(p.transport_allowance, 0) AS transport_allowance,
+        ISNULL(p.housing_allowance, 0) AS housing_allowance,
+        ISNULL(p.other_allowance, 0) AS other_allowance,
+        ISNULL(p.commission_rate, 0) AS commission_rate,
+        ISNULL(p.overtime_hourly_rate, 0) AS overtime_hourly_rate,
+        ISNULL(p.absence_day_rate, 0) AS absence_day_rate,
+        p.notes, p.updated_at
+      FROM representatives r
+      LEFT JOIN employee_salary_profiles p ON r.id = p.rep_id
+      ORDER BY r.code ASC
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error('Error fetching salary profiles:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء جلب ملفات رواتب الموظفين' });
+  }
+});
+
+// POST /api/payroll/profiles - Create/Update salary profile for a representative
+app.post('/api/payroll/profiles', async (req, res) => {
+  const { 
+    rep_id, basic_salary, transport_allowance, housing_allowance, 
+    other_allowance, commission_rate, overtime_hourly_rate, absence_day_rate, notes 
+  } = req.body;
+
+  if (!rep_id) {
+    return res.status(400).json({ error: 'الموظف/المندوب مطلوب' });
+  }
+
+  try {
+    const pool = getPool();
+    const check = await pool.request()
+      .input('repId', sql.Int, rep_id)
+      .query('SELECT id FROM employee_salary_profiles WHERE rep_id = @repId');
+
+    if (check.recordset.length > 0) {
+      await pool.request()
+        .input('repId', sql.Int, rep_id)
+        .input('basicSalary', sql.Decimal(18, 2), Number(basic_salary) || 0)
+        .input('transportAllowance', sql.Decimal(18, 2), Number(transport_allowance) || 0)
+        .input('housingAllowance', sql.Decimal(18, 2), Number(housing_allowance) || 0)
+        .input('otherAllowance', sql.Decimal(18, 2), Number(other_allowance) || 0)
+        .input('commissionRate', sql.Decimal(5, 2), Number(commission_rate) || 0)
+        .input('overtimeRate', sql.Decimal(18, 2), Number(overtime_hourly_rate) || 0)
+        .input('absenceRate', sql.Decimal(18, 2), Number(absence_day_rate) || 0)
+        .input('notes', sql.NVarChar, notes || null)
+        .query(`
+          UPDATE employee_salary_profiles
+          SET basic_salary = @basicSalary,
+              transport_allowance = @transportAllowance,
+              housing_allowance = @housingAllowance,
+              other_allowance = @otherAllowance,
+              commission_rate = @commissionRate,
+              overtime_hourly_rate = @overtimeRate,
+              absence_day_rate = @absenceRate,
+              notes = @notes,
+              updated_at = GETDATE()
+          WHERE rep_id = @repId
+        `);
+    } else {
+      await pool.request()
+        .input('repId', sql.Int, rep_id)
+        .input('basicSalary', sql.Decimal(18, 2), Number(basic_salary) || 0)
+        .input('transportAllowance', sql.Decimal(18, 2), Number(transport_allowance) || 0)
+        .input('housingAllowance', sql.Decimal(18, 2), Number(housing_allowance) || 0)
+        .input('otherAllowance', sql.Decimal(18, 2), Number(other_allowance) || 0)
+        .input('commissionRate', sql.Decimal(5, 2), Number(commission_rate) || 0)
+        .input('overtimeRate', sql.Decimal(18, 2), Number(overtime_hourly_rate) || 0)
+        .input('absenceRate', sql.Decimal(18, 2), Number(absence_day_rate) || 0)
+        .input('notes', sql.NVarChar, notes || null)
+        .query(`
+          INSERT INTO employee_salary_profiles (
+            rep_id, basic_salary, transport_allowance, housing_allowance, 
+            other_allowance, commission_rate, overtime_hourly_rate, absence_day_rate, notes
+          ) VALUES (
+            @repId, @basicSalary, @transportAllowance, @housingAllowance, 
+            @otherAllowance, @commissionRate, @overtimeRate, @absenceRate, @notes
+          )
+        `);
+    }
+
+    logAuditLog(req, 'تحديث ملف راتب الموظف', 'employee_salary_profile', parseInt(rep_id), { basic_salary });
+    res.json({ message: 'تم حفظ وتحديث ملف راتب الموظف بنجاح' });
+  } catch (error) {
+    console.error('Error saving salary profile:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء حفظ ملف راتب الموظف' });
+  }
+});
+
+// POST /api/payroll/generate - Generate/Recalculate monthly payroll run
+app.post('/api/payroll/generate', async (req, res) => {
+  const { year, month } = req.body;
+  const userId = parseInt(req.headers['x-user-id']) || null;
+
+  const y = parseInt(year) || new Date().getFullYear();
+  const m = parseInt(month) || (new Date().getMonth() + 1);
+
+  if (m < 1 || m > 12) {
+    return res.status(400).json({ error: 'الشهر المدخل غير صالح' });
+  }
+
+  const startDateStr = `${y}-${String(m).padStart(2, '0')}-01`;
+  const nextMonthDate = new Date(y, m, 1);
+  const endDateStr = nextMonthDate.toISOString().split('T')[0];
+
+  try {
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      // 1. Check if run exists
+      const existingRunRes = await transaction.request()
+        .input('year', sql.Int, y)
+        .input('month', sql.Int, m)
+        .query('SELECT id, status FROM payroll_runs WHERE year = @year AND month = @month');
+
+      let runId = null;
+      if (existingRunRes.recordset.length > 0) {
+        if (existingRunRes.recordset[0].status === 'disbursed') {
+          await transaction.rollback();
+          return res.status(400).json({ error: 'مسير هذا الشهر تم صرفه وتأكيده بالفعل ولا يمكن إعادة توليده' });
+        }
+        runId = existingRunRes.recordset[0].id;
+        // Delete items for recalculation
+        await transaction.request()
+          .input('runId', sql.Int, runId)
+          .query('DELETE FROM payroll_items WHERE payroll_run_id = @runId');
+      } else {
+        // Create new payroll run
+        const title = `مسير رواتب شهر ${m} / ${y}`;
+        const insertRunRes = await transaction.request()
+          .input('year', sql.Int, y)
+          .input('month', sql.Int, m)
+          .input('title', sql.NVarChar, title)
+          .input('createdBy', sql.Int, userId)
+          .query(`
+            INSERT INTO payroll_runs (year, month, title, status, created_by)
+            OUTPUT INSERTED.id
+            VALUES (@year, @month, @title, 'draft', @createdBy)
+          `);
+        runId = insertRunRes.recordset[0].id;
+      }
+
+      // 2. Fetch all representatives and profiles
+      const repsRes = await transaction.request().query(`
+        SELECT r.id, r.code, r.name, r.zk_user_id,
+               ISNULL(p.basic_salary, 0) AS basic_salary,
+               ISNULL(p.transport_allowance, 0) AS transport_allowance,
+               ISNULL(p.housing_allowance, 0) AS housing_allowance,
+               ISNULL(p.other_allowance, 0) AS other_allowance,
+               ISNULL(p.commission_rate, 0) AS commission_rate,
+               ISNULL(p.overtime_hourly_rate, 0) AS overtime_hourly_rate,
+               ISNULL(p.absence_day_rate, 0) AS absence_day_rate
+        FROM representatives r
+        LEFT JOIN employee_salary_profiles p ON r.id = p.rep_id
+        ORDER BY r.code ASC
+      `);
+
+      let totalBasicSum = 0;
+      let totalAllowancesSum = 0;
+      let totalCommissionsSum = 0;
+      let totalOvertimeSum = 0;
+      let totalDeductionsSum = 0;
+      let totalLoanDeductionsSum = 0;
+      let totalNetSalarySum = 0;
+
+      for (const rep of repsRes.recordset) {
+        const basic = Number(rep.basic_salary) || 0;
+        const allowances = (Number(rep.transport_allowance) || 0) + (Number(rep.housing_allowance) || 0) + (Number(rep.other_allowance) || 0);
+        
+        // Calculate deposits / sales commission
+        const depositsRes = await transaction.request()
+          .input('repId', sql.Int, rep.id)
+          .input('startD', sql.VarChar, startDateStr)
+          .input('endD', sql.VarChar, endDateStr)
+          .query(`
+            SELECT ISNULL(SUM(amount), 0) AS total
+            FROM transactions
+            WHERE rep_id = @repId AND type = 'deposit'
+              AND date >= @startD AND date < @endD
+              AND (status IN ('approved', 'disbursed') OR status IS NULL)
+          `);
+        const totalSales = Number(depositsRes.recordset[0].total) || 0;
+        const commissionAmt = (totalSales * (Number(rep.commission_rate) || 0)) / 100;
+
+        // Calculate attendance stats
+        let lateMins = 0;
+        let absenceDays = 0;
+        let overtimeAmt = 0;
+        if (rep.zk_user_id || rep.id) {
+          const attRes = await transaction.request()
+            .input('repId', sql.Int, rep.id)
+            .input('zkId', sql.VarChar, rep.zk_user_id || '')
+            .input('startD', sql.VarChar, startDateStr)
+            .input('endD', sql.VarChar, endDateStr)
+            .query(`
+              SELECT 
+                ISNULL(SUM(late_minutes), 0) AS total_late,
+                COUNT(CASE WHEN status = 'absent' THEN 1 END) AS total_absent
+              FROM attendance_logs
+              WHERE (rep_id = @repId OR (zk_user_id = @zkId AND @zkId <> ''))
+                AND date >= @startD AND date < @endD
+            `);
+          lateMins = Number(attRes.recordset[0]?.total_late) || 0;
+          absenceDays = Number(attRes.recordset[0]?.total_absent) || 0;
+        }
+
+        // Deductions
+        const absenceRate = Number(rep.absence_day_rate) > 0 ? Number(rep.absence_day_rate) : (basic > 0 ? basic / 30 : 0);
+        const absenceDeduction = absenceDays * absenceRate;
+        const lateDeduction = (lateMins / 60) * (basic > 0 ? (basic / 30 / 8) : 0);
+
+        // Loan installment deduction for this month
+        const loanRes = await transaction.request()
+          .input('repName', sql.NVarChar, rep.name)
+          .input('startD', sql.VarChar, startDateStr)
+          .input('endD', sql.VarChar, endDateStr)
+          .query(`
+            SELECT ISNULL(SUM(i.amount), 0) AS total_installment
+            FROM loan_installments i
+            JOIN loans l ON i.loan_id = l.id
+            WHERE l.entity_name = @repName AND i.status = 'pending'
+              AND i.due_date >= @startD AND i.due_date < @endD
+          `);
+        const loanDeduction = Number(loanRes.recordset[0]?.total_installment) || 0;
+
+        const totalDeductionForRep = absenceDeduction + lateDeduction + loanDeduction;
+        const netSalary = Math.max(0, (basic + allowances + commissionAmt + overtimeAmt) - totalDeductionForRep);
+
+        // Insert payroll item
+        await transaction.request()
+          .input('runId', sql.Int, runId)
+          .input('repId', sql.Int, rep.id)
+          .input('basicSalary', sql.Decimal(18, 2), basic)
+          .input('allowances', sql.Decimal(18, 2), allowances)
+          .input('commissionAmt', sql.Decimal(18, 2), commissionAmt)
+          .input('overtimeAmt', sql.Decimal(18, 2), overtimeAmt)
+          .input('absenceDays', sql.Int, absenceDays)
+          .input('absenceDeduction', sql.Decimal(18, 2), absenceDeduction)
+          .input('lateMins', sql.Int, lateMins)
+          .input('lateDeduction', sql.Decimal(18, 2), lateDeduction)
+          .input('loanDeduction', sql.Decimal(18, 2), loanDeduction)
+          .input('otherDeduction', sql.Decimal(18, 2), 0)
+          .input('bonusAmount', sql.Decimal(18, 2), 0)
+          .input('netSalary', sql.Decimal(18, 2), netSalary)
+          .query(`
+            INSERT INTO payroll_items (
+              payroll_run_id, rep_id, basic_salary, allowances, commission_amount, overtime_amount,
+              absence_days, absence_deduction, late_minutes, late_deduction, loan_deduction,
+              other_deduction, bonus_amount, net_salary, status
+            ) VALUES (
+              @runId, @repId, @basicSalary, @allowances, @commissionAmt, @overtimeAmt,
+              @absenceDays, @absenceDeduction, @lateMins, @lateDeduction, @loanDeduction,
+              @otherDeduction, @bonusAmount, @netSalary, 'pending'
+            )
+          `);
+
+        totalBasicSum += basic;
+        totalAllowancesSum += allowances;
+        totalCommissionsSum += commissionAmt;
+        totalOvertimeSum += overtimeAmt;
+        totalDeductionsSum += (absenceDeduction + lateDeduction);
+        totalLoanDeductionsSum += loanDeduction;
+        totalNetSalarySum += netSalary;
+      }
+
+      // Update payroll_runs totals
+      await transaction.request()
+        .input('runId', sql.Int, runId)
+        .input('totalBasic', sql.Decimal(18, 2), totalBasicSum)
+        .input('totalAllowances', sql.Decimal(18, 2), totalAllowancesSum)
+        .input('totalCommissions', sql.Decimal(18, 2), totalCommissionsSum)
+        .input('totalOvertime', sql.Decimal(18, 2), totalOvertimeSum)
+        .input('totalDeductions', sql.Decimal(18, 2), totalDeductionsSum)
+        .input('totalLoanDeductions', sql.Decimal(18, 2), totalLoanDeductionsSum)
+        .input('totalNetSalary', sql.Decimal(18, 2), totalNetSalarySum)
+        .query(`
+          UPDATE payroll_runs
+          SET total_basic = @totalBasic,
+              total_allowances = @totalAllowances,
+              total_commissions = @totalCommissions,
+              total_overtime = @totalOvertime,
+              total_deductions = @totalDeductions,
+              total_loan_deductions = @totalLoanDeductions,
+              total_net_salary = @totalNetSalary
+          WHERE id = @runId
+        `);
+
+      await transaction.commit();
+
+      logAuditLog(req, 'توليد مسير الرواتب الشهري', 'payroll_run', runId, { year: y, month: m, total_net_salary: totalNetSalarySum });
+      return res.status(201).json({ message: 'تم توليد مسير الرواتب الشهري بنجاح', runId });
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+  } catch (error) {
+    console.error('Error generating payroll:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء توليد مسير الرواتب' });
+  }
+});
+
+// GET /api/payroll/runs - List all payroll runs
+app.get('/api/payroll/runs', async (req, res) => {
+  try {
+    const pool = getPool();
+    const result = await pool.request().query(`
+      SELECT p.*, u.username AS creator_name, b.name AS bank_name
+      FROM payroll_runs p
+      LEFT JOIN users u ON p.created_by = u.id
+      LEFT JOIN banks b ON p.bank_id = b.id
+      ORDER BY p.year DESC, p.month DESC
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error('Error fetching payroll runs:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء جلب قائمة مسيرات الرواتب' });
+  }
+});
+
+// GET /api/payroll/runs/:id - Get detailed items of a payroll run
+app.get('/api/payroll/runs/:id', async (req, res) => {
+  const runId = req.params.id;
+  try {
+    const pool = getPool();
+    const runRes = await pool.request()
+      .input('runId', sql.Int, runId)
+      .query(`
+        SELECT p.*, u.username AS creator_name, b.name AS bank_name
+        FROM payroll_runs p
+        LEFT JOIN users u ON p.created_by = u.id
+        LEFT JOIN banks b ON p.bank_id = b.id
+        WHERE p.id = @runId
+      `);
+
+    if (runRes.recordset.length === 0) {
+      return res.status(404).json({ error: 'مسير الرواتب المطلوب غير موجود' });
+    }
+
+    const itemsRes = await pool.request()
+      .input('runId', sql.Int, runId)
+      .query(`
+        SELECT i.*, r.code AS rep_code, r.name AS rep_name, r.classification, r.phone AS rep_phone
+        FROM payroll_items i
+        JOIN representatives r ON i.rep_id = r.id
+        WHERE i.payroll_run_id = @runId
+        ORDER BY r.code ASC
+      `);
+
+    res.json({
+      run: runRes.recordset[0],
+      items: itemsRes.recordset
+    });
+  } catch (error) {
+    console.error('Error fetching payroll run details:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء جلب تفاصيل مسير الرواتب' });
+  }
+});
+
+// PUT /api/payroll/items/:id - Edit an individual payroll item (bonus, other deductions, notes)
+app.put('/api/payroll/items/:id', async (req, res) => {
+  const itemId = req.params.id;
+  const { bonus_amount, other_deduction, notes } = req.body;
+
+  try {
+    const pool = getPool();
+    const itemCheck = await pool.request()
+      .input('id', sql.Int, itemId)
+      .query('SELECT * FROM payroll_items WHERE id = @id');
+
+    if (itemCheck.recordset.length === 0) {
+      return res.status(404).json({ error: 'مفردات الراتب المحددة غير موجودة' });
+    }
+
+    const item = itemCheck.recordset[0];
+    const bonus = Number(bonus_amount) >= 0 ? Number(bonus_amount) : Number(item.bonus_amount);
+    const otherDed = Number(other_deduction) >= 0 ? Number(other_deduction) : Number(item.other_deduction);
+
+    const netSalary = Math.max(0, 
+      (Number(item.basic_salary) + Number(item.allowances) + Number(item.commission_amount) + Number(item.overtime_amount) + bonus) -
+      (Number(item.absence_deduction) + Number(item.late_deduction) + Number(item.loan_deduction) + otherDed)
+    );
+
+    await pool.request()
+      .input('id', sql.Int, itemId)
+      .input('bonusAmount', sql.Decimal(18, 2), bonus)
+      .input('otherDeduction', sql.Decimal(18, 2), otherDed)
+      .input('netSalary', sql.Decimal(18, 2), netSalary)
+      .input('notes', sql.NVarChar, notes || item.notes)
+      .query(`
+        UPDATE payroll_items
+        SET bonus_amount = @bonusAmount,
+            other_deduction = @otherDeduction,
+            net_salary = @netSalary,
+            notes = @notes
+        WHERE id = @id
+      `);
+
+    // Recalculate run totals
+    const runId = item.payroll_run_id;
+    await pool.request()
+      .input('runId', sql.Int, runId)
+      .query(`
+        UPDATE payroll_runs
+        SET total_net_salary = (SELECT ISNULL(SUM(net_salary), 0) FROM payroll_items WHERE payroll_run_id = @runId),
+            total_deductions = (SELECT ISNULL(SUM(absence_deduction + late_deduction + other_deduction), 0) FROM payroll_items WHERE payroll_run_id = @runId)
+        WHERE id = @runId
+      `);
+
+    res.json({ message: 'تم تعديل مفردات الراتب وتحديث الصافي بنجاح' });
+  } catch (error) {
+    console.error('Error updating payroll item:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء تعديل بند الراتب' });
+  }
+});
+
+// POST /api/payroll/runs/:id/disburse - Finalize and disburse payroll run from Safe or Bank
+app.post('/api/payroll/runs/:id/disburse', async (req, res) => {
+  const runId = req.params.id;
+  const { payment_method, bank_id, notes } = req.body;
+  const userId = parseInt(req.headers['x-user-id']) || null;
+  const userRole = req.headers['x-user-role'];
+
+  if (userRole !== 'manager') {
+    return res.status(403).json({ error: 'غير مسموح لغير المدراء بإتمام صرف مسيرات الرواتب' });
+  }
+
+  const payMethod = payment_method === 'bank_transfer' ? 'bank_transfer' : 'cash';
+
+  try {
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const runRes = await transaction.request()
+        .input('runId', sql.Int, runId)
+        .query('SELECT * FROM payroll_runs WITH (UPDLOCK) WHERE id = @runId');
+
+      if (runRes.recordset.length === 0) {
+        await transaction.rollback();
+        return res.status(404).json({ error: 'مسير الرواتب غير موجود' });
+      }
+
+      const run = runRes.recordset[0];
+      if (run.status === 'disbursed') {
+        await transaction.rollback();
+        return res.status(400).json({ error: 'تم صرف هذا المسير بالفعل سابقاً' });
+      }
+
+      const totalAmount = Number(run.total_net_salary);
+      if (totalAmount <= 0) {
+        await transaction.rollback();
+        return res.status(400).json({ error: 'إجمالي صافي مبالغ المسير صفر أو غير صحيح' });
+      }
+
+      // Check balance
+      if (payMethod === 'bank_transfer') {
+        if (!bank_id) {
+          await transaction.rollback();
+          return res.status(400).json({ error: 'الحساب البنكي المصدر للصرف مطلوب' });
+        }
+        const depRes = await transaction.request()
+          .input('bankId', sql.Int, bank_id)
+          .query(`
+            SELECT ISNULL(SUM(CASE WHEN type = 'deposit' THEN amount ELSE 0 END), 0) AS total
+            FROM transactions WHERE bank_id = @bankId AND (status IN ('approved', 'disbursed') OR status IS NULL)
+          `);
+        const wdRes = await transaction.request()
+          .input('bankId', sql.Int, bank_id)
+          .query(`
+            SELECT ISNULL(SUM(CASE WHEN type IN ('withdrawal', 'company_transfer') THEN amount ELSE 0 END), 0) AS total
+            FROM transactions WHERE bank_id = @bankId AND (status IN ('approved', 'disbursed') OR status IS NULL)
+          `);
+        const bankRes = await transaction.request()
+          .input('bankId', sql.Int, bank_id)
+          .query('SELECT initial_balance FROM banks WHERE id = @bankId');
+
+        const initialBal = Number(bankRes.recordset[0]?.initial_balance) || 0;
+        const currentBankBal = initialBal + Number(depRes.recordset[0]?.total || 0) - Number(wdRes.recordset[0]?.total || 0);
+
+        if (currentBankBal < totalAmount) {
+          await transaction.rollback();
+          return res.status(400).json({
+            error: `رصيد البنك الحالي (${currentBankBal.toLocaleString('ar-EG')} ج.م) أقل من قيمة إجمالي مسير الرواتب (${totalAmount.toLocaleString('ar-EG')} ج.م).`
+          });
+        }
+      } else {
+        const cashDepositsResult = await transaction.request().query(`
+          SELECT ISNULL(SUM(amount), 0) AS total 
+          FROM transactions WITH (UPDLOCK, TABLOCKX) 
+          WHERE type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved', 'disbursed') OR status IS NULL)
+        `);
+        const withdrawalsResult = await transaction.request().query(`
+          SELECT ISNULL(SUM(amount), 0) AS total 
+          FROM transactions 
+          WHERE (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
+             OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status = 'approved' OR status IS NULL))
+        `);
+
+        const safeInitialBalance = await getSafeInitialBalance(transaction);
+        const currentCashBalance = safeInitialBalance + Number(cashDepositsResult.recordset[0].total) - Number(withdrawalsResult.recordset[0].total);
+
+        if (currentCashBalance < totalAmount) {
+          await transaction.rollback();
+          return res.status(400).json({
+            error: `رصيد الخزينة الحالي (${currentCashBalance.toLocaleString('ar-EG')} ج.م) غير كافٍ لصرف مسير الرواتب بقيمة (${totalAmount.toLocaleString('ar-EG')} ج.م).`
+          });
+        }
+      }
+
+      // Record transaction
+      const txNotes = notes || `صرف مسير رواتب شهر ${run.month} / ${run.year}`;
+      const insertTxRes = await transaction.request()
+        .input('bankId', sql.Int, payMethod === 'bank_transfer' ? bank_id : null)
+        .input('type', sql.VarChar, 'withdrawal')
+        .input('paymentMethod', sql.VarChar, payMethod)
+        .input('subType', sql.NVarChar, 'salary')
+        .input('amount', sql.Decimal(18, 2), totalAmount)
+        .input('date', sql.DateTime, new Date())
+        .input('notes', sql.NVarChar, txNotes)
+        .input('status', sql.VarChar, 'disbursed')
+        .input('createdBy', sql.Int, userId)
+        .query(`
+          INSERT INTO transactions (bank_id, type, payment_method, withdrawal_sub_type, amount, date, notes, status, created_by)
+          OUTPUT INSERTED.id
+          VALUES (@bankId, @type, @paymentMethod, @subType, @amount, @date, @notes, @status, @createdBy)
+        `);
+
+      // Update payroll_runs status
+      await transaction.request()
+        .input('runId', sql.Int, runId)
+        .input('payMethod', sql.VarChar, payMethod)
+        .input('bankId', sql.Int, payMethod === 'bank_transfer' ? bank_id : null)
+        .query(`
+          UPDATE payroll_runs
+          SET status = 'disbursed',
+              payment_method = @payMethod,
+              bank_id = @bankId,
+              disbursed_at = GETDATE()
+          WHERE id = @runId
+        `);
+
+      // Update items status to paid
+      await transaction.request()
+        .input('runId', sql.Int, runId)
+        .query("UPDATE payroll_items SET status = 'paid' WHERE payroll_run_id = @runId");
+
+      await transaction.commit();
+
+      logAuditLog(req, 'إتمام صرف مسير الرواتب', 'payroll_run', parseInt(runId), { amount: totalAmount, payment_method: payMethod });
+      res.json({ message: 'تم إتمام صرف مسير الرواتب وتسجيل حركة الصرف بنجاح' });
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+  } catch (error) {
+    console.error('Error disbursing payroll run:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء صرف مسير الرواتب' });
+  }
+});
+
+// DELETE /api/payroll/runs/:id - Delete a draft payroll run
+app.delete('/api/payroll/runs/:id', async (req, res) => {
+  const runId = req.params.id;
+  const userRole = req.headers['x-user-role'];
+
+  if (userRole !== 'manager') {
+    return res.status(403).json({ error: 'غير مسموح لغير المدراء بحذف مسيرات الرواتب' });
+  }
+
+  try {
+    const pool = getPool();
+    const checkRes = await pool.request()
+      .input('runId', sql.Int, runId)
+      .query('SELECT status FROM payroll_runs WHERE id = @runId');
+
+    if (checkRes.recordset.length === 0) {
+      return res.status(404).json({ error: 'مسير الرواتب غير موجود' });
+    }
+
+    if (checkRes.recordset[0].status === 'disbursed') {
+      return res.status(400).json({ error: 'لا يمكن حذف مسير تم صرفه بالفعل' });
+    }
+
+    await pool.request()
+      .input('runId', sql.Int, runId)
+      .query('DELETE FROM payroll_runs WHERE id = @runId');
+
+    logAuditLog(req, 'حذف مسير رواتب مسودة', 'payroll_run', parseInt(runId));
+    res.json({ message: 'تم حذف مسير الرواتب بنجاح' });
+  } catch (error) {
+    console.error('Error deleting payroll run:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء حذف مسير الرواتب' });
+  }
+});
+
 // Start Database connection and then Express server
 connectDB()
   .then(async (pool) => {

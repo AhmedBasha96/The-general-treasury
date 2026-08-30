@@ -675,6 +675,78 @@ async function createTables() {
             FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL
           );
         END
+
+        -- Create employee_salary_profiles table (ملفات رواتب وبدلات الموظفين)
+        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'employee_salary_profiles')
+        BEGIN
+          CREATE TABLE employee_salary_profiles (
+            id INT IDENTITY(1,1) PRIMARY KEY,
+            rep_id INT UNIQUE NOT NULL,
+            basic_salary DECIMAL(18,2) DEFAULT 0,
+            transport_allowance DECIMAL(18,2) DEFAULT 0,
+            housing_allowance DECIMAL(18,2) DEFAULT 0,
+            other_allowance DECIMAL(18,2) DEFAULT 0,
+            commission_rate DECIMAL(5,2) DEFAULT 0,
+            overtime_hourly_rate DECIMAL(18,2) DEFAULT 0,
+            absence_day_rate DECIMAL(18,2) DEFAULT 0,
+            notes NVARCHAR(MAX) NULL,
+            updated_at DATETIME DEFAULT GETDATE(),
+            FOREIGN KEY (rep_id) REFERENCES representatives(id) ON DELETE CASCADE
+          );
+        END
+
+        -- Create payroll_runs table (مسيرات الرواتب الشهرية)
+        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'payroll_runs')
+        BEGIN
+          CREATE TABLE payroll_runs (
+            id INT IDENTITY(1,1) PRIMARY KEY,
+            year INT NOT NULL,
+            month INT NOT NULL,
+            title NVARCHAR(255) NOT NULL,
+            total_basic DECIMAL(18,2) DEFAULT 0,
+            total_allowances DECIMAL(18,2) DEFAULT 0,
+            total_commissions DECIMAL(18,2) DEFAULT 0,
+            total_overtime DECIMAL(18,2) DEFAULT 0,
+            total_deductions DECIMAL(18,2) DEFAULT 0,
+            total_loan_deductions DECIMAL(18,2) DEFAULT 0,
+            total_net_salary DECIMAL(18,2) DEFAULT 0,
+            status VARCHAR(20) DEFAULT 'draft',
+            payment_method VARCHAR(20) NULL,
+            bank_id INT NULL,
+            created_by INT NULL,
+            created_at DATETIME DEFAULT GETDATE(),
+            disbursed_at DATETIME NULL,
+            FOREIGN KEY (bank_id) REFERENCES banks(id) ON DELETE SET NULL,
+            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+          );
+        END
+
+        -- Create payroll_items table (تفاصيل قسائم مرتب الموظفين لكل مسير)
+        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'payroll_items')
+        BEGIN
+          CREATE TABLE payroll_items (
+            id INT IDENTITY(1,1) PRIMARY KEY,
+            payroll_run_id INT NOT NULL,
+            rep_id INT NOT NULL,
+            basic_salary DECIMAL(18,2) DEFAULT 0,
+            allowances DECIMAL(18,2) DEFAULT 0,
+            commission_amount DECIMAL(18,2) DEFAULT 0,
+            overtime_amount DECIMAL(18,2) DEFAULT 0,
+            absence_days INT DEFAULT 0,
+            absence_deduction DECIMAL(18,2) DEFAULT 0,
+            late_minutes INT DEFAULT 0,
+            late_deduction DECIMAL(18,2) DEFAULT 0,
+            loan_deduction DECIMAL(18,2) DEFAULT 0,
+            other_deduction DECIMAL(18,2) DEFAULT 0,
+            bonus_amount DECIMAL(18,2) DEFAULT 0,
+            net_salary DECIMAL(18,2) DEFAULT 0,
+            status VARCHAR(20) DEFAULT 'pending',
+            notes NVARCHAR(MAX) NULL,
+            created_at DATETIME DEFAULT GETDATE(),
+            FOREIGN KEY (payroll_run_id) REFERENCES payroll_runs(id) ON DELETE CASCADE,
+            FOREIGN KEY (rep_id) REFERENCES representatives(id) ON DELETE CASCADE
+          );
+        END
       `);
 
     console.log('Database tables verified/created (including ZKTeco Attendance, Audit Logs & Loans).');
