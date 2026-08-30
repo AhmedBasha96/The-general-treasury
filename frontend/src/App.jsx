@@ -7185,6 +7185,18 @@ const [showCarModal, setShowCarModal] = useState(false);
               </button>
             </div>
 
+            {/* Dual Bank Deposit Transfer Banner if Bank Deposit */}
+            {(previewingTx.bank_name || previewingTx.bank_id || previewingTx.withdrawal_sub_type === 'bank_deposit') && (
+              <div style={{ background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(14, 165, 233, 0.05))', border: '1px solid #0284c7', borderRadius: '16px', padding: '1.15rem', marginBottom: '1.25rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.05rem', fontWeight: 900, color: '#38bdf8', marginBottom: '0.5rem' }}>
+                  🏦 تحويل وإيداع مالي من الخزينة لحساب البنك
+                </div>
+                <div style={{ fontSize: '0.9rem', color: '#f8fafc', lineHeight: '1.6' }}>
+                  العملية عبارة عن <strong>سحب نقدية من الخزينة الرئيسية</strong> وتحويلها للإيداع في <strong>{previewingTx.bank_name || 'الحساب البنكي'}</strong> {previewingTx.bank_account_number ? `(رقم الحساب: ${previewingTx.bank_account_number})` : ''}.
+                </div>
+              </div>
+            )}
+
             {/* Financial Liquidity & Cover Gauge */}
             {previewingTx.payment_method !== 'bank_transfer' ? (
               <div style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid #334155', borderRadius: '16px', padding: '1.15rem', marginBottom: '1.25rem' }}>
@@ -7251,15 +7263,23 @@ const [showCarModal, setShowCarModal] = useState(false);
               </div>
 
               <div style={{ background: '#1e293b', padding: '0.9rem', borderRadius: '14px', border: '1px solid #334155' }}>
-                <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.2rem' }}>🏢 الجهة أو الموظف المستفيد</div>
-                <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#f8fafc' }}>{previewingTx.rep_name || previewingTx.company_name || 'مصروفات تشغيلية (خزينة مباشرة)'}</div>
+                <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.2rem' }}>🏢 الجهة أو الحساب المستلم</div>
+                <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#f8fafc' }}>
+                  {previewingTx.rep_name || previewingTx.company_name || (previewingTx.bank_name ? `🏦 ${previewingTx.bank_name}` : 'مصروفات تشغيلية (خزينة مباشرة)')}
+                </div>
+                {previewingTx.bank_name && !previewingTx.rep_name && (
+                  <div style={{ fontSize: '0.75rem', color: '#38bdf8', marginTop: '0.15rem' }}>
+                    💳 رقم الحساب: {previewingTx.bank_account_number || '—'}
+                  </div>
+                )}
                 {previewingTx.agency_name && <div style={{ fontSize: '0.75rem', color: '#38bdf8', marginTop: '0.15rem' }}>توكيل: {previewingTx.agency_name}</div>}
               </div>
 
               <div style={{ background: '#1e293b', padding: '0.9rem', borderRadius: '14px', border: '1px solid #334155' }}>
                 <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.2rem' }}>🏷️ بند الصرف المحدد</div>
-                <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#fb923c' }}>
-                  {previewingTx.withdrawal_sub_type === 'car' ? '🚗 مصاريف سيارات'
+                <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: (previewingTx.bank_name || previewingTx.bank_id || previewingTx.withdrawal_sub_type === 'bank_deposit') ? '#38bdf8' : '#fb923c' }}>
+                  {(previewingTx.bank_name || previewingTx.bank_id || previewingTx.withdrawal_sub_type === 'bank_deposit') ? '🏦 إيداع وتغذية حساب بنكي (من الخزينة)'
+                    : previewingTx.withdrawal_sub_type === 'car' ? '🚗 مصاريف سيارات'
                     : previewingTx.withdrawal_sub_type === 'car_gas' ? '⛽ سيارة (جاز)'
                     : previewingTx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)'
                     : previewingTx.withdrawal_sub_type === 'car_other' ? '🔧 سيارة (مصاريف أخرى)'
