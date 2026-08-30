@@ -424,6 +424,13 @@ router.post('/clear-all', async (req, res) => {
   try {
     const pool = getPool();
     await pool.request().query("DELETE FROM attendance_logs");
+    res.json({ success: true, message: 'تم مسح السجلات التجريبية وتنظيف جدول الحضور بنجاح' });
+  } catch (error) {
+    console.error('Error clearing attendance logs:', error);
+    res.status(500).json({ error: 'فشل مسح السجلات' });
+  }
+});
+
 // Helper to calculate distance in meters between two GPS coordinates (Haversine Formula)
 function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
   const R = 6371000; // Earth radius in meters
