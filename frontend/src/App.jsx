@@ -82,17 +82,17 @@ export default function App() {
   const [activeImageModal, setActiveImageModal] = useState(null);
   const [prevTab, setPrevTab] = useState(() => localStorage.getItem('activeTab') || 'dashboard');
   const [prevPendingCount, setPrevPendingCount] = useState(0);
-  
+
   const [usersList, setUsersList] = useState([]);
   const [newUser, setNewUser] = useState({ username: '', password: '', role: 'accountant', assigned_agency_id: '' });
   const [userError, setUserError] = useState('');
   const [userSuccess, setUserSuccess] = useState('');
-  
+
   // Edit User State
   const [editingUser, setEditingUser] = useState(null);
   const [editUserError, setEditUserError] = useState('');
   const [editUserSuccess, setEditUserSuccess] = useState('');
-  
+
   // Printing State
   const [printingTx, setPrintingTx] = useState(null);
 
@@ -176,25 +176,25 @@ export default function App() {
     const txRows = d.transactions.length === 0
       ? `<tr><td colspan="7" style="border:1px solid #cbd5e1;padding:12px;text-align:center">لا توجد عمليات مسجلة في هذه الفترة</td></tr>`
       : d.transactions.map(tx => {
-          const subTypeLabel = tx.withdrawal_sub_type === 'car' ? 'مصاريف سيارات'
-            : tx.withdrawal_sub_type === 'car_gas' ? 'جاز سيارات'
+        const subTypeLabel = tx.withdrawal_sub_type === 'car' ? 'مصاريف سيارات'
+          : tx.withdrawal_sub_type === 'car_gas' ? 'جاز سيارات'
             : tx.withdrawal_sub_type === 'car_oil' ? 'زيت/صيانة'
-            : tx.withdrawal_sub_type === 'salary' ? 'رواتب'
-            : tx.withdrawal_sub_type === 'commission' ? 'عمولات'
-            : tx.withdrawal_sub_type === 'loan' ? 'سلفة'
-            : tx.withdrawal_sub_type === 'direct_rent' ? 'إيجار'
-            : tx.withdrawal_sub_type === 'direct_operational' ? 'تشغيل عامة'
-            : tx.withdrawal_sub_type ? 'أخرى' : '';
-          const typeLabel = tx.type === 'deposit' ? 'وارد' : tx.type === 'company_transfer' ? 'حوالة لشركة' : 'منصرف';
-          const details = [
-            tx.type === 'company_transfer' && tx.company_name ? `تحويل لشركة: ${tx.company_name}` : '',
-            tx.rep_name ? `المندوب: ${tx.rep_name}` : '',
-            subTypeLabel ? `(بند: ${subTypeLabel})` : '',
-            tx.notes ? `- ${tx.notes}` : ''
-          ].filter(Boolean).join(' ');
-          const payMethod = tx.bank_name ? `بنك: ${tx.bank_name}` : 'نقدي بالخزينة';
-          const txDateStr = new Date(tx.date).toLocaleString('ar-EG');
-          return `<tr>
+              : tx.withdrawal_sub_type === 'salary' ? 'رواتب'
+                : tx.withdrawal_sub_type === 'commission' ? 'عمولات'
+                  : tx.withdrawal_sub_type === 'loan' ? 'سلفة'
+                    : tx.withdrawal_sub_type === 'direct_rent' ? 'إيجار'
+                      : tx.withdrawal_sub_type === 'direct_operational' ? 'تشغيل عامة'
+                        : tx.withdrawal_sub_type ? 'أخرى' : '';
+        const typeLabel = tx.type === 'deposit' ? 'وارد' : tx.type === 'company_transfer' ? 'حوالة لشركة' : 'منصرف';
+        const details = [
+          tx.type === 'company_transfer' && tx.company_name ? `تحويل لشركة: ${tx.company_name}` : '',
+          tx.rep_name ? `المندوب: ${tx.rep_name}` : '',
+          subTypeLabel ? `(بند: ${subTypeLabel})` : '',
+          tx.notes ? `- ${tx.notes}` : ''
+        ].filter(Boolean).join(' ');
+        const payMethod = tx.bank_name ? `بنك: ${tx.bank_name}` : 'نقدي بالخزينة';
+        const txDateStr = new Date(tx.date).toLocaleString('ar-EG');
+        return `<tr>
             <td style="border:1px solid #cbd5e1;padding:8px;text-align:center">TX-${String(tx.id).padStart(6, '0')}</td>
             <td style="border:1px solid #cbd5e1;padding:8px;text-align:center">${txDateStr}</td>
             <td style="border:1px solid #cbd5e1;padding:8px;text-align:center;font-weight:bold">${typeLabel}</td>
@@ -203,7 +203,7 @@ export default function App() {
             <td style="border:1px solid #cbd5e1;padding:8px;text-align:center;font-weight:bold">${Number(tx.amount).toFixed(2)}</td>
             <td style="border:1px solid #cbd5e1;padding:8px;text-align:center">${tx.creator_name || 'أمين الخزينة'}</td>
           </tr>`;
-        }).join('');
+      }).join('');
 
     const excelContent = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
@@ -329,21 +329,21 @@ export default function App() {
       : tx.type === 'deposit'
         ? 'مكتمل'
         : (tx.status === 'disbursed' ? 'مكتمل - تم الصرف الفعلي'
-           : tx.status === 'approved' ? 'معتمد - بانتظار التسليم'
-           : tx.status === 'pending' ? 'قيد المراجعة'
-           : 'مكتمل');
+          : tx.status === 'approved' ? 'معتمد - بانتظار التسليم'
+            : tx.status === 'pending' ? 'قيد المراجعة'
+              : 'مكتمل');
 
     const withdrawalSubType = tx.withdrawal_sub_type === 'car' ? 'مصاريف سيارات'
       : tx.withdrawal_sub_type === 'car_gas' ? 'مصاريف سيارات (جاز)'
-      : tx.withdrawal_sub_type === 'car_oil' ? 'مصاريف سيارات (زيت)'
-      : tx.withdrawal_sub_type === 'car_other' ? 'مصاريف سيارات (مصاريف أخرى)'
-      : tx.withdrawal_sub_type === 'salary' ? 'رواتب وأجور'
-      : tx.withdrawal_sub_type === 'commission' ? 'عمولات'
-      : (tx.withdrawal_sub_type || '');
+        : tx.withdrawal_sub_type === 'car_oil' ? 'مصاريف سيارات (زيت)'
+          : tx.withdrawal_sub_type === 'car_other' ? 'مصاريف سيارات (مصاريف أخرى)'
+            : tx.withdrawal_sub_type === 'salary' ? 'رواتب وأجور'
+              : tx.withdrawal_sub_type === 'commission' ? 'عمولات'
+                : (tx.withdrawal_sub_type || '');
 
     // Build denominations table
     const denoms = [200, 100, 50, 20, 10, 5, 1];
-    
+
     let isExchange = tx.type === 'exchange';
     let denomRowsExchangeIncoming = '';
     let denomRowsExchangeOutgoing = '';
@@ -539,12 +539,12 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
     e.preventDefault();
     setUserError('');
     setUserSuccess('');
-    
+
     if (!newUser.username || !newUser.password || !newUser.role) {
       setUserError('يرجى ملء اسم المستخدم وكلمة المرور واختيار الدور');
       return;
     }
-    
+
     try {
       const res = await fetch('/api/users', {
         method: 'POST',
@@ -575,7 +575,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
     window.fetch = async (url, options = {}) => {
       const saved = localStorage.getItem('currentUser');
       const user = saved ? JSON.parse(saved) : null;
-      
+
       if (user) {
         options.headers = options.headers || {};
         options.headers['x-user-role'] = user.role;
@@ -586,7 +586,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
       }
       return originalFetch(url, options);
     };
-    
+
     return () => {
       window.fetch = originalFetch;
     };
@@ -730,10 +730,10 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
 
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('activeTab') || 'dashboard');
   const [repsSubTab, setRepsSubTab] = useState('delegates');
-const [showCarModal, setShowCarModal] = useState(false);
+  const [showCarModal, setShowCarModal] = useState(false);
 
   const getClassificationLabel = (cls) => {
-    switch(cls) {
+    switch (cls) {
       case 'retail_rep': return '🛍️ مندوب تجزئة';
       case 'wholesale_rep': return '💼 مندوب جملة';
       case 'supervisor_staff': return '👔 مشرف';
@@ -747,7 +747,7 @@ const [showCarModal, setShowCarModal] = useState(false);
   };
 
   const getClassificationBadgeStyle = (cls) => {
-    switch(cls) {
+    switch (cls) {
       case 'retail_rep':
         return { background: 'var(--primary-glow)', color: 'var(--primary)', border: '1px solid rgba(14, 165, 233, 0.2)' };
       case 'wholesale_rep':
@@ -778,7 +778,7 @@ const [showCarModal, setShowCarModal] = useState(false);
         { value: 'direct_other', label: '📝 أخرى' }
       ];
     }
-    
+
     const selectedRep = reps.find(r => r.id === Number(newTx.repId));
     if (selectedRep) {
       const cls = selectedRep.classification;
@@ -799,7 +799,7 @@ const [showCarModal, setShowCarModal] = useState(false);
         ];
       }
     }
-    
+
     return [
       { value: 'car', label: '🚗 مصاريف سيارات' },
       { value: 'salary', label: '💵 راتب' },
@@ -860,7 +860,7 @@ const [showCarModal, setShowCarModal] = useState(false);
   const [selectedCarLedger, setSelectedCarLedger] = useState(null); // Detailed car ledger view
   const [carLedgerLoading, setCarLedgerLoading] = useState(false);
   const [carLedgerData, setCarLedgerData] = useState(null);
-  
+
   // New Agency Form State
   const [newAgency, setNewAgency] = useState({ code: '', name: '' });
   const [agencyError, setAgencyError] = useState('');
@@ -891,9 +891,9 @@ const [showCarModal, setShowCarModal] = useState(false);
     const numericCodes = (list || [])
       .map(item => parseInt(item.code))
       .filter(num => !isNaN(num));
-    
+
     let proposedNum = numericCodes.length === 0 ? parseInt(defaultCode) : Math.max(...numericCodes) + 1;
-    
+
     // Resolve any global code collisions if checkUniqueList is provided
     if (checkUniqueList && checkUniqueList.length > 0) {
       const allUsedCodes = new Set(checkUniqueList.map(item => item.code ? item.code.toString().trim() : ''));
@@ -901,7 +901,7 @@ const [showCarModal, setShowCarModal] = useState(false);
         proposedNum++;
       }
     }
-    
+
     return proposedNum.toString();
   };
 
@@ -922,7 +922,7 @@ const [showCarModal, setShowCarModal] = useState(false);
       const defaultCode = defaults[cls] || '5001';
       const filteredReps = reps.filter(r => r.classification === cls);
       const nextCode = getNextCode(filteredReps, defaultCode, reps);
-      
+
       if (newRep.code !== nextCode) {
         setNewRep(prev => ({ ...prev, code: nextCode }));
       }
@@ -946,7 +946,7 @@ const [showCarModal, setShowCarModal] = useState(false);
       setNewSupervisor(prev => ({ ...prev, code: getNextCode(supervisors, '3001') }));
     }
   }, [supervisors, supervisorsLoaded, newSupervisor.code]);
-  
+
   // New Transaction Form State
   const [newTx, setNewTx] = useState({ type: 'deposit', repId: '', bankId: '', companyId: '', carId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash' });
   const [txSourceType, setTxSourceType] = useState('rep'); // 'rep' or 'bank' // 'rep' | 'bank' | 'direct' | 'company'
@@ -982,7 +982,7 @@ const [showCarModal, setShowCarModal] = useState(false);
   const [txError, setTxError] = useState('');
   const [txSuccess, setTxSuccess] = useState(null);
   const [receiptImageBank, setReceiptImageBank] = useState(null); // base64 string for bank transfer receipt
-  
+
   // Transaction Filters State
   const [filters, setFilters] = useState({ type: '', repId: '', bankId: '', startDate: '', endDate: '' });
 
@@ -1019,7 +1019,7 @@ const [showCarModal, setShowCarModal] = useState(false);
         const savedAgencyId = localStorage.getItem('selectedAgencyLedgerId');
         const savedSupId = localStorage.getItem('selectedSupervisorRepsId');
         const savedCompany = localStorage.getItem('selectedCompanyForLedger');
-        
+
         const currentTab = localStorage.getItem('activeTab') || 'dashboard';
         if (currentTab === 'banks' && savedBankId) {
           handleViewBankLedger(savedBankId);
@@ -1064,7 +1064,7 @@ const [showCarModal, setShowCarModal] = useState(false);
         loadSupervisors();
         loadCompanies();
         loadCarsList();
-        
+
         if (currentUser.role === 'manager' || currentUser.role === 'accountant') {
           loadPendingTx();
           loadRejectedTx();
@@ -1104,7 +1104,7 @@ const [showCarModal, setShowCarModal] = useState(false);
         } catch (e) {
           console.warn('Audio notification failed:', e);
         }
-        
+
         if ('Notification' in window && Notification.permission === 'granted') {
           new Notification('طلبات معلقة بالخزينة ⚠️', {
             body: `يوجد حالياً ${currentCount} من طلبات الصرف بانتظار موافقتك المباشرة.`,
@@ -1125,13 +1125,13 @@ const [showCarModal, setShowCarModal] = useState(false);
       setSelectedSupervisorReps(null);
       setSelectedCompanyForLedger(null);
       setCompanyLedgerData(null);
-      
+
       localStorage.removeItem('selectedBankLedgerId');
       localStorage.removeItem('selectedRepLedgerId');
       localStorage.removeItem('selectedAgencyLedgerId');
       localStorage.removeItem('selectedSupervisorRepsId');
       localStorage.removeItem('selectedCompanyForLedger');
-      
+
       setPrevTab(activeTab);
     }
   }, [activeTab, prevTab]);
@@ -1200,7 +1200,7 @@ const [showCarModal, setShowCarModal] = useState(false);
       if (res.ok) {
         carTxs = await res.json();
       }
-      
+
       // Fallback filter if specific route returned empty or wasn't mapped
       if (!carTxs || carTxs.length === 0) {
         const fallbackRes = await fetch('/api/transactions');
@@ -1397,7 +1397,7 @@ const [showCarModal, setShowCarModal] = useState(false);
       if (appliedFilters.status) queryParams.append('status', appliedFilters.status);
       if (appliedFilters.startDate) queryParams.append('start_date', appliedFilters.startDate);
       if (appliedFilters.endDate) queryParams.append('end_date', appliedFilters.endDate);
-      
+
       const res = await fetch(`/api/transactions?${queryParams.toString()}`);
       if (res.ok) {
         const data = await res.json();
@@ -1412,19 +1412,19 @@ const [showCarModal, setShowCarModal] = useState(false);
     e.preventDefault();
     setAgencyError('');
     setAgencySuccess('');
-    
+
     if (!newAgency.code || !newAgency.name) {
       setAgencyError('يرجى ملء جميع الحقول المطلوبة');
       return;
     }
-    
+
     try {
       const res = await fetch('/api/agencies', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newAgency)
       });
-      
+
       const data = await res.json();
       if (res.ok) {
         setAgencySuccess('تم إضافة التوكيل بنجاح!');
@@ -1479,19 +1479,19 @@ const [showCarModal, setShowCarModal] = useState(false);
     e.preventDefault();
     setBankError('');
     setBankSuccess('');
-    
+
     if (!newBank.code || !newBank.name || !newBank.account_number) {
       setBankError('يرجى ملء جميع الحقول المطلوبة (الكود والاسم ورقم الحساب)');
       return;
     }
-    
+
     try {
       const res = await fetch('/api/banks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newBank)
       });
-      
+
       const data = await res.json();
       if (res.ok) {
         setBankSuccess('تم إضافة الحساب البنكي بنجاح!');
@@ -1546,19 +1546,19 @@ const [showCarModal, setShowCarModal] = useState(false);
     e.preventDefault();
     setSupervisorError('');
     setSupervisorSuccess('');
-    
+
     if (!newSupervisor.code || !newSupervisor.name) {
       setSupervisorError('يرجى ملء جميع الحقول المطلوبة');
       return;
     }
-    
+
     try {
       const res = await fetch('/api/supervisors', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newSupervisor)
       });
-      
+
       const data = await res.json();
       if (res.ok) {
         setSupervisorSuccess('تم إضافة المشرف بنجاح!');
@@ -1611,26 +1611,26 @@ const [showCarModal, setShowCarModal] = useState(false);
     e.preventDefault();
     setRepError('');
     setRepSuccess('');
-    
+
     const isRep = (newRep.classification === 'retail_rep' || newRep.classification === 'wholesale_rep');
-    
+
     if (!newRep.code || !newRep.name) {
       setRepError('يرجى ملء جميع الحقول المطلوبة (الكود والاسم)');
       return;
     }
-    
+
     if (isRep && !newRep.agency_id) {
       setRepError('يرجى اختيار التوكيل التابع له المندوب');
       return;
     }
-    
+
     try {
       const res = await fetch('/api/reps', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newRep)
       });
-      
+
       const data = await res.json();
       if (res.ok) {
         setRepSuccess('تم إضافة المندوب بنجاح!');
@@ -1708,7 +1708,7 @@ const [showCarModal, setShowCarModal] = useState(false);
     try {
       const res = await fetch(`/api/reps/${repId}/password`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'x-user-role': currentUser.role
         },
@@ -1728,7 +1728,7 @@ const [showCarModal, setShowCarModal] = useState(false);
   const handleAddTransaction = async (e) => {
     e.preventDefault();
     setTxError('');
-    
+
     if (!window.confirm('هل أنت متأكد من تسجيل هذه العملية؟')) {
       return;
     }
@@ -1769,11 +1769,11 @@ const [showCarModal, setShowCarModal] = useState(false);
 
         const data = await res.json();
         if (res.ok) {
-          const selectedBankName = txSourceType === 'bank' 
+          const selectedBankName = txSourceType === 'bank'
             ? (banks.find(b => b.id === Number(newTx.bankId))?.name || 'البنك المصدر')
             : 'الخزينة المباشرة';
           const selectedCompanyName = companies.find(c => c.id === Number(newTx.companyId))?.name || 'الشركة المستلمة';
-          
+
           setTxSuccess({
             type: 'company_transfer',
             amount: amountNum,
@@ -1785,12 +1785,12 @@ const [showCarModal, setShowCarModal] = useState(false);
           if (data.transaction) {
             handlePrintReceipt(data.transaction);
           }
-          
+
           // Reset Form
           setNewTx({ type: 'deposit', repId: '', bankId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash' });
           setTxSourceType('rep');
           setSearchRepQuery('');
-          
+
           // Refresh Lists
           loadDashboard();
           loadReps();
@@ -1807,24 +1807,24 @@ const [showCarModal, setShowCarModal] = useState(false);
       }
       return;
     }
-    
+
     // Check if we are doing an exchange
     if (newTx.type === 'exchange') {
       const i200 = Number(incomingDenominations.denom_200) || 0;
       const i100 = Number(incomingDenominations.denom_100) || 0;
-      const i50  = Number(incomingDenominations.denom_50)  || 0;
-      const i20  = Number(incomingDenominations.denom_20)  || 0;
-      const i10  = Number(incomingDenominations.denom_10)  || 0;
-      const i5   = Number(incomingDenominations.denom_5)   || 0;
-      const i1   = Number(incomingDenominations.denom_1)   || 0;
+      const i50 = Number(incomingDenominations.denom_50) || 0;
+      const i20 = Number(incomingDenominations.denom_20) || 0;
+      const i10 = Number(incomingDenominations.denom_10) || 0;
+      const i5 = Number(incomingDenominations.denom_5) || 0;
+      const i1 = Number(incomingDenominations.denom_1) || 0;
 
       const o200 = Number(outgoingDenominations.denom_200) || 0;
       const o100 = Number(outgoingDenominations.denom_100) || 0;
-      const o50  = Number(outgoingDenominations.denom_50)  || 0;
-      const o20  = Number(outgoingDenominations.denom_20)  || 0;
-      const o10  = Number(outgoingDenominations.denom_10)  || 0;
-      const o5   = Number(outgoingDenominations.denom_5)   || 0;
-      const o1   = Number(outgoingDenominations.denom_1)   || 0;
+      const o50 = Number(outgoingDenominations.denom_50) || 0;
+      const o20 = Number(outgoingDenominations.denom_20) || 0;
+      const o10 = Number(outgoingDenominations.denom_10) || 0;
+      const o5 = Number(outgoingDenominations.denom_5) || 0;
+      const o1 = Number(outgoingDenominations.denom_1) || 0;
 
       const incomingTotal = (i200 * 200) + (i100 * 100) + (i50 * 50) + (i20 * 20) + (i10 * 10) + (i5 * 5) + (i1 * 1);
       const outgoingTotal = (o200 * 200) + (o100 * 100) + (o50 * 50) + (o20 * 20) + (o10 * 10) + (o5 * 5) + (o1 * 1);
@@ -1871,14 +1871,14 @@ const [showCarModal, setShowCarModal] = useState(false);
           if (data.transaction) {
             handlePrintReceipt(data.transaction);
           }
-          
+
           // Reset Form
           setNewTx({ type: 'deposit', repId: '', bankId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash' });
           setIncomingDenominations({ denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0 });
           setOutgoingDenominations({ denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0 });
           setSearchRepQuery('');
           setTxSourceType('rep');
-          
+
           // Refresh Lists
           loadDashboard();
           loadReps();
@@ -1959,13 +1959,13 @@ const [showCarModal, setShowCarModal] = useState(false);
 
       // Validate denominations for bank deposits only
       if (newTx.type === 'deposit' && txSourceType === 'bank') {
-        const calculatedTotal = 
-          (Number(denominations.denom_200 || 0) * 200) + 
-          (Number(denominations.denom_100 || 0) * 100) + 
-          (Number(denominations.denom_50 || 0) * 50) + 
-          (Number(denominations.denom_20 || 0) * 20) + 
-          (Number(denominations.denom_10 || 0) * 10) + 
-          (Number(denominations.denom_5 || 0) * 5) + 
+        const calculatedTotal =
+          (Number(denominations.denom_200 || 0) * 200) +
+          (Number(denominations.denom_100 || 0) * 100) +
+          (Number(denominations.denom_50 || 0) * 50) +
+          (Number(denominations.denom_20 || 0) * 20) +
+          (Number(denominations.denom_10 || 0) * 10) +
+          (Number(denominations.denom_5 || 0) * 5) +
           (Number(denominations.denom_1 || 0) * 1);
         if (isNaN(calculatedTotal) || Math.abs(calculatedTotal - amountNum) > 0.01) {
           const msg = `مجموع الفئات النقدية المحددة هو (${(calculatedTotal || 0).toLocaleString()} ج.م) ولكنه لا يطابق قيمة المبلغ المطلوب (${amountNum.toLocaleString()} ج.م)!`;
@@ -1989,7 +1989,7 @@ const [showCarModal, setShowCarModal] = useState(false);
           notes: newTx.notes,
           payment_method: calculatedPaymentMethod
         };
-        
+
         if (newTx.type === 'withdrawal') {
           requestBody.withdrawal_sub_type = newTx.withdrawal_sub_type || null;
           if (newTx.withdrawal_sub_type && newTx.withdrawal_sub_type.startsWith('car')) {
@@ -2033,7 +2033,7 @@ const [showCarModal, setShowCarModal] = useState(false);
           if (data.transaction) {
             handlePrintReceipt(data.transaction);
           }
-          
+
           // Reset Form
           setNewTx({ type: 'deposit', repId: '', bankId: '', companyId: '', carId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash', withdrawal_sub_type: '' });
           setTxSourceType('rep');
@@ -2048,7 +2048,7 @@ const [showCarModal, setShowCarModal] = useState(false);
           });
           setSearchRepQuery('');
           setReceiptImageBank(null);
-          
+
           // Refresh Lists
           loadDashboard();
           loadReps();
@@ -2087,13 +2087,13 @@ const [showCarModal, setShowCarModal] = useState(false);
 
       // If cash amount is filled, validate denominations match
       if (cashAmt > 0) {
-        const calculatedTotal = 
-          (Number(denominations.denom_200 || 0) * 200) + 
-          (Number(denominations.denom_100 || 0) * 100) + 
-          (Number(denominations.denom_50 || 0) * 50) + 
-          (Number(denominations.denom_20 || 0) * 20) + 
-          (Number(denominations.denom_10 || 0) * 10) + 
-          (Number(denominations.denom_5 || 0) * 5) + 
+        const calculatedTotal =
+          (Number(denominations.denom_200 || 0) * 200) +
+          (Number(denominations.denom_100 || 0) * 100) +
+          (Number(denominations.denom_50 || 0) * 50) +
+          (Number(denominations.denom_20 || 0) * 20) +
+          (Number(denominations.denom_10 || 0) * 10) +
+          (Number(denominations.denom_5 || 0) * 5) +
           (Number(denominations.denom_1 || 0) * 1);
         if (isNaN(calculatedTotal) || Math.abs(calculatedTotal - cashAmt) > 0.01) {
           const msg = `مجموع الفئات النقدية المحددة هو (${(calculatedTotal || 0).toLocaleString()} ج.م) ولكنه لا يطابق قيمة المبلغ النقدي المطلوب توريده (${cashAmt.toLocaleString()} ج.م)!`;
@@ -2142,7 +2142,7 @@ const [showCarModal, setShowCarModal] = useState(false);
               handlePrintReceipt(tx);
             });
           }
-          
+
           // Reset Form
           setNewTx({ type: 'deposit', repId: '', bankId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash' });
           setTxSourceType('rep');
@@ -2157,7 +2157,7 @@ const [showCarModal, setShowCarModal] = useState(false);
           });
           setSearchRepQuery('');
           setReceiptImageBank(null);
-          
+
           // Refresh Lists
           loadDashboard();
           loadReps();
@@ -2362,7 +2362,7 @@ const [showCarModal, setShowCarModal] = useState(false);
           <div style={{ fontSize: '3.5rem', marginBottom: '1rem', filter: 'drop-shadow(0 0 12px var(--primary-glow))' }}>💰</div>
           <h2 style={{ fontSize: '1.75rem', fontWeight: 800, marginBottom: '0.5rem', color: 'var(--text-primary)', fontFamily: 'var(--font-cairo)' }}>خزينة التوريد والصرف</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '2rem', fontFamily: 'var(--font-cairo)' }}>تسجيل الدخول للنظام المالي</p>
-          
+
           {loginError && (
             <div style={{
               background: 'rgba(244, 63, 94, 0.1)',
@@ -2378,7 +2378,7 @@ const [showCarModal, setShowCarModal] = useState(false);
               ⚠️ {loginError}
             </div>
           )}
-          
+
           <form onSubmit={handleLogin}>
             <div style={{ marginBottom: '1.25rem', textAlign: 'right' }}>
               <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.88rem', color: 'var(--text-secondary)', fontWeight: 600, fontFamily: 'var(--font-cairo)' }}>اسم المستخدم</label>
@@ -2402,7 +2402,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                 }}
               />
             </div>
-            
+
             <div style={{ marginBottom: '2rem', textAlign: 'right' }}>
               <label style={{ display: 'block', marginBottom: '0.4rem', fontSize: '0.88rem', color: 'var(--text-secondary)', fontWeight: 600, fontFamily: 'var(--font-cairo)' }}>كلمة المرور</label>
               <input
@@ -2425,7 +2425,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                 }}
               />
             </div>
-            
+
             <button
               type="submit"
               disabled={loginLoading}
@@ -2456,8 +2456,8 @@ const [showCarModal, setShowCarModal] = useState(false);
     <div className="app-container">
       {/* LIVE TOAST ALERT BANNER */}
       {showToastAlert && (
-        <div 
-          className="live-toast-alert" 
+        <div
+          className="live-toast-alert"
           onClick={() => { setShowToastAlert(false); setActiveTab('pending-approvals'); }}
         >
           <div className="toast-icon">🔔</div>
@@ -2465,7 +2465,7 @@ const [showCarModal, setShowCarModal] = useState(false);
             <h4>إشعار عاجل من النظام!</h4>
             <p>{toastMessage}</p>
           </div>
-          <button 
+          <button
             style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer', marginRight: 'auto' }}
             onClick={(e) => { e.stopPropagation(); setShowToastAlert(false); }}
           >
@@ -2488,10 +2488,10 @@ const [showCarModal, setShowCarModal] = useState(false);
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', direction: 'rtl' }}>
           <div style={{ textAlign: 'left', marginLeft: '1rem' }}>
             <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>
-              {currentUser.role === 'manager' 
-                ? '👑 مدير النظام' 
-                : currentUser.role === 'representative' 
-                  ? `👤 مندوب: ${currentUser.name || currentUser.username}` 
+              {currentUser.role === 'manager'
+                ? '👑 مدير النظام'
+                : currentUser.role === 'representative'
+                  ? `👤 مندوب: ${currentUser.name || currentUser.username}`
                   : `👤 محاسب: ${currentUser.username}`}
             </div>
             {currentUser.assigned_agency_id && (
@@ -2510,8 +2510,8 @@ const [showCarModal, setShowCarModal] = useState(false);
             {theme === 'dark' ? '☀️ الوضع الفاتح' : '🌙 الوضع الداكن'}
           </button>
 
-          <button 
-            className="btn btn-secondary" 
+          <button
+            className="btn btn-secondary"
             onClick={handleLogout}
             style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', color: 'var(--danger)', borderColor: 'rgba(244,63,94,0.2)' }}
           >
@@ -2524,19 +2524,19 @@ const [showCarModal, setShowCarModal] = useState(false);
       <nav className="tabs-nav" style={{ marginBottom: '2rem' }}>
         {currentUser.role === 'representative' ? (
           <>
-            <button 
+            <button
               className={`tab-btn ${activeTab === 'driver-portal' ? 'active' : ''}`}
               onClick={() => setActiveTab('driver-portal')}
             >
               🚗 سيارتي وتفاصيل الوقود (بوابة السائق)
             </button>
-            <button 
+            <button
               className={`tab-btn ${activeTab === 'rep-dashboard' ? 'active' : ''}`}
               onClick={() => { setActiveTab('rep-dashboard'); loadRepLedger(); }}
             >
               📊 كشف حسابي ورصيدي
             </button>
-            <button 
+            <button
               className={`tab-btn ${activeTab === 'rep-new-tx' ? 'active' : ''}`}
               onClick={() => { setActiveTab('rep-new-tx'); setTxSuccess(null); setTxError(''); }}
             >
@@ -2545,7 +2545,7 @@ const [showCarModal, setShowCarModal] = useState(false);
           </>
         ) : (
           <>
-            <button 
+            <button
               className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
               onClick={() => { setActiveTab('dashboard'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
             >
@@ -2553,19 +2553,19 @@ const [showCarModal, setShowCarModal] = useState(false);
             </button>
 
             {currentUser.role === 'manager' && (
-              <button 
+              <button
                 className={`tab-btn ${activeTab === 'pending-approvals' ? 'active' : ''}`}
                 onClick={() => { setActiveTab('pending-approvals'); loadPendingTx(); loadRejectedTx(); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
                 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
               >
                 📥 طلبات الصرف المعلقة
                 {pendingTx.length > 0 && (
-                  <span style={{ 
-                    background: 'var(--danger)', color: '#fff', 
-                    fontSize: '0.75rem', fontWeight: 'bold', 
+                  <span style={{
+                    background: 'var(--danger)', color: '#fff',
+                    fontSize: '0.75rem', fontWeight: 'bold',
                     padding: '0.15rem 0.45rem', borderRadius: '50px',
                     boxShadow: '0 0 10px rgba(239,68,68,0.5)',
-                    animation: 'pulse 1.5s infinite' 
+                    animation: 'pulse 1.5s infinite'
                   }}>
                     {pendingTx.length}
                   </span>
@@ -2573,7 +2573,7 @@ const [showCarModal, setShowCarModal] = useState(false);
               </button>
             )}
 
-            <button 
+            <button
               className={`tab-btn ${activeTab === 'transactions' ? 'active' : ''}`}
               onClick={() => { setActiveTab('transactions'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
             >
@@ -2581,14 +2581,14 @@ const [showCarModal, setShowCarModal] = useState(false);
             </button>
 
             {currentUser.role === 'manager' ? (
-              <button 
+              <button
                 className={`tab-btn ${activeTab === 'agencies' ? 'active' : ''}`}
                 onClick={() => { setActiveTab('agencies'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
               >
                 🏢 التوكيلات
               </button>
             ) : (
-              <button 
+              <button
                 className={`tab-btn ${activeTab === 'agencies' ? 'active' : ''}`}
                 onClick={() => { setActiveTab('agencies'); setSelectedRepLedger(null); handleViewAgencyLedger(currentUser.assigned_agency_id); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
               >
@@ -2597,7 +2597,7 @@ const [showCarModal, setShowCarModal] = useState(false);
             )}
 
             {(currentUser.role === 'manager' || currentUser.role === 'accountant') && (
-              <button 
+              <button
                 className={`tab-btn ${activeTab === 'banks' ? 'active' : ''}`}
                 onClick={() => { setActiveTab('banks'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
               >
@@ -2606,7 +2606,7 @@ const [showCarModal, setShowCarModal] = useState(false);
             )}
 
             {(currentUser.role === 'manager' || currentUser.role === 'accountant') && (
-              <button 
+              <button
                 className={`tab-btn ${activeTab === 'companies' ? 'active' : ''}`}
                 onClick={() => { setActiveTab('companies'); loadCompanies(); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
               >
@@ -2615,7 +2615,7 @@ const [showCarModal, setShowCarModal] = useState(false);
             )}
 
             {(currentUser.role === 'manager' || currentUser.role === 'accountant') && (
-              <button 
+              <button
                 className={`tab-btn ${activeTab === 'loans' ? 'active' : ''}`}
                 onClick={() => { setActiveTab('loans'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
               >
@@ -2624,7 +2624,7 @@ const [showCarModal, setShowCarModal] = useState(false);
             )}
 
             {(currentUser.role === 'manager' || currentUser.role === 'accountant') && (
-              <button 
+              <button
                 className={`tab-btn ${activeTab === 'payroll' ? 'active' : ''}`}
                 onClick={() => { setActiveTab('payroll'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
               >
@@ -2634,7 +2634,7 @@ const [showCarModal, setShowCarModal] = useState(false);
 
 
             {currentUser.role === 'manager' && (
-              <button 
+              <button
                 className={`tab-btn ${activeTab === 'users' ? 'active' : ''}`}
                 onClick={() => { setActiveTab('users'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
               >
@@ -2643,7 +2643,7 @@ const [showCarModal, setShowCarModal] = useState(false);
             )}
 
             {currentUser.role === 'manager' && (
-              <button 
+              <button
                 className={`tab-btn ${activeTab === 'daily-report' ? 'active' : ''}`}
                 onClick={() => { setActiveTab('daily-report'); handleFetchDailyReport(); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
               >
@@ -2652,7 +2652,7 @@ const [showCarModal, setShowCarModal] = useState(false);
             )}
 
             {currentUser.role === 'manager' && (
-              <button 
+              <button
                 className={`tab-btn ${activeTab === 'audit-logs' ? 'active' : ''}`}
                 onClick={() => { setActiveTab('audit-logs'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
               >
@@ -2660,28 +2660,28 @@ const [showCarModal, setShowCarModal] = useState(false);
               </button>
             )}
 
-            <button 
+            <button
               className={`tab-btn ${activeTab === 'reps' ? 'active' : ''}`}
               onClick={() => { setActiveTab('reps'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
             >
               👥 الموظفين والمناديب
             </button>
 
-            <button 
+            <button
               className={`tab-btn ${activeTab === 'car-expenses' ? 'active' : ''}`}
               onClick={() => { setActiveTab('car-expenses'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
             >
               🚗 مصاريف السيارات
             </button>
 
-            <button 
+            <button
               className={`tab-btn ${activeTab === 'attendance' ? 'active' : ''}`}
               onClick={() => { setActiveTab('attendance'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
             >
               🕒 بصمة الحضور ZKTeco
             </button>
 
-            <button 
+            <button
               className={`tab-btn ${activeTab === 'new-tx' ? 'active' : ''}`}
               onClick={() => { setActiveTab('new-tx'); setTxSuccess(null); setTxError(''); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
             >
@@ -2712,7 +2712,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                   <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#f59e0b', margin: 0 }}>تهيئة الخزنة العامة تلقائياً من الحركات</h3>
                 </div>
                 <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '1.5rem', lineHeight: '1.7' }}>
-                  النظام سيقوم بحساب <strong style={{color:'#fbbf24'}}>رصيد الخزنة الحالي والفئات النقدية تلقائياً</strong> من خلال جمع وطرح جميع عمليات الإيداع والصرف المسجلة بالنظام مع فئاتها النقدية — بدون أي إدخال يدوي.
+                  النظام سيقوم بحساب <strong style={{ color: '#fbbf24' }}>رصيد الخزنة الحالي والفئات النقدية تلقائياً</strong> من خلال جمع وطرح جميع عمليات الإيداع والصرف المسجلة بالنظام مع فئاتها النقدية — بدون أي إدخال يدوي.
                 </p>
 
                 {/* زر الحساب التلقائي */}
@@ -2739,9 +2739,9 @@ const [showCarModal, setShowCarModal] = useState(false);
                       }}
                     >
                       {initialBalanceLoading ? (
-                        <><span style={{fontSize:'1.3rem', animation:'spin 1s linear infinite'}}>⚙️</span> جاري الحساب التلقائي...</>
+                        <><span style={{ fontSize: '1.3rem', animation: 'spin 1s linear infinite' }}>⚙️</span> جاري الحساب التلقائي...</>
                       ) : (
-                        <><span style={{fontSize:'1.3rem'}}>🔄</span> احسب وهيئ الخزنة تلقائياً من الحركات</>
+                        <><span style={{ fontSize: '1.3rem' }}>🔄</span> احسب وهيئ الخزنة تلقائياً من الحركات</>
                       )}
                     </button>
                     <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
@@ -2880,7 +2880,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: dashboardData.summary.isAuditMatched ? '#34d399' : '#fbbf24', fontWeight: 'bold' }}>
                     <span>{dashboardData.summary.isAuditMatched ? '✅' : '🔍'}</span>
                     <span>
-                      {dashboardData.summary.isAuditMatched 
+                      {dashboardData.summary.isAuditMatched
                         ? 'فحص ودورة التدقيق: الرصيد الحسابي مطابق 100% للعد الفعلي بالخزنة'
                         : `تدقيق ومطابقة الخزنة: صافي حركات الوارد والمنصرف (${(dashboardData.summary.netTransactionBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م)`}
                     </span>
@@ -3015,9 +3015,9 @@ const [showCarModal, setShowCarModal] = useState(false);
                           <div>{tx.notes || 'لا يوجد'}</div>
                           {tx.receipt_image && (
                             <div style={{ marginTop: '0.3rem' }}>
-                              <a 
-                                href="#" 
-                                onClick={(e) => { e.preventDefault(); setActiveImageModal(tx.receipt_image); }} 
+                              <a
+                                href="#"
+                                onClick={(e) => { e.preventDefault(); setActiveImageModal(tx.receipt_image); }}
                                 style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.78rem', color: '#a78bfa', textDecoration: 'underline', fontWeight: 600 }}
                               >
                                 📎 عرض الإيصال
@@ -3105,15 +3105,15 @@ const [showCarModal, setShowCarModal] = useState(false);
                     {pendingTx.map((tx) => {
                       const subTypeLabel = tx.withdrawal_sub_type === 'car' ? '🚗 مصاريف سيارات'
                         : tx.withdrawal_sub_type === 'car_gas' ? '⛽ سيارة (جاز)'
-                        : tx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)'
-                        : tx.withdrawal_sub_type === 'car_other' ? '🔧 سيارة (مصاريف أخرى)'
-                        : tx.withdrawal_sub_type === 'salary' ? '💼 راتب'
-                        : tx.withdrawal_sub_type === 'commission' ? '💰 عمولة'
-                        : tx.withdrawal_sub_type === 'loan' ? '💸 سلفة'
-                        : tx.withdrawal_sub_type === 'direct_rent' ? '🏢 إيجار'
-                        : tx.withdrawal_sub_type === 'direct_operational' ? '🔧 تشغيل'
-                        : tx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى'
-                        : tx.withdrawal_sub_type === 'other' ? '📤 صرف عام' : '📤 صرف';
+                          : tx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)'
+                            : tx.withdrawal_sub_type === 'car_other' ? '🔧 سيارة (مصاريف أخرى)'
+                              : tx.withdrawal_sub_type === 'salary' ? '💼 راتب'
+                                : tx.withdrawal_sub_type === 'commission' ? '💰 عمولة'
+                                  : tx.withdrawal_sub_type === 'loan' ? '💸 سلفة'
+                                    : tx.withdrawal_sub_type === 'direct_rent' ? '🏢 إيجار'
+                                      : tx.withdrawal_sub_type === 'direct_operational' ? '🔧 تشغيل'
+                                        : tx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى'
+                                          : tx.withdrawal_sub_type === 'other' ? '📤 صرف عام' : '📤 صرف';
 
                       return (
                         <tr key={tx.id} style={{ background: 'rgba(245, 158, 11, 0.02)' }}>
@@ -3170,9 +3170,9 @@ const [showCarModal, setShowCarModal] = useState(false);
                             <div>{tx.notes || '—'}</div>
                             {tx.receipt_image && (
                               <div style={{ marginTop: '0.3rem' }}>
-                                <a 
-                                  href="#" 
-                                  onClick={(e) => { e.preventDefault(); setActiveImageModal(tx.receipt_image); }} 
+                                <a
+                                  href="#"
+                                  onClick={(e) => { e.preventDefault(); setActiveImageModal(tx.receipt_image); }}
                                   style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.78rem', color: '#a78bfa', textDecoration: 'underline', fontWeight: 600 }}
                                 >
                                   📎 عرض الإيصال المرفق
@@ -3287,15 +3287,15 @@ const [showCarModal, setShowCarModal] = useState(false);
                       {rejectedTx.map((tx) => {
                         const subTypeLabel = tx.withdrawal_sub_type === 'car' ? '🚗 مصاريف سيارات'
                           : tx.withdrawal_sub_type === 'car_gas' ? '⛽ سيارة (جاز)'
-                          : tx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)'
-                          : tx.withdrawal_sub_type === 'car_other' ? '🔧 سيارة (مصاريف أخرى)'
-                          : tx.withdrawal_sub_type === 'salary' ? '💼 راتب'
-                          : tx.withdrawal_sub_type === 'commission' ? '💰 عمولة'
-                          : tx.withdrawal_sub_type === 'loan' ? '💸 سلفة'
-                          : tx.withdrawal_sub_type === 'direct_rent' ? '🏢 إيجار'
-                          : tx.withdrawal_sub_type === 'direct_operational' ? '🔧 تشغيل'
-                          : tx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى'
-                          : tx.withdrawal_sub_type === 'other' ? '📤 صرف عام' : '📤 صرف';
+                            : tx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)'
+                              : tx.withdrawal_sub_type === 'car_other' ? '🔧 سيارة (مصاريف أخرى)'
+                                : tx.withdrawal_sub_type === 'salary' ? '💼 راتب'
+                                  : tx.withdrawal_sub_type === 'commission' ? '💰 عمولة'
+                                    : tx.withdrawal_sub_type === 'loan' ? '💸 سلفة'
+                                      : tx.withdrawal_sub_type === 'direct_rent' ? '🏢 إيجار'
+                                        : tx.withdrawal_sub_type === 'direct_operational' ? '🔧 تشغيل'
+                                          : tx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى'
+                                            : tx.withdrawal_sub_type === 'other' ? '📤 صرف عام' : '📤 صرف';
 
                         return (
                           <tr key={tx.id} style={{ background: 'rgba(244, 63, 94, 0.02)' }}>
@@ -3330,9 +3330,9 @@ const [showCarModal, setShowCarModal] = useState(false);
                               <div>{tx.notes || '—'}</div>
                               {tx.receipt_image && (
                                 <div style={{ marginTop: '0.3rem' }}>
-                                  <a 
-                                    href="#" 
-                                    onClick={(e) => { e.preventDefault(); setActiveImageModal(tx.receipt_image); }} 
+                                  <a
+                                    href="#"
+                                    onClick={(e) => { e.preventDefault(); setActiveImageModal(tx.receipt_image); }}
                                     style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.78rem', color: '#a78bfa', textDecoration: 'underline', fontWeight: 600 }}
                                   >
                                     📎 عرض الصورة المصورة
@@ -3429,7 +3429,7 @@ const [showCarModal, setShowCarModal] = useState(false);
               return false;
             });
             if (unconfirmedTx.length === 0) return null;
-            
+
             return (
               <div className="panel" style={{ background: 'rgba(245, 158, 11, 0.04)', border: '1px solid rgba(245, 158, 11, 0.25)', marginBottom: '2rem', marginTop: '1rem', boxShadow: 'none' }}>
                 <div className="panel-header" style={{ borderBottom: '1px solid rgba(245, 158, 11, 0.15)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '1rem' }}>
@@ -3440,7 +3440,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                     تتطلب إجراءً
                   </span>
                 </div>
-                
+
                 <div className="table-container" style={{ margin: 0, borderRadius: 0, border: 'none', background: 'transparent' }}>
                   <table>
                     <thead>
@@ -3470,16 +3470,16 @@ const [showCarModal, setShowCarModal] = useState(false);
                             <span className={`badge badge-${tx.type}`}>
                               {tx.type === 'deposit' ? '📥 توريد' : (
                                 tx.withdrawal_sub_type === 'car' ? '🚗 سيارة' :
-                                tx.withdrawal_sub_type === 'car_gas' ? '⛽ سيارة (جاز)' :
-                                tx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)' :
-                                tx.withdrawal_sub_type === 'car_other' ? '🔧 سيارة (أخرى)' :
-                                tx.withdrawal_sub_type === 'salary' ? '💼 راتب' :
-                                tx.withdrawal_sub_type === 'commission' ? '💰 عمولة' :
-                                tx.withdrawal_sub_type === 'loan' ? '💸 سلفة' :
-                                tx.withdrawal_sub_type === 'direct_rent' ? '🏢 إيجار' :
-                                tx.withdrawal_sub_type === 'direct_operational' ? '🔧 تشغيل' :
-                                tx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى' :
-                                tx.withdrawal_sub_type === 'other' ? '📤 صرف عام' : '📤 صرف'
+                                  tx.withdrawal_sub_type === 'car_gas' ? '⛽ سيارة (جاز)' :
+                                    tx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)' :
+                                      tx.withdrawal_sub_type === 'car_other' ? '🔧 سيارة (أخرى)' :
+                                        tx.withdrawal_sub_type === 'salary' ? '💼 راتب' :
+                                          tx.withdrawal_sub_type === 'commission' ? '💰 عمولة' :
+                                            tx.withdrawal_sub_type === 'loan' ? '💸 سلفة' :
+                                              tx.withdrawal_sub_type === 'direct_rent' ? '🏢 إيجار' :
+                                                tx.withdrawal_sub_type === 'direct_operational' ? '🔧 تشغيل' :
+                                                  tx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى' :
+                                                    tx.withdrawal_sub_type === 'other' ? '📤 صرف عام' : '📤 صرف'
                               )}
                             </span>
                           </td>
@@ -3490,9 +3490,9 @@ const [showCarModal, setShowCarModal] = useState(false);
                             <div>{tx.notes || '—'}</div>
                             {tx.receipt_image && (
                               <div style={{ marginTop: '0.3rem' }}>
-                                <a 
-                                  href="#" 
-                                  onClick={(e) => { e.preventDefault(); setActiveImageModal(tx.receipt_image); }} 
+                                <a
+                                  href="#"
+                                  onClick={(e) => { e.preventDefault(); setActiveImageModal(tx.receipt_image); }}
                                   style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.78rem', color: '#a78bfa', textDecoration: 'underline', fontWeight: 600 }}
                                 >
                                   📎 عرض الإيصال
@@ -3531,9 +3531,9 @@ const [showCarModal, setShowCarModal] = useState(false);
                                           loadDashboard();
                                           loadTransactions();
                                           loadCarExpenses();
-                    if (selectedCarLedger) {
-                      loadCarLedger(selectedCarLedger);
-                    }
+                                          if (selectedCarLedger) {
+                                            loadCarLedger(selectedCarLedger);
+                                          }
                                         } else {
                                           const err = await res.json();
                                           alert(err.error || 'حدث خطأ أثناء تأكيد الاستلام');
@@ -3612,8 +3612,8 @@ const [showCarModal, setShowCarModal] = useState(false);
           <form className="filter-bar" onSubmit={handleApplyFilters}>
             <div className="form-group">
               <label>نوع العملية</label>
-              <select 
-                value={filters.type} 
+              <select
+                value={filters.type}
                 onChange={(e) => setFilters({ ...filters, type: e.target.value })}
               >
                 <option value="">الكل</option>
@@ -3623,8 +3623,8 @@ const [showCarModal, setShowCarModal] = useState(false);
             </div>
             <div className="form-group">
               <label>حالة العملية</label>
-              <select 
-                value={filters.status || ''} 
+              <select
+                value={filters.status || ''}
                 onChange={(e) => setFilters({ ...filters, status: e.target.value })}
               >
                 <option value="">مكتملة ومقبولة</option>
@@ -3635,8 +3635,8 @@ const [showCarModal, setShowCarModal] = useState(false);
             </div>
             <div className="form-group">
               <label>المندوب</label>
-              <select 
-                value={filters.repId} 
+              <select
+                value={filters.repId}
                 onChange={(e) => setFilters({ ...filters, repId: e.target.value, bankId: '' })}
               >
                 <option value="">كل المناديب</option>
@@ -3647,8 +3647,8 @@ const [showCarModal, setShowCarModal] = useState(false);
             </div>
             <div className="form-group">
               <label>الحساب البنكي</label>
-              <select 
-                value={filters.bankId} 
+              <select
+                value={filters.bankId}
                 onChange={(e) => setFilters({ ...filters, bankId: e.target.value, repId: '' })}
               >
                 <option value="">كل البنوك</option>
@@ -3659,16 +3659,16 @@ const [showCarModal, setShowCarModal] = useState(false);
             </div>
             <div className="form-group">
               <label>من تاريخ</label>
-              <input 
-                type="date" 
+              <input
+                type="date"
                 value={filters.startDate}
                 onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
               />
             </div>
             <div className="form-group">
               <label>إلى تاريخ</label>
-              <input 
-                type="date" 
+              <input
+                type="date"
                 value={filters.endDate}
                 onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
               />
@@ -3735,16 +3735,16 @@ const [showCarModal, setShowCarModal] = useState(false);
                         <span className={`badge badge-${tx.type}`}>
                           {tx.type === 'deposit' ? '📥 توريد' : tx.type === 'withdrawal' ? (
                             tx.withdrawal_sub_type === 'car' ? '🚗 سيارة' :
-                            tx.withdrawal_sub_type === 'car_gas' ? '⛽ سيارة (جاز)' :
-                            tx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)' :
-                            tx.withdrawal_sub_type === 'car_other' ? '🔧 سيارة (أخرى)' :
-                            tx.withdrawal_sub_type === 'salary' ? '💼 راتب' :
-                            tx.withdrawal_sub_type === 'commission' ? '💰 عمولة' :
-                            tx.withdrawal_sub_type === 'loan' ? '💸 سلفة' :
-                            tx.withdrawal_sub_type === 'direct_rent' ? '🏢 إيجار' :
-                            tx.withdrawal_sub_type === 'direct_operational' ? '🔧 تشغيل' :
-                            tx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى' :
-                            tx.withdrawal_sub_type === 'other' ? '📤 صرف عام' : '📤 صرف'
+                              tx.withdrawal_sub_type === 'car_gas' ? '⛽ سيارة (جاز)' :
+                                tx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)' :
+                                  tx.withdrawal_sub_type === 'car_other' ? '🔧 سيارة (أخرى)' :
+                                    tx.withdrawal_sub_type === 'salary' ? '💼 راتب' :
+                                      tx.withdrawal_sub_type === 'commission' ? '💰 عمولة' :
+                                        tx.withdrawal_sub_type === 'loan' ? '💸 سلفة' :
+                                          tx.withdrawal_sub_type === 'direct_rent' ? '🏢 إيجار' :
+                                            tx.withdrawal_sub_type === 'direct_operational' ? '🔧 تشغيل' :
+                                              tx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى' :
+                                                tx.withdrawal_sub_type === 'other' ? '📤 صرف عام' : '📤 صرف'
                           ) : tx.type === 'company_transfer' ? '🏢 حوالة' : '🔄 تسوية'}
                         </span>
                       </td>
@@ -3958,7 +3958,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                   </div>
                   <button className="btn btn-secondary" onClick={() => { setSelectedRepLedger(null); localStorage.removeItem('selectedRepLedgerId'); }}>العودة للقائمة ⬅</button>
                 </div>
-                
+
                 <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
                   <div className="metric-card deposits" style={{ padding: '1rem', background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.2)' }}>
                     <span className="metric-title" style={{ fontSize: '0.8rem', color: '#34d399' }}>📥 توريدات الخزينة (نقدي)</span>
@@ -4004,17 +4004,17 @@ const [showCarModal, setShowCarModal] = useState(false);
                               <span className={`badge badge-${tx.type}`}>
                                 {tx.type === 'exchange' ? '🔄 تسوية فئات' : tx.type === 'deposit' ? '📥 توريد' : '📤 صرف'}
                                 {tx.type !== 'exchange' && (
-                                  tx.withdrawal_sub_type === 'car' ? ' - سيارة' : 
-                                  tx.withdrawal_sub_type === 'car_gas' ? ' - سيارة (جاز)' : 
-                                  tx.withdrawal_sub_type === 'car_oil' ? ' - سيارة (زيت)' : 
-                                  tx.withdrawal_sub_type === 'car_other' ? ' - سيارة (مصاريف أخرى)' : 
-                                  tx.withdrawal_sub_type === 'salary' ? ' - راتب' : 
-                                  tx.withdrawal_sub_type === 'commission' ? ' - عمولة' :
-                                  tx.withdrawal_sub_type === 'loan' ? ' - سلفة' :
-                                  tx.withdrawal_sub_type === 'direct_rent' ? ' - إيجار' :
-                                  tx.withdrawal_sub_type === 'direct_operational' ? ' - تشغيل' :
-                                  tx.withdrawal_sub_type === 'direct_other' ? ' - عامة أخرى' :
-                                  tx.withdrawal_sub_type === 'other' ? ' - صرف عام' : ''
+                                  tx.withdrawal_sub_type === 'car' ? ' - سيارة' :
+                                    tx.withdrawal_sub_type === 'car_gas' ? ' - سيارة (جاز)' :
+                                      tx.withdrawal_sub_type === 'car_oil' ? ' - سيارة (زيت)' :
+                                        tx.withdrawal_sub_type === 'car_other' ? ' - سيارة (مصاريف أخرى)' :
+                                          tx.withdrawal_sub_type === 'salary' ? ' - راتب' :
+                                            tx.withdrawal_sub_type === 'commission' ? ' - عمولة' :
+                                              tx.withdrawal_sub_type === 'loan' ? ' - سلفة' :
+                                                tx.withdrawal_sub_type === 'direct_rent' ? ' - إيجار' :
+                                                  tx.withdrawal_sub_type === 'direct_operational' ? ' - تشغيل' :
+                                                    tx.withdrawal_sub_type === 'direct_other' ? ' - عامة أخرى' :
+                                                      tx.withdrawal_sub_type === 'other' ? ' - صرف عام' : ''
                                 )}
                               </span>
                             </td>
@@ -4353,12 +4353,12 @@ const [showCarModal, setShowCarModal] = useState(false);
 
 
 
-            
+
 
       {/* CAR EXPENSES TAB */}
       {activeTab === 'car-expenses' && (
         <div className="car-expenses-container">
-          
+
           {/* Metrics Summary Row */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginBottom: '1.5rem' }}>
             <div style={{
@@ -4447,7 +4447,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #334155', paddingBottom: '1rem' }}>
                   <div>
                     <h2 style={{ margin: 0, fontSize: '1.4rem', color: '#f8fafc', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      📋 كشف الحساب التفصيلي للسيارة: 
+                      📋 كشف الحساب التفصيلي للسيارة:
                       <span style={{ background: '#0f172a', padding: '0.2rem 0.8rem', borderRadius: '10px', border: '1px solid #334155', color: '#60a5fa' }}>
                         {selectedCarLedger.plate_letters ? `${selectedCarLedger.plate_letters} - ${selectedCarLedger.plate_numbers}` : selectedCarLedger.plate_number}
                         {selectedCarLedger.driver_name ? ` (👤 السائق: ${selectedCarLedger.driver_name})` : ''}
@@ -4455,8 +4455,8 @@ const [showCarModal, setShowCarModal] = useState(false);
                     </h2>
                   </div>
                   <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                    <button 
-                      className="btn btn-secondary" 
+                    <button
+                      className="btn btn-secondary"
                       style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
                       onClick={() => {
                         const printWin = window.open('', '_blank');
@@ -4515,7 +4515,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                     >
                       🖨️ طباعة كشف الحساب
                     </button>
-                    <button 
+                    <button
                       onClick={() => setSelectedCarLedger(null)}
                       style={{ background: 'none', border: 'none', fontSize: '1.6rem', cursor: 'pointer', color: '#94a3b8', fontWeight: 'bold' }}
                     >
@@ -4603,26 +4603,26 @@ const [showCarModal, setShowCarModal] = useState(false);
                               </td>
                               <td style={{ padding: '0.75rem', whiteSpace: 'nowrap', textAlign: 'center' }}>
                                 <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'center' }}>
-                                  <button 
-                                    className="btn btn-secondary btn-sm" 
-                                    onClick={() => handlePrintReceipt(tx)} 
+                                  <button
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => handlePrintReceipt(tx)}
                                     title="طباعة إيصال الصرف"
                                     style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: '#0284c7', color: '#fff', border: 'none' }}
                                   >
                                     🖨️ طباعة
                                   </button>
-                                  <button 
-                                    className="btn btn-secondary btn-sm" 
-                                    onClick={() => { setSelectedCarLedger(null); setEditingTx(tx); }} 
+                                  <button
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => { setSelectedCarLedger(null); setEditingTx(tx); }}
                                     title="تعديل المعاملة"
                                     style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: '#3b82f6', color: '#fff', border: 'none' }}
                                   >
                                     ✏️ تعديل
                                   </button>
                                   {currentUser?.role === 'manager' && (
-                                    <button 
-                                      className="btn btn-secondary btn-sm" 
-                                      onClick={() => handleDeleteCarTx(tx)} 
+                                    <button
+                                      className="btn btn-secondary btn-sm"
+                                      onClick={() => handleDeleteCarTx(tx)}
                                       title="حذف المعاملة"
                                       style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: '#ef4444', color: '#fff', border: 'none' }}
                                     >
@@ -4765,7 +4765,7 @@ const [showCarModal, setShowCarModal] = useState(false);
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1rem', marginTop: '1rem' }}>
               <div className="form-group">
                 <label>السيارة</label>
-                <select 
+                <select
                   value={carFilters.carId || ''}
                   onChange={(e) => setCarFilters({ ...carFilters, carId: e.target.value })}
                 >
@@ -4781,7 +4781,7 @@ const [showCarModal, setShowCarModal] = useState(false);
 
               <div className="form-group">
                 <label>بند الصرف الفرعي</label>
-                <select 
+                <select
                   value={carFilters.subType || ''}
                   onChange={(e) => setCarFilters({ ...carFilters, subType: e.target.value })}
                 >
@@ -4795,7 +4795,7 @@ const [showCarModal, setShowCarModal] = useState(false);
 
               <div className="form-group">
                 <label>التوكيل</label>
-                <select 
+                <select
                   value={carFilters.agencyId}
                   onChange={(e) => setCarFilters({ ...carFilters, agencyId: e.target.value })}
                 >
@@ -4808,7 +4808,7 @@ const [showCarModal, setShowCarModal] = useState(false);
 
               <div className="form-group">
                 <label>المشرف</label>
-                <select 
+                <select
                   value={carFilters.supervisorId}
                   onChange={(e) => setCarFilters({ ...carFilters, supervisorId: e.target.value })}
                 >
@@ -4821,7 +4821,7 @@ const [showCarModal, setShowCarModal] = useState(false);
 
               <div className="form-group">
                 <label>المندوب</label>
-                <select 
+                <select
                   value={carFilters.repId}
                   onChange={(e) => setCarFilters({ ...carFilters, repId: e.target.value })}
                 >
@@ -4834,7 +4834,7 @@ const [showCarModal, setShowCarModal] = useState(false);
 
               <div className="form-group">
                 <label>من تاريخ</label>
-                <input 
+                <input
                   type="date"
                   value={carFilters.startDate}
                   onChange={(e) => setCarFilters({ ...carFilters, startDate: e.target.value })}
@@ -4843,7 +4843,7 @@ const [showCarModal, setShowCarModal] = useState(false);
 
               <div className="form-group">
                 <label>إلى تاريخ</label>
-                <input 
+                <input
                   type="date"
                   value={carFilters.endDate}
                   onChange={(e) => setCarFilters({ ...carFilters, endDate: e.target.value })}
@@ -4851,7 +4851,7 @@ const [showCarModal, setShowCarModal] = useState(false);
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
-              <button 
+              <button
                 className="btn btn-secondary"
                 onClick={() => setCarFilters({ carId: '', repId: '', supervisorId: '', agencyId: '', startDate: '', endDate: '', subType: '' })}
               >
@@ -4900,9 +4900,9 @@ const [showCarModal, setShowCarModal] = useState(false);
                           <td>
                             <span style={{ fontWeight: 'bold', color: 'var(--warning)' }}>
                               {tx.withdrawal_sub_type === 'car_gas' ? '⛽ جاز'
-                               : tx.withdrawal_sub_type === 'car_oil' ? '🛢️ زيت'
-                               : tx.withdrawal_sub_type === 'car_other' ? '🔧 مصاريف أخرى'
-                               : '🚗 عام'}
+                                : tx.withdrawal_sub_type === 'car_oil' ? '🛢️ زيت'
+                                  : tx.withdrawal_sub_type === 'car_other' ? '🔧 مصاريف أخرى'
+                                    : '🚗 عام'}
                             </span>
                           </td>
                           <td style={{ color: 'var(--danger)', fontWeight: 800 }}>
@@ -4976,17 +4976,17 @@ const [showCarModal, setShowCarModal] = useState(false);
             <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
               <div className="success-checkmark">✓</div>
               <h3 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '1rem' }}>تم تسجيل العملية بنجاح!</h3>
-              
+
               <div style={{ background: 'rgba(255,255,255,0.03)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)', margin: '1.5rem 0', textAlign: 'right' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
                   <span style={{ color: 'var(--text-secondary)' }}>نوع الحركة:</span>
                   <span className={`badge badge-${txSuccess.type}`} style={{ fontSize: '0.85rem' }}>
-                    {txSuccess.type === 'deposit' 
-                      ? '📥 توريد نقدي / كاش' 
-                      : txSuccess.type === 'withdrawal' 
-                        ? '📤 صرف نقدي' 
-                        : txSuccess.type === 'company_transfer' 
-                          ? '🏢 حوالة لشركة' 
+                    {txSuccess.type === 'deposit'
+                      ? '📥 توريد نقدي / كاش'
+                      : txSuccess.type === 'withdrawal'
+                        ? '📤 صرف نقدي'
+                        : txSuccess.type === 'company_transfer'
+                          ? '🏢 حوالة لشركة'
                           : '🔄 تسوية وفك فئات'}
                   </span>
                 </div>
@@ -5042,37 +5042,37 @@ const [showCarModal, setShowCarModal] = useState(false);
             /* FORM DISPLAY */
             <form onSubmit={handleAddTransaction}>
               {txError && <div className="alert alert-error">⚠️ {txError}</div>}
-              
+
               {/* Type Switcher */}
               <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                 <label>نوع المعاملة</label>
                 <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className={`btn ${newTx.type === 'deposit' ? 'btn-primary' : 'btn-secondary'}`}
                     style={{ flex: 1, minWidth: '120px', background: newTx.type === 'deposit' ? 'var(--success)' : '', boxShadow: newTx.type === 'deposit' ? '0 4px 12px var(--success-glow)' : '' }}
                     onClick={() => setNewTx(prev => ({ ...prev, type: 'deposit' }))}
                   >
                     📥 توريد (دخول)
                   </button>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className={`btn ${newTx.type === 'withdrawal' ? 'btn-primary' : 'btn-secondary'}`}
                     style={{ flex: 1, minWidth: '120px', background: newTx.type === 'withdrawal' ? 'var(--danger)' : '', boxShadow: newTx.type === 'withdrawal' ? '0 4px 12px var(--danger-glow)' : '' }}
                     onClick={() => setNewTx(prev => ({ ...prev, type: 'withdrawal' }))}
                   >
                     📤 صرف (خروج)
                   </button>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className={`btn ${newTx.type === 'exchange' ? 'btn-primary' : 'btn-secondary'}`}
                     style={{ flex: 1, minWidth: '120px', background: newTx.type === 'exchange' ? '#7c3aed' : '', boxShadow: newTx.type === 'exchange' ? '0 4px 12px rgba(124, 58, 237, 0.2)' : '' }}
                     onClick={() => { setNewTx(prev => ({ ...prev, type: 'exchange', repId: '', bankId: '', amount: '', cashAmount: '', bankTransferAmount: '' })); setTxSourceType('rep'); setSearchRepQuery(''); }}
                   >
                     🔄 فك / تسوية
                   </button>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className={`btn ${newTx.type === 'company_transfer' ? 'btn-primary' : 'btn-secondary'}`}
                     style={{ flex: 1, minWidth: '120px', background: newTx.type === 'company_transfer' ? '#06b6d4' : '', color: newTx.type === 'company_transfer' ? '#fff' : '', boxShadow: newTx.type === 'company_transfer' ? '0 4px 12px rgba(6, 182, 212, 0.3)' : '' }}
                     onClick={() => { setNewTx(prev => ({ ...prev, type: 'company_transfer', repId: '', bankId: '', companyId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '' })); setTxSourceType('bank'); setSearchRepQuery(''); }}
@@ -5087,8 +5087,8 @@ const [showCarModal, setShowCarModal] = useState(false);
                 <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                   <label>{newTx.type === 'withdrawal' ? 'جهة الصرف' : 'الجهة المعنية بالعملية'}</label>
                   <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       className={`btn ${txSourceType === 'rep' ? 'btn-primary' : 'btn-secondary'}`}
                       style={{ flex: 1 }}
                       onClick={() => { setTxSourceType('rep'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
@@ -5097,16 +5097,16 @@ const [showCarModal, setShowCarModal] = useState(false);
                     </button>
                     {newTx.type === 'withdrawal' && (
                       <>
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           className={`btn ${txSourceType === 'bank' ? 'btn-primary' : 'btn-secondary'}`}
                           style={{ flex: 1 }}
                           onClick={() => { setTxSourceType('bank'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '', payment_method: 'cash' })); setSearchRepQuery(''); }}
                         >
                           🏦 إيداع في بنك
                         </button>
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           className={`btn ${txSourceType === 'direct' ? 'btn-primary' : 'btn-secondary'}`}
                           style={{ flex: 1 }}
                           onClick={() => { setTxSourceType('direct'); setNewTx(prev => ({ ...prev, repId: '', agencyId: '', withdrawal_sub_type: '', payment_method: 'cash' })); setSearchRepQuery(''); }}
@@ -5117,16 +5117,16 @@ const [showCarModal, setShowCarModal] = useState(false);
                     )}
                     {newTx.type === 'deposit' && (
                       <>
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           className={`btn ${txSourceType === 'bank' ? 'btn-primary' : 'btn-secondary'}`}
                           style={{ flex: 1 }}
                           onClick={() => { setTxSourceType('bank'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
                         >
                           🏦 توريد من بنك
                         </button>
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           className={`btn ${txSourceType === 'direct' ? 'btn-primary' : 'btn-secondary'}`}
                           style={{ flex: 1 }}
                           onClick={() => { setTxSourceType('direct'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
@@ -5144,16 +5144,16 @@ const [showCarModal, setShowCarModal] = useState(false);
                 <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                   <label>مصدر التحويل للشركة</label>
                   <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       className={`btn ${txSourceType === 'bank' ? 'btn-primary' : 'btn-secondary'}`}
                       style={{ flex: 1 }}
                       onClick={() => { setTxSourceType('bank'); setNewTx(prev => ({ ...prev, bankId: '' })); }}
                     >
                       🏦 من البنك (حوالة بنكية)
                     </button>
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       className={`btn ${txSourceType === 'safe' ? 'btn-primary' : 'btn-secondary'}`}
                       style={{ flex: 1 }}
                       onClick={() => { setTxSourceType('safe'); setNewTx(prev => ({ ...prev, bankId: '' })); }}
@@ -5168,7 +5168,7 @@ const [showCarModal, setShowCarModal] = useState(false);
               {newTx.type !== 'exchange' && newTx.type !== 'company_transfer' && txSourceType === 'rep' && (
                 <div className="form-group" style={{ marginBottom: '1.5rem', position: 'relative' }}>
                   <label>المندوب المعني بالعملية <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <input 
+                  <input
                     type="text"
                     placeholder="ابحث بكتابة اسم المندوب أو كوده..."
                     value={searchRepQuery}
@@ -5182,18 +5182,18 @@ const [showCarModal, setShowCarModal] = useState(false);
                     onFocus={() => setShowRepSuggestions(true)}
                     required
                   />
-                  
+
                   {/* Suggestions List */}
                   {showRepSuggestions && searchRepQuery && (
                     <div className="suggestions-box">
                       {reps
-                        .filter(r => 
-                          r.name.toLowerCase().includes(searchRepQuery.toLowerCase()) || 
+                        .filter(r =>
+                          r.name.toLowerCase().includes(searchRepQuery.toLowerCase()) ||
                           r.code.toLowerCase().includes(searchRepQuery.toLowerCase())
                         )
                         .map(rep => (
-                          <div 
-                            key={rep.id} 
+                          <div
+                            key={rep.id}
                             className="suggestion-item"
                             onClick={() => {
                               setNewTx(prev => ({ ...prev, repId: rep.id }));
@@ -5205,15 +5205,15 @@ const [showCarModal, setShowCarModal] = useState(false);
                           </div>
                         ))
                       }
-                      {reps.filter(r => 
-                        r.name.toLowerCase().includes(searchRepQuery.toLowerCase()) || 
+                      {reps.filter(r =>
+                        r.name.toLowerCase().includes(searchRepQuery.toLowerCase()) ||
                         r.code.toLowerCase().includes(searchRepQuery.toLowerCase())
                       ).length === 0 && (
-                        <div style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>لا توجد نتائج مطابقة</div>
-                      )}
+                          <div style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>لا توجد نتائج مطابقة</div>
+                        )}
                     </div>
                   )}
-                  
+
                   {newTx.repId && (
                     <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--primary)', fontWeight: 'bold' }}>
                       ✓ تم اختيار المندوب: {selectedRepName}
@@ -5225,7 +5225,7 @@ const [showCarModal, setShowCarModal] = useState(false);
               {/* Direct Safe Info Notice */}
               {txSourceType === 'direct' && (
                 <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px', border: '1px dashed var(--border-color)', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                  {newTx.type === 'withdrawal' 
+                  {newTx.type === 'withdrawal'
                     ? 'ℹ️ سيتم تسجيل العملية كحركة صرف نثريات ومصاريف عامة مباشرة دون ربطها بموظف.'
                     : 'ℹ️ سيتم تسجيل العملية كحركة توريد مباشرة بالخزينة دون ربطها بمندوب.'
                   }
@@ -5238,7 +5238,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                   {/* Bank selection */}
                   <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                     <label>البنك المورِّد منه <span style={{ color: 'var(--danger)' }}>*</span></label>
-                    <select 
+                    <select
                       value={newTx.bankId || ''}
                       onChange={(e) => setNewTx(prev => ({ ...prev, bankId: e.target.value }))}
                       required
@@ -5253,7 +5253,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                   {/* Agency selection */}
                   <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                     <label>التوكيل التابع له</label>
-                    <select 
+                    <select
                       value={newTx.agencyId || ''}
                       onChange={(e) => setNewTx(prev => ({ ...prev, agencyId: e.target.value }))}
                     >
@@ -5268,9 +5268,9 @@ const [showCarModal, setShowCarModal] = useState(false);
                   <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                     <label>قيمة المبلغ المورد من البنك <span style={{ color: 'var(--danger)' }}>*</span></label>
                     <div style={{ position: 'relative', marginTop: '0.25rem' }}>
-                      <input 
-                        type="number" 
-                        step="0.01" 
+                      <input
+                        type="number"
+                        step="0.01"
                         min="0.01"
                         placeholder="0.00"
                         value={newTx.amount}
@@ -5289,9 +5289,9 @@ const [showCarModal, setShowCarModal] = useState(false);
                     <div className="form-group">
                       <label>💵 المبلغ النقدي (الخزينة)</label>
                       <div style={{ position: 'relative', marginTop: '0.25rem' }}>
-                        <input 
-                          type="number" 
-                          step="0.01" 
+                        <input
+                          type="number"
+                          step="0.01"
                           min="0"
                           placeholder="0.00"
                           value={newTx.cashAmount}
@@ -5301,14 +5301,14 @@ const [showCarModal, setShowCarModal] = useState(false);
                         <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '0.8rem' }}>ج.م</span>
                       </div>
                     </div>
-                    
+
                     {/* Bank transfer portion */}
                     <div className="form-group">
                       <label>🏦 تحويل بنكي / كاش (محفظة)</label>
                       <div style={{ position: 'relative', marginTop: '0.25rem' }}>
-                        <input 
-                          type="number" 
-                          step="0.01" 
+                        <input
+                          type="number"
+                          step="0.01"
                           min="0"
                           placeholder="0.00"
                           value={newTx.bankTransferAmount}
@@ -5324,7 +5324,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                   {(parseFloat(newTx.bankTransferAmount) > 0) && (
                     <div className="form-group" style={{ marginBottom: '1rem' }}>
                       <label>الحساب البنكي / المحفظة المستلمة <span style={{ color: 'var(--danger)' }}>*</span></label>
-                      <select 
+                      <select
                         value={newTx.bankId}
                         onChange={(e) => setNewTx(prev => ({ ...prev, bankId: e.target.value }))}
                         required
@@ -5413,16 +5413,16 @@ const [showCarModal, setShowCarModal] = useState(false);
                     <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                       <label>طريقة / وسيلة الصرف <span style={{ color: 'var(--danger)' }}>*</span></label>
                       <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           className={`btn ${newTx.payment_method !== 'bank_transfer' ? 'btn-primary' : 'btn-secondary'}`}
                           style={{ flex: 1, background: newTx.payment_method !== 'bank_transfer' ? 'var(--success)' : '' }}
                           onClick={() => setNewTx(prev => ({ ...prev, payment_method: 'cash', bankId: '' }))}
                         >
                           💵 نقدي (من الخزنة العامة)
                         </button>
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           className={`btn ${newTx.payment_method === 'bank_transfer' ? 'btn-primary' : 'btn-secondary'}`}
                           style={{ flex: 1, background: newTx.payment_method === 'bank_transfer' ? '#7c3aed' : '' }}
                           onClick={() => setNewTx(prev => ({ ...prev, payment_method: 'bank_transfer' }))}
@@ -5441,7 +5441,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                   {txSourceType === 'bank' && (
                     <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                       <label>الحساب البنكي المودَع فيه (إيداع نقدية الخزينة) <span style={{ color: 'var(--danger)' }}>*</span></label>
-                      <select 
+                      <select
                         value={newTx.bankId || ''}
                         onChange={(e) => setNewTx(prev => ({ ...prev, bankId: e.target.value }))}
                         required
@@ -5458,7 +5458,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                     {newTx.payment_method === 'bank_transfer' && txSourceType !== 'bank' && (
                       <div className="form-group">
                         <label>البنك المصدر للصرف <span style={{ color: 'var(--danger)' }}>*</span></label>
-                        <select 
+                        <select
                           value={newTx.bankId || ''}
                           onChange={(e) => setNewTx(prev => ({ ...prev, bankId: e.target.value }))}
                           required
@@ -5474,7 +5474,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                     {txSourceType !== 'bank' && (
                       <div className="form-group">
                         <label>نوع الصرف <span style={{ color: 'var(--danger)' }}>*</span></label>
-                        <select 
+                        <select
                           value={newTx.withdrawal_sub_type && newTx.withdrawal_sub_type.startsWith('car') ? 'car' : (newTx.withdrawal_sub_type || '')}
                           onChange={(e) => {
                             const val = e.target.value;
@@ -5499,7 +5499,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem', paddingRight: '0.75rem', borderRight: '3px solid var(--primary)' }}>
                       <div className="form-group">
                         <label>السيارة <span style={{ color: 'var(--danger)' }}>*</span></label>
-                        <select 
+                        <select
                           value={newTx.carId || ''}
                           onChange={(e) => setNewTx(prev => ({ ...prev, carId: e.target.value }))}
                           required
@@ -5515,7 +5515,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                       </div>
                       <div className="form-group">
                         <label>بند مصروفات السيارة <span style={{ color: 'var(--danger)' }}>*</span></label>
-                        <select 
+                        <select
                           value={newTx.withdrawal_sub_type}
                           onChange={(e) => setNewTx(prev => ({ ...prev, withdrawal_sub_type: e.target.value }))}
                           required
@@ -5532,9 +5532,9 @@ const [showCarModal, setShowCarModal] = useState(false);
                     <div className="form-group">
                       <label>قيمة المبلغ المطلوب صرفه <span style={{ color: 'var(--danger)' }}>*</span></label>
                       <div style={{ position: 'relative', marginTop: '0.25rem' }}>
-                        <input 
-                          type="number" 
-                          step="0.01" 
+                        <input
+                          type="number"
+                          step="0.01"
                           min="0.01"
                           placeholder="0.00"
                           value={newTx.amount}
@@ -5549,7 +5549,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                     {newTx.payment_method === 'bank_transfer' && (
                       <div className="form-group">
                         <label>التوكيل (اختياري)</label>
-                        <select 
+                        <select
                           value={newTx.agencyId || ''}
                           onChange={(e) => setNewTx(prev => ({ ...prev, agencyId: e.target.value }))}
                         >
@@ -5567,7 +5567,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                   {txSourceType === 'bank' && (
                     <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                       <label>الحساب البنكي المصدر للتحويل <span style={{ color: 'var(--danger)' }}>*</span></label>
-                      <select 
+                      <select
                         value={newTx.bankId || ''}
                         onChange={(e) => setNewTx(prev => ({ ...prev, bankId: e.target.value }))}
                         required
@@ -5582,7 +5582,7 @@ const [showCarModal, setShowCarModal] = useState(false);
 
                   <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                     <label>الشركة أو المورد المستلم <span style={{ color: 'var(--danger)' }}>*</span></label>
-                    <select 
+                    <select
                       value={newTx.companyId || ''}
                       onChange={(e) => setNewTx(prev => ({ ...prev, companyId: e.target.value }))}
                       required
@@ -5597,9 +5597,9 @@ const [showCarModal, setShowCarModal] = useState(false);
                   <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                     <label>قيمة المبلغ المراد تحويله <span style={{ color: 'var(--danger)' }}>*</span></label>
                     <div style={{ position: 'relative', marginTop: '0.25rem' }}>
-                      <input 
-                        type="number" 
-                        step="0.01" 
+                      <input
+                        type="number"
+                        step="0.01"
                         min="0.01"
                         placeholder="0.00"
                         value={newTx.amount}
@@ -5618,7 +5618,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                 <>
                   <div className="form-group" style={{ marginBottom: '1.5rem', position: 'relative' }}>
                     <label>المندوب طالب الفك (اختياري)</label>
-                    <input 
+                    <input
                       type="text"
                       placeholder="ابحث باسم المندوب أو كوده (اتركه فارغاً لخزينة مباشرة)..."
                       value={searchRepQuery}
@@ -5634,13 +5634,13 @@ const [showCarModal, setShowCarModal] = useState(false);
                     {showRepSuggestions && searchRepQuery && (
                       <div className="suggestions-box">
                         {reps
-                          .filter(r => 
-                            r.name.toLowerCase().includes(searchRepQuery.toLowerCase()) || 
+                          .filter(r =>
+                            r.name.toLowerCase().includes(searchRepQuery.toLowerCase()) ||
                             r.code.toLowerCase().includes(searchRepQuery.toLowerCase())
                           )
                           .map(rep => (
-                            <div 
-                              key={rep.id} 
+                            <div
+                              key={rep.id}
                               className="suggestion-item"
                               onClick={() => {
                                 setNewTx(prev => ({ ...prev, repId: rep.id }));
@@ -5651,12 +5651,12 @@ const [showCarModal, setShowCarModal] = useState(false);
                               <strong>{rep.code}</strong> — {rep.name}
                             </div>
                           ))}
-                        {reps.filter(r => 
-                          r.name.toLowerCase().includes(searchRepQuery.toLowerCase()) || 
+                        {reps.filter(r =>
+                          r.name.toLowerCase().includes(searchRepQuery.toLowerCase()) ||
                           r.code.toLowerCase().includes(searchRepQuery.toLowerCase())
                         ).length === 0 && (
-                          <div style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>لا توجد نتائج مطابقة</div>
-                        )}
+                            <div style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>لا توجد نتائج مطابقة</div>
+                          )}
                       </div>
                     )}
                     {newTx.repId && (
@@ -5677,8 +5677,8 @@ const [showCarModal, setShowCarModal] = useState(false);
                           {[200, 100, 50, 20, 10, 5, 1].map((denom) => (
                             <div className="denom-input-group" key={`inc-${denom}`} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: '0.2rem 0.5rem' }}>
                               <span style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>{denom} ج.م</span>
-                              <input 
-                                type="number" 
+                              <input
+                                type="number"
                                 min="0"
                                 placeholder="0"
                                 value={incomingDenominations[`denom_${denom}`] || ''}
@@ -5711,8 +5711,8 @@ const [showCarModal, setShowCarModal] = useState(false);
                           {[200, 100, 50, 20, 10, 5, 1].map((denom) => (
                             <div className="denom-input-group" key={`out-${denom}`} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: '0.2rem 0.5rem' }}>
                               <span style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>{denom} ج.م</span>
-                              <input 
-                                type="number" 
+                              <input
+                                type="number"
                                 min="0"
                                 placeholder="0"
                                 value={outgoingDenominations[`denom_${denom}`] || ''}
@@ -5769,9 +5769,9 @@ const [showCarModal, setShowCarModal] = useState(false);
                 <div className="denom-section">
                   <div className="denom-section-title">
                     <span>💵 فئات المبالغ النقدية</span>
-                    <button 
-                      type="button" 
-                      className="btn btn-secondary" 
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
                       style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
                       onClick={() => {
                         const amt = newTx.type === 'withdrawal'
@@ -5779,7 +5779,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                           : (txSourceType === 'bank' ? (parseFloat(newTx.amount) || 0) : (parseFloat(newTx.cashAmount) || 0));
                         let remaining = amt;
                         const breakdown = { denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0 };
-                        
+
                         breakdown.denom_200 = Math.floor(remaining / 200); remaining %= 200;
                         breakdown.denom_100 = Math.floor(remaining / 100); remaining %= 100;
                         breakdown.denom_50 = Math.floor(remaining / 50); remaining %= 50;
@@ -5787,21 +5787,21 @@ const [showCarModal, setShowCarModal] = useState(false);
                         breakdown.denom_10 = Math.floor(remaining / 10); remaining %= 10;
                         breakdown.denom_5 = Math.floor(remaining / 5); remaining %= 5;
                         breakdown.denom_1 = Math.floor(remaining);
-                        
+
                         setDenominations(breakdown);
                       }}
                     >
                       💡 ملء تلقائي للفئات
                     </button>
                   </div>
-                  
+
                   <div className="denom-grid">
                     {[200, 100, 50, 20, 10, 5, 1].map((denom) => (
                       <div className="denom-input-group" key={denom}>
                         <span className="denom-label">{denom} ج.م</span>
                         <div className="denom-input-row">
-                          <input 
-                            type="number" 
+                          <input
+                            type="number"
                             min="0"
                             placeholder="0"
                             value={denominations[`denom_${denom}`] || ''}
@@ -5817,20 +5817,20 @@ const [showCarModal, setShowCarModal] = useState(false);
 
                   {/* Calculator Summary */}
                   {(() => {
-                    const totalCalculated = 
-                      (Number(denominations.denom_200 || 0) * 200) + 
-                      (Number(denominations.denom_100 || 0) * 100) + 
-                      (Number(denominations.denom_50 || 0) * 50) + 
-                      (Number(denominations.denom_20 || 0) * 20) + 
-                      (Number(denominations.denom_10 || 0) * 10) + 
-                      (Number(denominations.denom_5 || 0) * 5) + 
+                    const totalCalculated =
+                      (Number(denominations.denom_200 || 0) * 200) +
+                      (Number(denominations.denom_100 || 0) * 100) +
+                      (Number(denominations.denom_50 || 0) * 50) +
+                      (Number(denominations.denom_20 || 0) * 20) +
+                      (Number(denominations.denom_10 || 0) * 10) +
+                      (Number(denominations.denom_5 || 0) * 5) +
                       (Number(denominations.denom_1 || 0) * 1);
                     const expectedAmount = newTx.type === 'withdrawal'
                       ? (parseFloat(newTx.amount) || 0)
                       : (txSourceType === 'bank' ? (parseFloat(newTx.amount) || 0) : (parseFloat(newTx.cashAmount) || 0));
                     const diff = expectedAmount - totalCalculated;
                     const isMatch = Math.abs(diff) < 0.01;
-                    
+
                     return (
                       <div className="denom-calc-summary">
                         <span className="denom-total-label">إجمالي الفئات:</span>
@@ -5851,8 +5851,8 @@ const [showCarModal, setShowCarModal] = useState(false);
               {/* Notes */}
               <div className="form-group" style={{ marginBottom: '2rem' }}>
                 <label>ملاحظات إضافية</label>
-                <textarea 
-                  rows="3" 
+                <textarea
+                  rows="3"
                   placeholder="اكتب أي ملاحظات أو تفاصيل عن الحركة..."
                   value={newTx.notes}
                   onChange={(e) => setNewTx(prev => ({ ...prev, notes: e.target.value }))}
@@ -5860,13 +5860,13 @@ const [showCarModal, setShowCarModal] = useState(false);
               </div>
 
               {/* Submit */}
-              <button 
-                type="submit" 
-                className="btn btn-primary" 
-                style={{ 
-                  width: '100%', 
-                  background: newTx.type === 'deposit' ? 'var(--success)' : newTx.type === 'withdrawal' ? 'var(--danger)' : newTx.type === 'company_transfer' ? '#06b6d4' : '#7c3aed', 
-                  fontSize: '1.1rem', 
+              <button
+                type="submit"
+                className="btn btn-primary"
+                style={{
+                  width: '100%',
+                  background: newTx.type === 'deposit' ? 'var(--success)' : newTx.type === 'withdrawal' ? 'var(--danger)' : newTx.type === 'company_transfer' ? '#06b6d4' : '#7c3aed',
+                  fontSize: '1.1rem',
                   padding: '0.9rem',
                   boxShadow: newTx.type === 'exchange' ? '0 4px 12px rgba(124, 58, 237, 0.2)' : newTx.type === 'company_transfer' ? '0 4px 12px rgba(6, 182, 212, 0.2)' : ''
                 }}
@@ -5877,14 +5877,14 @@ const [showCarModal, setShowCarModal] = useState(false);
                   return incTotal === 0 || Math.abs(incTotal - outTotal) > 0.01;
                 })()}
               >
-                {newTx.type === 'deposit' 
-                  ? '📥 تأكيد عملية التوريد' 
-                  : newTx.type === 'withdrawal' 
-                    ? '📤 تأكيد عملية الصرف' 
+                {newTx.type === 'deposit'
+                  ? '📥 تأكيد عملية التوريد'
+                  : newTx.type === 'withdrawal'
+                    ? '📤 تأكيد عملية الصرف'
                     : newTx.type === 'company_transfer'
                       ? (currentUser.role === 'manager' ? '🏢 تنفيذ الحوالة للشركة' : '🏢 طلب إذن تحويل للشركة')
-                      : currentUser.role === 'manager' 
-                        ? '🔄 تنفيذ عملية التسوية والفك' 
+                      : currentUser.role === 'manager'
+                        ? '🔄 تنفيذ عملية التسوية والفك'
                         : '🔄 طلب إذن تسوية وفك فئات'}
               </button>
             </form>
@@ -5922,7 +5922,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                       المندوب: {repLedgerData.representative.name} ({repLedgerData.representative.code})
                     </span>
                   </div>
-                  
+
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
                     <div>
                       <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.2rem' }}>الرصيد الإجمالي الحالي</div>
@@ -5931,7 +5931,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                         <span style={{ fontSize: '1rem', fontWeight: 400, color: '#7dd3fc', marginRight: '0.4rem' }}>ج.م</span>
                       </div>
                     </div>
-                    
+
                     <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', borderRight: '1px solid rgba(255,255,255,0.1)', paddingRight: '2rem' }}>
                       <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>الهاتف: {repLedgerData.representative.phone || 'غير مسجل'}</div>
                       <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>التوكيل: {repLedgerData.representative.agency_name}</div>
@@ -5964,7 +5964,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                     🔄 تحديث البيانات
                   </button>
                 </div>
-                
+
                 <div className="table-container" style={{ margin: 0 }}>
                   {repLedgerData.transactions.length === 0 ? (
                     <div className="no-data-msg" style={{ padding: '2rem' }}>لا توجد عمليات مسجلة لحسابك بعد.</div>
@@ -5986,10 +5986,10 @@ const [showCarModal, setShowCarModal] = useState(false);
                         {repLedgerData.transactions.map((tx) => {
                           const idStr = String(tx.id).padStart(6, '0');
                           const txDate = new Date(tx.date).toLocaleString('en-US');
-                          
+
                           let statusLabel = 'مكتمل';
                           let statusClass = 'approved';
-                          
+
                           if (tx.status === 'pending_receipt') {
                             statusLabel = '⏳ بانتظار استلام الحسابات';
                             statusClass = 'pending';
@@ -6007,7 +6007,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                             statusClass = 'rejected';
                           }
 
-                          const displayPaymentOrSubType = tx.type === 'deposit' 
+                          const displayPaymentOrSubType = tx.type === 'deposit'
                             ? (tx.payment_method === 'bank_transfer' ? '🏧 تحويل بنكي' : '💵 نقدي بالخزينة')
                             : (tx.withdrawal_sub_type === 'salary' ? '💸 راتب' : tx.withdrawal_sub_type === 'commission' ? '💼 عمولة' : tx.withdrawal_sub_type === 'car' ? '🚗 مصاريف سيارة' : `📤 صرف: ${tx.withdrawal_sub_type || 'عام'}`);
 
@@ -6075,7 +6075,7 @@ const [showCarModal, setShowCarModal] = useState(false);
           <div className="panel-header">
             <h2 className="panel-title">💸 طلب حركة جديدة (توريد / إذن صرف)</h2>
           </div>
-          
+
           {txError && <div className="alert alert-error">⚠️ {txError}</div>}
           {txSuccess && <div className="alert alert-success">✔️ {txSuccess}</div>}
 
@@ -6287,9 +6287,9 @@ const [showCarModal, setShowCarModal] = useState(false);
                   <div className="denom-section" style={{ marginBottom: '1.5rem' }}>
                     <div className="denom-section-title">
                       <span>💵 فئات المبلغ النقدي المودع بالخزينة</span>
-                      <button 
-                        type="button" 
-                        className="btn btn-secondary" 
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
                         style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
                         onClick={() => {
                           const amt = parseFloat(newTx.cashAmount) || 0;
@@ -6312,8 +6312,8 @@ const [showCarModal, setShowCarModal] = useState(false);
                       {[200, 100, 50, 20, 10, 5, 1].map((denom) => (
                         <div className="denom-input-group" key={denom}>
                           <span className="denom-label">{denom} ج.م</span>
-                          <input 
-                            type="number" 
+                          <input
+                            type="number"
                             min="0"
                             placeholder="0"
                             value={denominations[`denom_${denom}`] || ''}
@@ -6391,7 +6391,7 @@ const [showCarModal, setShowCarModal] = useState(false);
             <div className="panel-header">
               <h2 className="panel-title">🏢 دليل التوكيلات والحسابات المشتركة</h2>
             </div>
-            
+
             {selectedAgencyLedger ? (
               /* INDIVIDUAL AGENCY LEDGER */
               <div>
@@ -6402,7 +6402,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                   </div>
                   <button className="btn btn-secondary" onClick={() => { setSelectedAgencyLedger(null); localStorage.removeItem('selectedAgencyLedgerId'); }}>العودة للقائمة ⬅</button>
                 </div>
-                
+
                 <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
                   <div className="metric-card deposits" style={{ padding: '1rem', background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.2)' }}>
                     <span className="metric-title" style={{ fontSize: '0.8rem', color: '#34d399' }}>📥 توريدات الخزينة (نقدي)</span>
@@ -6449,17 +6449,17 @@ const [showCarModal, setShowCarModal] = useState(false);
                             <td>
                               <span className={`badge badge-${tx.type}`}>
                                 {tx.type === 'deposit' ? '📥 توريد' : '📤 صرف'}
-                                {tx.withdrawal_sub_type === 'car' ? ' - سيارة' : 
-                                 tx.withdrawal_sub_type === 'car_gas' ? ' - سيارة (جاز)' : 
-                                 tx.withdrawal_sub_type === 'car_oil' ? ' - سيارة (زيت)' : 
-                                 tx.withdrawal_sub_type === 'car_other' ? ' - سيارة (مصاريف أخرى)' : 
-                                 tx.withdrawal_sub_type === 'salary' ? ' - راتب' : 
-                                 tx.withdrawal_sub_type === 'commission' ? ' - عمولة' :
-                                 tx.withdrawal_sub_type === 'loan' ? ' - سلفة' :
-                                 tx.withdrawal_sub_type === 'direct_rent' ? ' - إيجار' :
-                                 tx.withdrawal_sub_type === 'direct_operational' ? ' - تشغيل' :
-                                 tx.withdrawal_sub_type === 'direct_other' ? ' - عامة أخرى' :
-                                 tx.withdrawal_sub_type === 'other' ? ' - صرف عام' : ''}
+                                {tx.withdrawal_sub_type === 'car' ? ' - سيارة' :
+                                  tx.withdrawal_sub_type === 'car_gas' ? ' - سيارة (جاز)' :
+                                    tx.withdrawal_sub_type === 'car_oil' ? ' - سيارة (زيت)' :
+                                      tx.withdrawal_sub_type === 'car_other' ? ' - سيارة (مصاريف أخرى)' :
+                                        tx.withdrawal_sub_type === 'salary' ? ' - راتب' :
+                                          tx.withdrawal_sub_type === 'commission' ? ' - عمولة' :
+                                            tx.withdrawal_sub_type === 'loan' ? ' - سلفة' :
+                                              tx.withdrawal_sub_type === 'direct_rent' ? ' - إيجار' :
+                                                tx.withdrawal_sub_type === 'direct_operational' ? ' - تشغيل' :
+                                                  tx.withdrawal_sub_type === 'direct_other' ? ' - عامة أخرى' :
+                                                    tx.withdrawal_sub_type === 'other' ? ' - صرف عام' : ''}
                               </span>
                             </td>
                             <td>
@@ -6522,16 +6522,16 @@ const [showCarModal, setShowCarModal] = useState(false);
                           </td>
                           <td>
                             <div style={{ display: 'flex', gap: '0.5rem' }}>
-                              <button 
-                                className="btn btn-secondary" 
+                              <button
+                                className="btn btn-secondary"
                                 style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
                                 onClick={() => handleViewAgencyLedger(agency.id)}
                               >
                                 📂 كشف حساب
                               </button>
                               {currentUser.role === 'manager' && (
-                                <button 
-                                  className="btn btn-secondary btn-xs" 
+                                <button
+                                  className="btn btn-secondary btn-xs"
                                   style={{ padding: '0.15rem 0.4rem', fontSize: '0.65rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
                                   onClick={() => handleDeleteAgency(agency.id, agency.name)}
                                 >
@@ -6548,22 +6548,22 @@ const [showCarModal, setShowCarModal] = useState(false);
               </div>
             )}
           </div>
-          
+
           {/* Add Agency Panel */}
           {currentUser.role === 'manager' && !selectedAgencyLedger && (
             <div className="panel" style={{ width: '100%', marginTop: '1.5rem' }}>
               <div className="panel-header">
                 <h2 className="panel-title">➕ إضافة توكيل جديد</h2>
               </div>
-              
+
               {agencyError && <div className="alert alert-error">⚠️ {agencyError}</div>}
               {agencySuccess && <div className="alert alert-success">✔️ {agencySuccess}</div>}
 
               <form onSubmit={handleAddAgency} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '1rem', alignItems: 'end' }}>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label>كود التوكيل <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={newAgency.code}
                     readOnly
                     disabled
@@ -6572,8 +6572,8 @@ const [showCarModal, setShowCarModal] = useState(false);
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label>اسم التوكيل بالكامل <span style={{ color: 'var(--danger)' }}>*</span></label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     placeholder="مثال: توكيل الجيزة والفيوم"
                     value={newAgency.name}
                     onChange={(e) => setNewAgency({ ...newAgency, name: e.target.value })}
@@ -6590,7 +6590,7 @@ const [showCarModal, setShowCarModal] = useState(false);
       {/* COMPANIES TAB */}
       {activeTab === 'companies' && (currentUser.role === 'manager' || currentUser.role === 'accountant') && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', width: '100%' }}>
-          
+
           {companyError && <div className="alert alert-error">⚠️ {companyError}</div>}
           {companySuccess && <div className="alert alert-success">✔️ {companySuccess}</div>}
 
@@ -6601,7 +6601,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                 <h2 className="panel-title">🏢 كشف حساب الشركة: {selectedCompanyForLedger.name}</h2>
                 <button className="btn btn-secondary" onClick={() => { setSelectedCompanyForLedger(null); setCompanyLedgerData(null); localStorage.removeItem('selectedCompanyForLedger'); }}>العودة للقائمة ⬅</button>
               </div>
-              
+
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
                 <div>
                   <h3 style={{ color: 'var(--primary)', fontWeight: 800 }}>{selectedCompanyForLedger.name}</h3>
@@ -6670,7 +6670,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                 <div className="panel-header">
                   <h2 className="panel-title">🏢 دليل الشركات والموردين</h2>
                 </div>
-                
+
                 {companies.length === 0 ? (
                   <div className="no-data-msg">لا يوجد أي شركات مسجلة في النظام حالياً. يمكنك إضافة شركة من النموذج الجانبي.</div>
                 ) : (
@@ -6729,20 +6729,20 @@ const [showCarModal, setShowCarModal] = useState(false);
                 <form onSubmit={handleCreateCompany}>
                   <div className="form-group" style={{ marginBottom: '1.25rem' }}>
                     <label>كود الشركة (سيتم توليده تلقائياً إذا ترك فارغاً)</label>
-                    <input 
-                      type="text" 
-                      placeholder="مثال: COCA, PEPSI (أو اتركه فارغاً للتوليد التلقائي)..." 
+                    <input
+                      type="text"
+                      placeholder="مثال: COCA, PEPSI (أو اتركه فارغاً للتوليد التلقائي)..."
                       value={newCompany.code}
                       onChange={(e) => setNewCompany({ ...newCompany, code: e.target.value.toUpperCase() })}
                       style={{ marginTop: '0.25rem' }}
                     />
                   </div>
-                  
+
                   <div className="form-group" style={{ marginBottom: '1.25rem' }}>
                     <label>اسم الشركة التجاري <span style={{ color: 'var(--danger)' }}>*</span></label>
-                    <input 
-                      type="text" 
-                      placeholder="مثال: شركة الأهرم للمشروبات..." 
+                    <input
+                      type="text"
+                      placeholder="مثال: شركة الأهرم للمشروبات..."
                       value={newCompany.name}
                       onChange={(e) => setNewCompany({ ...newCompany, name: e.target.value })}
                       required
@@ -6752,9 +6752,9 @@ const [showCarModal, setShowCarModal] = useState(false);
 
                   <div className="form-group" style={{ marginBottom: '1.25rem' }}>
                     <label>رقم الحساب البنكي للشركة (اختياري)</label>
-                    <input 
-                      type="text" 
-                      placeholder="أدخل رقم الحساب البنكي للشركة المستلمة..." 
+                    <input
+                      type="text"
+                      placeholder="أدخل رقم الحساب البنكي للشركة المستلمة..."
                       value={newCompany.bank_account_number}
                       onChange={(e) => setNewCompany({ ...newCompany, bank_account_number: e.target.value })}
                       style={{ marginTop: '0.25rem' }}
@@ -6763,9 +6763,9 @@ const [showCarModal, setShowCarModal] = useState(false);
 
                   <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                     <label>اسم بنك الشركة المستلم (اختياري)</label>
-                    <input 
-                      type="text" 
-                      placeholder="مثال: البنك الأهلي المصري..." 
+                    <input
+                      type="text"
+                      placeholder="مثال: البنك الأهلي المصري..."
                       value={newCompany.bank_name}
                       onChange={(e) => setNewCompany({ ...newCompany, bank_name: e.target.value })}
                       style={{ marginTop: '0.25rem' }}
@@ -6802,7 +6802,7 @@ const [showCarModal, setShowCarModal] = useState(false);
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
                 يرجى إدخال الرصيد الافتتاحي للحسابات البنكية التالية لتأسيس رصيد بداية المدة لها. ستختفي هذه اللوحة بمجرد تعيين الأرصدة.
               </p>
-              
+
               {bankInitError && <div className="alert alert-error" style={{ marginBottom: '1rem' }}>⚠️ {bankInitError}</div>}
               {bankInitSuccess && <div className="alert alert-success" style={{ marginBottom: '1rem' }}>✔️ {bankInitSuccess}</div>}
 
@@ -6810,14 +6810,14 @@ const [showCarModal, setShowCarModal] = useState(false);
                 e.preventDefault();
                 setBankInitError('');
                 setBankInitSuccess('');
-                
+
                 try {
                   const res = await fetch('/api/banks/initial-balances', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ balances: bankInitBalances })
                   });
-                  
+
                   const data = await res.json();
                   if (res.ok) {
                     setBankInitSuccess('تم حفظ الأرصدة الافتتاحية بنجاح!');
@@ -6835,8 +6835,8 @@ const [showCarModal, setShowCarModal] = useState(false);
                       <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 600, fontSize: '0.85rem' }}>
                         🏦 {bank.name} ({bank.code})
                       </label>
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         step="0.01"
                         placeholder="0.00 ج.م"
                         value={bankInitBalances[bank.id] || ''}
@@ -6857,300 +6857,300 @@ const [showCarModal, setShowCarModal] = useState(false);
           <div className={currentUser.role === 'manager' ? "grid-2col" : ""} style={{ display: currentUser.role !== 'manager' ? 'block' : undefined }}>
             {/* Banks list */}
             <div className="panel">
-            <div className="panel-header">
-              <h2 className="panel-title">🏦 دليل الحسابات البنكية</h2>
-            </div>
-            
-            {selectedBankLedger ? (
-              /* INDIVIDUAL BANK LEDGER */
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-                  <div>
-                    <h3 style={{ color: 'var(--primary)', fontWeight: 800 }}>{selectedBankLedger.bank.name}
-                      {currentUser.role === 'manager' && (
-                        <button 
-                          className="btn btn-secondary btn-xs" 
-                          style={{ padding: '0.15rem 0.4rem', fontSize: '0.65rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)', marginRight: '10px' }}
-                          onClick={() => handleDeleteBank(selectedBankLedger.bank.id, selectedBankLedger.bank.name)}
-                        >
-                          🗑️ حذف
-                        </button>
-                      )}
-                    </h3>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                      كود الحساب: {selectedBankLedger.bank.code} | رقم الحساب: {selectedBankLedger.bank.account_number}
-                      {selectedBankLedger.bank.account_name && ` | اسم الحساب: ${selectedBankLedger.bank.account_name}`}
-                      {selectedBankLedger.bank.branch && ` | الفرع: ${selectedBankLedger.bank.branch}`}
-                    </p>
-                  </div>
-                  <button className="btn btn-secondary" onClick={() => { setSelectedBankLedger(null); localStorage.removeItem('selectedBankLedgerId'); }}>العودة للقائمة ⬅</button>
-                </div>
-                
-                <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', marginBottom: '1.5rem' }}>
-                  <div className="metric-card balance" style={{ padding: '1rem' }}>
-                    <span className="metric-title" style={{ fontSize: '0.8rem' }}>الرصيد الافتتاحي</span>
-                    <span className="metric-value currency" style={{ fontSize: '1.3rem' }}>{Number(selectedBankLedger.bank.initial_balance).toLocaleString()} ج.م</span>
-                  </div>
-                  <div className="metric-card deposits" style={{ padding: '1rem' }}>
-                    <span className="metric-title" style={{ fontSize: '0.8rem' }}>إجمالي الإيداعات</span>
-                    <span className="metric-value currency" style={{ fontSize: '1.3rem' }}>{selectedBankLedger.summary.totalDeposits.toLocaleString()} ج.م</span>
-                  </div>
-                  <div className="metric-card withdrawals" style={{ padding: '1rem' }}>
-                    <span className="metric-title" style={{ fontSize: '0.8rem' }}>إجمالي السحوبات</span>
-                    <span className="metric-value currency" style={{ fontSize: '1.3rem' }}>{selectedBankLedger.summary.totalWithdrawals.toLocaleString()} ج.م</span>
-                  </div>
-                  <div className="metric-card balance" style={{ padding: '1rem', background: 'var(--success-bg)' }}>
-                    <span className="metric-title" style={{ fontSize: '0.8rem' }}>الرصيد الحالي</span>
-                    <span className="metric-value currency" style={{ fontSize: '1.3rem', color: 'var(--success)' }}>{selectedBankLedger.summary.balance.toLocaleString()} ج.م</span>
-                  </div>
-                </div>
+              <div className="panel-header">
+                <h2 className="panel-title">🏦 دليل الحسابات البنكية</h2>
+              </div>
 
-                <div className="table-container">
-                  {selectedBankLedger.transactions.length === 0 ? (
-                    <div className="no-data-msg">لم يتم تسجيل أي تحويلات نقدية لهذا الحساب البنكي بعد.</div>
-                  ) : (
+              {selectedBankLedger ? (
+                /* INDIVIDUAL BANK LEDGER */
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
                     <div>
-                      {/* BANK TRANSFER (CASH) transactions - highlighted section */}
-                      {selectedBankLedger.transactions.filter(tx => tx.payment_method === 'bank_transfer').length > 0 && (
-                        <div style={{ marginBottom: '1.5rem' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', padding: '0.6rem 1rem', background: 'rgba(124,58,237,0.08)', borderRadius: '8px', border: '1px solid rgba(124,58,237,0.2)' }}>
-                            <span style={{ fontSize: '1.1rem' }}>🏦</span>
-                            <strong style={{ color: '#a78bfa' }}>تحويلات الكاش البنكية</strong>
-                            <span style={{ marginRight: 'auto', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                              {selectedBankLedger.transactions.filter(tx => tx.payment_method === 'bank_transfer').length} عملية
-                            </span>
-                          </div>
-                          <div style={{ display: 'grid', gap: '1rem' }}>
-                            {selectedBankLedger.transactions.filter(tx => tx.payment_method === 'bank_transfer').map(tx => (
-                              <div key={tx.id} style={{ background: 'rgba(124,58,237,0.05)', border: '1px solid rgba(124,58,237,0.15)', borderRadius: '12px', padding: '1rem', display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-                                {/* Receipt image */}
-                                {tx.receipt_image ? (
-                                  <div style={{ flexShrink: 0 }}>
-                                    <img
-                                      src={tx.receipt_image}
-                                      alt="إيصال التحويل"
-                                      style={{ width: '90px', height: '70px', borderRadius: '8px', objectFit: 'cover', border: '1px solid rgba(124,58,237,0.3)', cursor: 'pointer' }}
-                                      onClick={() => setActiveImageModal(tx.receipt_image)}
-                                      title="اضغط لعرض الصورة بالحجم الكامل"
-                                    />
-                                  </div>
-                                ) : (
-                                  <div style={{ flexShrink: 0, width: '90px', height: '70px', borderRadius: '8px', border: '1px dashed rgba(124,58,237,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '1.5rem' }}>📄</div>
-                                )}
-                                {/* Details */}
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.4rem' }}>
-                                    <span style={{ color: '#a78bfa', fontWeight: 700, fontSize: '1rem' }}>
-                                      {Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
-                                    </span>
-                                    <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{new Date(tx.date).toLocaleString('en-US')}</span>
-                                  </div>
-                                  {tx.rep_name && (
-                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
-                                      👤 المندوب: <strong>{tx.rep_name}</strong> ({tx.rep_code})
-                                    </div>
-                                  )}
-                                  {tx.notes && (
-                                    <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.03)', padding: '0.3rem 0.5rem', borderRadius: '4px' }}>
-                                      📝 {tx.notes}
-                                    </div>
-                                  )}
-                                  {!tx.receipt_image && (
-                                    <div style={{ marginTop: '0.4rem', fontSize: '0.75rem', color: 'rgba(124,58,237,0.5)', fontStyle: 'italic' }}>لا يوجد إيصال مرفق</div>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Other transactions table */}
-                      {selectedBankLedger.transactions.filter(tx => tx.payment_method !== 'bank_transfer').length > 0 && (
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', padding: '0.6rem 1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                            <span style={{ fontSize: '1.1rem' }}>💵</span>
-                            <strong style={{ color: 'var(--text-secondary)' }}>حركات التحويل النقدي (صرف/إيداع)</strong>
-                          </div>
-                          <table>
-                            <thead>
-                              <tr>
-                                <th>التاريخ والوقت</th>
-                                <th>العملية</th>
-                                <th>أثر الرصيد البنكي</th>
-                                <th>المبلغ</th>
-                                <th>المندوب</th>
-                                <th>ملاحظات</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {selectedBankLedger.transactions.filter(tx => tx.payment_method !== 'bank_transfer').map((tx) => (
-                                <tr key={tx.id}>
-                                  <td>{new Date(tx.date).toLocaleString('en-US')}</td>
-                                  <td>
-                                    <span className={`badge badge-${tx.type}`}>
-                                      {tx.type === 'deposit' ? '📥 توريد من البنك' : '📤 صرف للبنك'}
-                                    </span>
-                                  </td>
-                                  <td>
-                                    <span className={`badge badge-${tx.type === 'withdrawal' ? 'deposit' : 'withdrawal'}`}>
-                                      {tx.type === 'withdrawal' ? '📈 زيادة رصيد البنك' : '📉 نقص رصيد البنك'}
-                                    </span>
-                                  </td>
-                                  <td>
-                                    <span className={tx.type === 'withdrawal' ? 'amount-deposit' : 'amount-withdrawal'}>
-                                      {tx.type === 'deposit' ? '-' : ''}
-                                      {Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
-                                    </span>
-                                  </td>
-                                  <td>{tx.rep_name ? `${tx.rep_name} (${tx.rep_code})` : '—'}</td>
-                                  <td>{tx.notes || '—'}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
+                      <h3 style={{ color: 'var(--primary)', fontWeight: 800 }}>{selectedBankLedger.bank.name}
+                        {currentUser.role === 'manager' && (
+                          <button
+                            className="btn btn-secondary btn-xs"
+                            style={{ padding: '0.15rem 0.4rem', fontSize: '0.65rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)', marginRight: '10px' }}
+                            onClick={() => handleDeleteBank(selectedBankLedger.bank.id, selectedBankLedger.bank.name)}
+                          >
+                            🗑️ حذف
+                          </button>
+                        )}
+                      </h3>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                        كود الحساب: {selectedBankLedger.bank.code} | رقم الحساب: {selectedBankLedger.bank.account_number}
+                        {selectedBankLedger.bank.account_name && ` | اسم الحساب: ${selectedBankLedger.bank.account_name}`}
+                        {selectedBankLedger.bank.branch && ` | الفرع: ${selectedBankLedger.bank.branch}`}
+                      </p>
                     </div>
+                    <button className="btn btn-secondary" onClick={() => { setSelectedBankLedger(null); localStorage.removeItem('selectedBankLedgerId'); }}>العودة للقائمة ⬅</button>
+                  </div>
+
+                  <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', marginBottom: '1.5rem' }}>
+                    <div className="metric-card balance" style={{ padding: '1rem' }}>
+                      <span className="metric-title" style={{ fontSize: '0.8rem' }}>الرصيد الافتتاحي</span>
+                      <span className="metric-value currency" style={{ fontSize: '1.3rem' }}>{Number(selectedBankLedger.bank.initial_balance).toLocaleString()} ج.م</span>
+                    </div>
+                    <div className="metric-card deposits" style={{ padding: '1rem' }}>
+                      <span className="metric-title" style={{ fontSize: '0.8rem' }}>إجمالي الإيداعات</span>
+                      <span className="metric-value currency" style={{ fontSize: '1.3rem' }}>{selectedBankLedger.summary.totalDeposits.toLocaleString()} ج.م</span>
+                    </div>
+                    <div className="metric-card withdrawals" style={{ padding: '1rem' }}>
+                      <span className="metric-title" style={{ fontSize: '0.8rem' }}>إجمالي السحوبات</span>
+                      <span className="metric-value currency" style={{ fontSize: '1.3rem' }}>{selectedBankLedger.summary.totalWithdrawals.toLocaleString()} ج.م</span>
+                    </div>
+                    <div className="metric-card balance" style={{ padding: '1rem', background: 'var(--success-bg)' }}>
+                      <span className="metric-title" style={{ fontSize: '0.8rem' }}>الرصيد الحالي</span>
+                      <span className="metric-value currency" style={{ fontSize: '1.3rem', color: 'var(--success)' }}>{selectedBankLedger.summary.balance.toLocaleString()} ج.م</span>
+                    </div>
+                  </div>
+
+                  <div className="table-container">
+                    {selectedBankLedger.transactions.length === 0 ? (
+                      <div className="no-data-msg">لم يتم تسجيل أي تحويلات نقدية لهذا الحساب البنكي بعد.</div>
+                    ) : (
+                      <div>
+                        {/* BANK TRANSFER (CASH) transactions - highlighted section */}
+                        {selectedBankLedger.transactions.filter(tx => tx.payment_method === 'bank_transfer').length > 0 && (
+                          <div style={{ marginBottom: '1.5rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', padding: '0.6rem 1rem', background: 'rgba(124,58,237,0.08)', borderRadius: '8px', border: '1px solid rgba(124,58,237,0.2)' }}>
+                              <span style={{ fontSize: '1.1rem' }}>🏦</span>
+                              <strong style={{ color: '#a78bfa' }}>تحويلات الكاش البنكية</strong>
+                              <span style={{ marginRight: 'auto', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                                {selectedBankLedger.transactions.filter(tx => tx.payment_method === 'bank_transfer').length} عملية
+                              </span>
+                            </div>
+                            <div style={{ display: 'grid', gap: '1rem' }}>
+                              {selectedBankLedger.transactions.filter(tx => tx.payment_method === 'bank_transfer').map(tx => (
+                                <div key={tx.id} style={{ background: 'rgba(124,58,237,0.05)', border: '1px solid rgba(124,58,237,0.15)', borderRadius: '12px', padding: '1rem', display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+                                  {/* Receipt image */}
+                                  {tx.receipt_image ? (
+                                    <div style={{ flexShrink: 0 }}>
+                                      <img
+                                        src={tx.receipt_image}
+                                        alt="إيصال التحويل"
+                                        style={{ width: '90px', height: '70px', borderRadius: '8px', objectFit: 'cover', border: '1px solid rgba(124,58,237,0.3)', cursor: 'pointer' }}
+                                        onClick={() => setActiveImageModal(tx.receipt_image)}
+                                        title="اضغط لعرض الصورة بالحجم الكامل"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div style={{ flexShrink: 0, width: '90px', height: '70px', borderRadius: '8px', border: '1px dashed rgba(124,58,237,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '1.5rem' }}>📄</div>
+                                  )}
+                                  {/* Details */}
+                                  <div style={{ flex: 1 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.4rem' }}>
+                                      <span style={{ color: '#a78bfa', fontWeight: 700, fontSize: '1rem' }}>
+                                        {Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
+                                      </span>
+                                      <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{new Date(tx.date).toLocaleString('en-US')}</span>
+                                    </div>
+                                    {tx.rep_name && (
+                                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
+                                        👤 المندوب: <strong>{tx.rep_name}</strong> ({tx.rep_code})
+                                      </div>
+                                    )}
+                                    {tx.notes && (
+                                      <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.03)', padding: '0.3rem 0.5rem', borderRadius: '4px' }}>
+                                        📝 {tx.notes}
+                                      </div>
+                                    )}
+                                    {!tx.receipt_image && (
+                                      <div style={{ marginTop: '0.4rem', fontSize: '0.75rem', color: 'rgba(124,58,237,0.5)', fontStyle: 'italic' }}>لا يوجد إيصال مرفق</div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Other transactions table */}
+                        {selectedBankLedger.transactions.filter(tx => tx.payment_method !== 'bank_transfer').length > 0 && (
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', padding: '0.6rem 1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                              <span style={{ fontSize: '1.1rem' }}>💵</span>
+                              <strong style={{ color: 'var(--text-secondary)' }}>حركات التحويل النقدي (صرف/إيداع)</strong>
+                            </div>
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>التاريخ والوقت</th>
+                                  <th>العملية</th>
+                                  <th>أثر الرصيد البنكي</th>
+                                  <th>المبلغ</th>
+                                  <th>المندوب</th>
+                                  <th>ملاحظات</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {selectedBankLedger.transactions.filter(tx => tx.payment_method !== 'bank_transfer').map((tx) => (
+                                  <tr key={tx.id}>
+                                    <td>{new Date(tx.date).toLocaleString('en-US')}</td>
+                                    <td>
+                                      <span className={`badge badge-${tx.type}`}>
+                                        {tx.type === 'deposit' ? '📥 توريد من البنك' : '📤 صرف للبنك'}
+                                      </span>
+                                    </td>
+                                    <td>
+                                      <span className={`badge badge-${tx.type === 'withdrawal' ? 'deposit' : 'withdrawal'}`}>
+                                        {tx.type === 'withdrawal' ? '📈 زيادة رصيد البنك' : '📉 نقص رصيد البنك'}
+                                      </span>
+                                    </td>
+                                    <td>
+                                      <span className={tx.type === 'withdrawal' ? 'amount-deposit' : 'amount-withdrawal'}>
+                                        {tx.type === 'deposit' ? '-' : ''}
+                                        {Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
+                                      </span>
+                                    </td>
+                                    <td>{tx.rep_name ? `${tx.rep_name} (${tx.rep_code})` : '—'}</td>
+                                    <td>{tx.notes || '—'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* ALL BANKS TABLE */
+                <div className="table-container">
+                  {banks.length === 0 ? (
+                    <div className="no-data-msg">لا يوجد حسابات بنكية مسجلة بالنظام حالياً.</div>
+                  ) : (
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>كود البنك</th>
+                          <th>اسم البنك</th>
+                          <th>رقم الحساب</th>
+                          <th>الرصيد الافتتاحي</th>
+                          <th>إجمالي الإيداعات</th>
+                          <th>إجمالي السحوبات</th>
+                          <th>الرصيد الحالي</th>
+                          <th>الإجراءات</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {banks.map((bank) => (
+                          <tr key={bank.id}>
+                            <td><strong>{bank.code}</strong></td>
+                            <td>{bank.name}</td>
+                            <td><code>{bank.account_number}</code></td>
+                            <td>{Number(bank.initial_balance).toLocaleString()} ج.م</td>
+                            <td style={{ color: 'var(--success)', fontWeight: 600 }}>{Number(bank.total_deposits).toLocaleString()} ج.م</td>
+                            <td style={{ color: 'var(--danger)', fontWeight: 600 }}>{Number(bank.total_withdrawals).toLocaleString()} ج.م</td>
+                            <td>
+                              <span style={{ fontWeight: 800, color: Number(bank.balance) >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                                {Number(bank.balance).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
+                              </span>
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <button
+                                  className="btn btn-secondary"
+                                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                                  onClick={() => handleViewBankLedger(bank.id)}
+                                >
+                                  📂 كشف حساب
+                                </button>
+                                {currentUser.role === 'manager' && (
+                                  <button
+                                    className="btn btn-secondary btn-xs"
+                                    style={{ padding: '0.15rem 0.4rem', fontSize: '0.65rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
+                                    onClick={() => handleDeleteBank(bank.id, bank.name)}
+                                  >
+                                    🗑️ حذف
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   )}
                 </div>
-              </div>
-            ) : (
-              /* ALL BANKS TABLE */
-              <div className="table-container">
-                {banks.length === 0 ? (
-                  <div className="no-data-msg">لا يوجد حسابات بنكية مسجلة بالنظام حالياً.</div>
-                ) : (
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>كود البنك</th>
-                        <th>اسم البنك</th>
-                        <th>رقم الحساب</th>
-                        <th>الرصيد الافتتاحي</th>
-                        <th>إجمالي الإيداعات</th>
-                        <th>إجمالي السحوبات</th>
-                        <th>الرصيد الحالي</th>
-                        <th>الإجراءات</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {banks.map((bank) => (
-                        <tr key={bank.id}>
-                          <td><strong>{bank.code}</strong></td>
-                          <td>{bank.name}</td>
-                          <td><code>{bank.account_number}</code></td>
-                          <td>{Number(bank.initial_balance).toLocaleString()} ج.م</td>
-                          <td style={{ color: 'var(--success)', fontWeight: 600 }}>{Number(bank.total_deposits).toLocaleString()} ج.م</td>
-                          <td style={{ color: 'var(--danger)', fontWeight: 600 }}>{Number(bank.total_withdrawals).toLocaleString()} ج.م</td>
-                          <td>
-                            <span style={{ fontWeight: 800, color: Number(bank.balance) >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                              {Number(bank.balance).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
-                            </span>
-                          </td>
-                          <td>
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                              <button 
-                                className="btn btn-secondary" 
-                                style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
-                                onClick={() => handleViewBankLedger(bank.id)}
-                              >
-                                📂 كشف حساب
-                              </button>
-                              {currentUser.role === 'manager' && (
-                                <button 
-                                  className="btn btn-secondary btn-xs"
-                                  style={{ padding: '0.15rem 0.4rem', fontSize: '0.65rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
-                                  onClick={() => handleDeleteBank(bank.id, bank.name)}
-                                >
-                                  🗑️ حذف
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
+              )}
+            </div>
+
+            {/* Add Bank Panel */}
+            {currentUser.role === 'manager' && (
+              <div className="panel">
+                <div className="panel-header">
+                  <h2 className="panel-title">➕ إضافة حساب بنكي جديد</h2>
+                </div>
+
+                {bankError && <div className="alert alert-error">⚠️ {bankError}</div>}
+                {bankSuccess && <div className="alert alert-success">✔️ {bankSuccess}</div>}
+
+                <form onSubmit={handleAddBank}>
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label>كود الحساب (مختصر) <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <input
+                      type="text"
+                      value={newBank.code}
+                      readOnly
+                      disabled
+                      style={{ background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed' }}
+                    />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label>اسم البنك <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <input
+                      type="text"
+                      placeholder="مثال: البنك التجاري الدولي (CIB)"
+                      value={newBank.name}
+                      onChange={(e) => setNewBank({ ...newBank, name: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label>رقم الحساب <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <input
+                      type="text"
+                      placeholder="مثال: 100055998877"
+                      value={newBank.account_number}
+                      onChange={(e) => setNewBank({ ...newBank, account_number: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label>اسم صاحب الحساب <span style={{ color: 'var(--text-muted)' }}>(اختياري)</span></label>
+                    <input
+                      type="text"
+                      placeholder="مثال: شركة النور للتجارة"
+                      value={newBank.account_name}
+                      onChange={(e) => setNewBank({ ...newBank, account_name: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label>الفرع <span style={{ color: 'var(--text-muted)' }}>(اختياري)</span></label>
+                    <input
+                      type="text"
+                      placeholder="مثال: فرع الدقي الرئيسي"
+                      value={newBank.branch}
+                      onChange={(e) => setNewBank({ ...newBank, branch: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                    <label>الرصيد الافتتاحي (ج.م)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={newBank.initial_balance}
+                      onChange={(e) => setNewBank({ ...newBank, initial_balance: e.target.value })}
+                    />
+                  </div>
+                  <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>حفظ الحساب الجديد</button>
+                </form>
               </div>
             )}
           </div>
-          
-          {/* Add Bank Panel */}
-          {currentUser.role === 'manager' && (
-            <div className="panel">
-              <div className="panel-header">
-                <h2 className="panel-title">➕ إضافة حساب بنكي جديد</h2>
-              </div>
-            
-            {bankError && <div className="alert alert-error">⚠️ {bankError}</div>}
-            {bankSuccess && <div className="alert alert-success">✔️ {bankSuccess}</div>}
-
-            <form onSubmit={handleAddBank}>
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>كود الحساب (مختصر) <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input 
-                  type="text" 
-                  value={newBank.code}
-                  readOnly
-                  disabled
-                  style={{ background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed' }}
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>اسم البنك <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input 
-                  type="text" 
-                  placeholder="مثال: البنك التجاري الدولي (CIB)"
-                  value={newBank.name}
-                  onChange={(e) => setNewBank({ ...newBank, name: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>رقم الحساب <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input 
-                  type="text" 
-                  placeholder="مثال: 100055998877"
-                  value={newBank.account_number}
-                  onChange={(e) => setNewBank({ ...newBank, account_number: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>اسم صاحب الحساب <span style={{ color: 'var(--text-muted)' }}>(اختياري)</span></label>
-                <input 
-                  type="text" 
-                  placeholder="مثال: شركة النور للتجارة"
-                  value={newBank.account_name}
-                  onChange={(e) => setNewBank({ ...newBank, account_name: e.target.value })}
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>الفرع <span style={{ color: 'var(--text-muted)' }}>(اختياري)</span></label>
-                <input 
-                  type="text" 
-                  placeholder="مثال: فرع الدقي الرئيسي"
-                  value={newBank.branch}
-                  onChange={(e) => setNewBank({ ...newBank, branch: e.target.value })}
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                <label>الرصيد الافتتاحي (ج.م)</label>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  placeholder="0.00"
-                  value={newBank.initial_balance}
-                  onChange={(e) => setNewBank({ ...newBank, initial_balance: e.target.value })}
-                />
-              </div>
-              <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>حفظ الحساب الجديد</button>
-            </form>
-            </div>
-          )}
-        </div>
         </div>
       )}
 
@@ -7165,7 +7165,7 @@ const [showCarModal, setShowCarModal] = useState(false);
           direction: 'rtl', padding: '1.5rem'
         }}>
           <div className="panel" style={{ width: '100%', maxWidth: '720px', maxHeight: '92vh', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.15)', boxShadow: '0 25px 60px rgba(0,0,0,0.6)', background: 'linear-gradient(145deg, #1e293b 0%, #0f172a 100%)', borderRadius: '24px', padding: '1.75rem' }}>
-            
+
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #334155', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
               <div>
@@ -7176,999 +7176,997 @@ const [showCarModal, setShowCarModal] = useState(false);
                   طلب رقم: TX-{String(previewingTx.id).padStart(6, '0')}
                 </h2>
               </div>
-              <button 
-                className="btn btn-secondary" 
-                onClick={() => setPreviewingTx(null)} 
+              <button
+                className="btn btn-secondary"
+                onClick={() => setPreviewingTx(null)}
                 style={{ padding: '0.4rem 0.8rem', borderRadius: '10px', fontSize: '0.9rem', cursor: 'pointer' }}
               >
                 ✕ إغلاق
               </button>
-            </div>
-
-            {/* Dual Bank Deposit Transfer Banner if Bank Deposit */}
-            {(previewingTx.bank_name || previewingTx.bank_id || previewingTx.withdrawal_sub_type === 'bank_deposit') && (
-              <div style={{ background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(14, 165, 233, 0.05))', border: '1px solid #0284c7', borderRadius: '16px', padding: '1.15rem', marginBottom: '1.25rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.05rem', fontWeight: 900, color: '#38bdf8', marginBottom: '0.5rem' }}>
-                  🏦 تحويل وإيداع مالي من الخزينة لحساب البنك
-                </div>
-                <div style={{ fontSize: '0.9rem', color: '#f8fafc', lineHeight: '1.6' }}>
-                  العملية عبارة عن <strong>سحب نقدية من الخزينة الرئيسية</strong> وتحويلها للإيداع في <strong>{previewingTx.bank_name || 'الحساب البنكي'}</strong> {previewingTx.bank_account_number ? `(رقم الحساب: ${previewingTx.bank_account_number})` : ''}.
-                </div>
-              </div>
-            )}
-
-            {/* Financial Liquidity & Cover Gauge */}
-            {previewingTx.payment_method !== 'bank_transfer' ? (
-              <div style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid #334155', borderRadius: '16px', padding: '1.15rem', marginBottom: '1.25rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                  <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: '#cbd5e1' }}>🏦 تحليل غطاء رصيد الخزينة الحالي:</span>
-                  <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>صرف نقدي من الخزينة الرئيسية</span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', textAlign: 'center' }}>
-                  <div style={{ background: '#1e293b', padding: '0.75rem', borderRadius: '12px', border: '1px solid #334155' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>رصيد الخزينة الحالي</div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#38bdf8', marginTop: '0.2rem' }}>
-                      {(dashboardData.summary.safeBalance || 0).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
-                    </div>
+              {/* Dual Bank Deposit Transfer Banner if Bank Deposit */}
+              {(previewingTx.bank_name || previewingTx.bank_id || previewingTx.withdrawal_sub_type === 'bank_deposit') && (
+                <div style={{ background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(14, 165, 233, 0.05))', border: '1px solid #0284c7', borderRadius: '16px', padding: '1.15rem', marginBottom: '1.25rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.05rem', fontWeight: 900, color: '#38bdf8', marginBottom: '0.5rem' }}>
+                    🏦 تحويل وإيداع مالي من الخزينة لحساب البنك
                   </div>
-                  <div style={{ background: '#1e293b', padding: '0.75rem', borderRadius: '12px', border: '1px solid #334155' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>المبلغ المطلوب صرفه</div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#f43f5e', marginTop: '0.2rem' }}>
-                      -{Number(previewingTx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
-                    </div>
+                  <div style={{ fontSize: '0.9rem', color: '#f8fafc', lineHeight: '1.6' }}>
+                    العملية عبارة عن <strong>سحب نقدية من الخزينة الرئيسية</strong> وتحويلها للإيداع في <strong>{previewingTx.bank_name || 'الحساب البنكي'}</strong> {previewingTx.bank_account_number ? `(رقم الحساب: ${previewingTx.bank_account_number})` : ''}.
                   </div>
-                  <div style={{ background: '#1e293b', padding: '0.75rem', borderRadius: '12px', border: '1px solid #334155' }}>
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>الرصيد المتبقي المتوقع</div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 900, color: (dashboardData.summary.safeBalance - Number(previewingTx.amount)) >= 0 ? '#4ade80' : '#f87171', marginTop: '0.2rem' }}>
-                      {(dashboardData.summary.safeBalance - Number(previewingTx.amount)).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{
-                  marginTop: '0.85rem',
-                  padding: '0.65rem 1rem',
-                  borderRadius: '12px',
-                  fontSize: '0.85rem',
-                  fontWeight: 'bold',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  background: (dashboardData.summary.safeBalance - Number(previewingTx.amount)) >= 0 ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
-                  color: (dashboardData.summary.safeBalance - Number(previewingTx.amount)) >= 0 ? '#4ade80' : '#f87171',
-                  border: `1px solid ${(dashboardData.summary.safeBalance - Number(previewingTx.amount)) >= 0 ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`
-                }}>
-                  {(dashboardData.summary.safeBalance - Number(previewingTx.amount)) >= 0
-                    ? '🟢 مؤشر السيولة: رصيد الخزينة كافٍ تماماً لإجازة عملية الصرف.'
-                    : `⚠️ تحذير عجز: رصيد الخزينة غير كافٍ ومحتاج تغذية بمبلغ ${Math.abs(dashboardData.summary.safeBalance - Number(previewingTx.amount)).toLocaleString()} ج.م!`}
-                </div>
-              </div>
-            ) : (
-              <div style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid #334155', borderRadius: '16px', padding: '1.15rem', marginBottom: '1.25rem' }}>
-                <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#38bdf8', marginBottom: '0.5rem' }}>
-                  🏦 مصدر الصرف: تحويل بنكي ({previewingTx.bank_name || 'حساب بنكي'})
-                </div>
-                <div style={{ fontSize: '0.85rem', color: '#cbd5e1' }}>
-                  رقم الحساب الخصم: <strong>{previewingTx.bank_account_number || '—'}</strong>
-                </div>
-              </div>
-            )}
-
-            {/* Context & Details Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
-              <div style={{ background: '#1e293b', padding: '0.9rem', borderRadius: '14px', border: '1px solid #334155' }}>
-                <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.2rem' }}>👤 طالب الصرف (المحاسب)</div>
-                <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#f8fafc' }}>{previewingTx.creator_name || 'المحاسب'}</div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.15rem' }}>{new Date(previewingTx.date).toLocaleString('ar-EG')}</div>
-              </div>
-
-              <div style={{ background: '#1e293b', padding: '0.9rem', borderRadius: '14px', border: '1px solid #334155' }}>
-                <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.2rem' }}>🏢 الجهة أو الحساب المستلم</div>
-                <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#f8fafc' }}>
-                  {previewingTx.rep_name || previewingTx.company_name || (previewingTx.bank_name ? `🏦 ${previewingTx.bank_name}` : 'مصروفات تشغيلية (خزينة مباشرة)')}
-                </div>
-                {previewingTx.bank_name && !previewingTx.rep_name && (
-                  <div style={{ fontSize: '0.75rem', color: '#38bdf8', marginTop: '0.15rem' }}>
-                    💳 رقم الحساب: {previewingTx.bank_account_number || '—'}
-                  </div>
-                )}
-                {previewingTx.agency_name && <div style={{ fontSize: '0.75rem', color: '#38bdf8', marginTop: '0.15rem' }}>توكيل: {previewingTx.agency_name}</div>}
-              </div>
-
-              <div style={{ background: '#1e293b', padding: '0.9rem', borderRadius: '14px', border: '1px solid #334155' }}>
-                <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.2rem' }}>🏷️ بند الصرف المحدد</div>
-                <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: (previewingTx.bank_name || previewingTx.bank_id || previewingTx.withdrawal_sub_type === 'bank_deposit') ? '#38bdf8' : '#fb923c' }}>
-                  {(previewingTx.bank_name || previewingTx.bank_id || previewingTx.withdrawal_sub_type === 'bank_deposit') ? '🏦 إيداع وتغذية حساب بنكي (من الخزينة)'
-                    : previewingTx.withdrawal_sub_type === 'car' ? '🚗 مصاريف سيارات'
-                    : previewingTx.withdrawal_sub_type === 'car_gas' ? '⛽ سيارة (جاز)'
-                    : previewingTx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)'
-                    : previewingTx.withdrawal_sub_type === 'car_other' ? '🔧 سيارة (مصاريف أخرى)'
-                    : previewingTx.withdrawal_sub_type === 'salary' ? '💼 رواتب وأجور'
-                    : previewingTx.withdrawal_sub_type === 'commission' ? '💰 عمولات'
-                    : previewingTx.withdrawal_sub_type === 'loan' ? '💸 سُلفة موظف'
-                    : previewingTx.withdrawal_sub_type === 'direct_rent' ? '🏢 إيجار'
-                    : previewingTx.withdrawal_sub_type === 'direct_operational' ? '🔧 مصاريف تشغيل'
-                    : previewingTx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى'
-                    : '📤 مصروفات عامة / نقدية مباشرة'}
-                </div>
-              </div>
-            </div>
-
-            {/* Car Details if applicable */}
-            {previewingTx.car_plate_number && (
-              <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '14px', padding: '0.9rem', marginBottom: '1.25rem' }}>
-                <div style={{ fontWeight: 'bold', color: '#fb923c', fontSize: '0.9rem', marginBottom: '0.3rem' }}>🚗 بيانات السيارة المربوطة بالطلب:</div>
-                <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', fontSize: '0.85rem', color: '#f8fafc' }}>
-                  <div>رقم اللوحة: <strong>{previewingTx.car_plate_number}</strong></div>
-                  {previewingTx.car_driver_name && <div>السائق: <strong>{previewingTx.car_driver_name}</strong></div>}
-                  {previewingTx.car_odometer_km && <div>قراءة العداد: <strong>{previewingTx.car_odometer_km} كم</strong></div>}
-                </div>
-              </div>
-            )}
-
-            {/* Denominations breakdown if present */}
-            {(previewingTx.denom_200 > 0 || previewingTx.denom_100 > 0 || previewingTx.denom_50 > 0 || previewingTx.denom_20 > 0 || previewingTx.denom_10 > 0 || previewingTx.denom_5 > 0 || previewingTx.denom_1 > 0) && (
-              <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '14px', padding: '0.9rem', marginBottom: '1.25rem' }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#cbd5e1', marginBottom: '0.5rem' }}>🧮 تفكيك الفئات النقدية المطلوبة من الخزينة:</div>
-                <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
-                  {previewingTx.denom_200 > 0 && <span className="denom-badge">200 × {previewingTx.denom_200}</span>}
-                  {previewingTx.denom_100 > 0 && <span className="denom-badge">100 × {previewingTx.denom_100}</span>}
-                  {previewingTx.denom_50 > 0 && <span className="denom-badge">50 × {previewingTx.denom_50}</span>}
-                  {previewingTx.denom_20 > 0 && <span className="denom-badge">20 × {previewingTx.denom_20}</span>}
-                  {previewingTx.denom_10 > 0 && <span className="denom-badge">10 × {previewingTx.denom_10}</span>}
-                  {previewingTx.denom_5 > 0 && <span className="denom-badge">5 × {previewingTx.denom_5}</span>}
-                  {previewingTx.denom_1 > 0 && <span className="denom-badge">1 × {previewingTx.denom_1}</span>}
-                </div>
-              </div>
-            )}
-
-            {/* Notes & Receipt */}
-            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '14px', padding: '0.9rem', marginBottom: '1.5rem' }}>
-              <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#cbd5e1', marginBottom: '0.3rem' }}>📝 ملاحظات المحاسب والبيانات الإضافية:</div>
-              <div style={{ fontSize: '0.9rem', color: '#f8fafc', lineHeight: '1.5' }}>{previewingTx.notes || 'لا توجد ملاحظات مدونة لهذا الطلب.'}</div>
-              
-              {previewingTx.receipt_image && (
-                <div style={{ marginTop: '0.85rem', borderTop: '1px solid #334155', paddingTop: '0.75rem' }}>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#a78bfa', marginBottom: '0.4rem' }}>📎 المستند والإيصال المرفق:</div>
-                  <img 
-                    src={previewingTx.receipt_image} 
-                    alt="إيصال الصرف" 
-                    style={{ maxWidth: '100%', maxHeight: '250px', borderRadius: '12px', border: '1px solid #475569', cursor: 'pointer' }}
-                    onClick={() => setActiveImageModal(previewingTx.receipt_image)}
-                  />
                 </div>
               )}
+
+              {/* Financial Liquidity & Cover Gauge */}
+              {previewingTx.payment_method !== 'bank_transfer' ? (
+                <div style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid #334155', borderRadius: '16px', padding: '1.15rem', marginBottom: '1.25rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: '#cbd5e1' }}>🏦 تحليل غطاء رصيد الخزينة الحالي:</span>
+                    <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>صرف نقدي من الخزينة الرئيسية</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', textAlign: 'center' }}>
+                    <div style={{ background: '#1e293b', padding: '0.75rem', borderRadius: '12px', border: '1px solid #334155' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>رصيد الخزينة الحالي</div>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#38bdf8', marginTop: '0.2rem' }}>
+                        {(dashboardData.summary.safeBalance || 0).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                      </div>
+                    </div>
+                    <div style={{ background: '#1e293b', padding: '0.75rem', borderRadius: '12px', border: '1px solid #334155' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>المبلغ المطلوب صرفه</div>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#f43f5e', marginTop: '0.2rem' }}>
+                        -{Number(previewingTx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                      </div>
+                    </div>
+                    <div style={{ background: '#1e293b', padding: '0.75rem', borderRadius: '12px', border: '1px solid #334155' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>الرصيد المتبقي المتوقع</div>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 900, color: (dashboardData.summary.safeBalance - Number(previewingTx.amount)) >= 0 ? '#4ade80' : '#f87171', marginTop: '0.2rem' }}>
+                        {(dashboardData.summary.safeBalance - Number(previewingTx.amount)).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{
+                    marginTop: '0.85rem',
+                    padding: '0.65rem 1rem',
+                    borderRadius: '12px',
+                    fontSize: '0.85rem',
+                    fontWeight: 'bold',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    background: (dashboardData.summary.safeBalance - Number(previewingTx.amount)) >= 0 ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                    color: (dashboardData.summary.safeBalance - Number(previewingTx.amount)) >= 0 ? '#4ade80' : '#f87171',
+                    border: `1px solid ${(dashboardData.summary.safeBalance - Number(previewingTx.amount)) >= 0 ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`
+                  }}>
+                    {(dashboardData.summary.safeBalance - Number(previewingTx.amount)) >= 0
+                      ? '🟢 مؤشر السيولة: رصيد الخزينة كافٍ تماماً لإجازة عملية الصرف.'
+                      : `⚠️ تحذير عجز: رصيد الخزينة غير كافٍ ومحتاج تغذية بمبلغ ${Math.abs(dashboardData.summary.safeBalance - Number(previewingTx.amount)).toLocaleString()} ج.م!`}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid #334155', borderRadius: '16px', padding: '1.15rem', marginBottom: '1.25rem' }}>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#38bdf8', marginBottom: '0.5rem' }}>
+                    🏦 مصدر الصرف: تحويل بنكي ({previewingTx.bank_name || 'حساب بنكي'})
+                  </div>
+                  <div style={{ fontSize: '0.85rem', color: '#cbd5e1' }}>
+                    رقم الحساب الخصم: <strong>{previewingTx.bank_account_number || '—'}</strong>
+                  </div>
+                </div>
+              )}
+
+              {/* Context & Details Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+                <div style={{ background: '#1e293b', padding: '0.9rem', borderRadius: '14px', border: '1px solid #334155' }}>
+                  <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.2rem' }}>👤 طالب الصرف (المحاسب)</div>
+                  <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#f8fafc' }}>{previewingTx.creator_name || 'المحاسب'}</div>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.15rem' }}>{new Date(previewingTx.date).toLocaleString('ar-EG')}</div>
+                </div>
+
+                <div style={{ background: '#1e293b', padding: '0.9rem', borderRadius: '14px', border: '1px solid #334155' }}>
+                  <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.2rem' }}>🏢 الجهة أو الحساب المستلم</div>
+                  <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#f8fafc' }}>
+                    {previewingTx.rep_name || previewingTx.company_name || (previewingTx.bank_name ? `🏦 ${previewingTx.bank_name}` : 'مصروفات تشغيلية (خزينة مباشرة)')}
+                  </div>
+                  {previewingTx.bank_name && !previewingTx.rep_name && (
+                    <div style={{ fontSize: '0.75rem', color: '#38bdf8', marginTop: '0.15rem' }}>
+                      💳 رقم الحساب: {previewingTx.bank_account_number || '—'}
+                    </div>
+                  )}
+                  {previewingTx.agency_name && <div style={{ fontSize: '0.75rem', color: '#38bdf8', marginTop: '0.15rem' }}>توكيل: {previewingTx.agency_name}</div>}
+                </div>
+
+                <div style={{ background: '#1e293b', padding: '0.9rem', borderRadius: '14px', border: '1px solid #334155' }}>
+                  <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.2rem' }}>🏷️ بند الصرف المحدد</div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: (previewingTx.bank_name || previewingTx.bank_id || previewingTx.withdrawal_sub_type === 'bank_deposit') ? '#38bdf8' : '#fb923c' }}>
+                    {(previewingTx.bank_name || previewingTx.bank_id || previewingTx.withdrawal_sub_type === 'bank_deposit') ? '🏦 إيداع وتغذية حساب بنكي (من الخزينة)'
+                      : previewingTx.withdrawal_sub_type === 'car' ? '🚗 مصاريف سيارات'
+                        : previewingTx.withdrawal_sub_type === 'car_gas' ? '⛽ سيارة (جاز)'
+                          : previewingTx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)'
+                            : previewingTx.withdrawal_sub_type === 'car_other' ? '🔧 سيارة (مصاريف أخرى)'
+                              : previewingTx.withdrawal_sub_type === 'salary' ? '💼 رواتب وأجور'
+                                : previewingTx.withdrawal_sub_type === 'commission' ? '💰 عمولات'
+                                  : previewingTx.withdrawal_sub_type === 'loan' ? '💸 سُلفة موظف'
+                                    : previewingTx.withdrawal_sub_type === 'direct_rent' ? '🏢 إيجار'
+                                      : previewingTx.withdrawal_sub_type === 'direct_operational' ? '🔧 مصاريف تشغيل'
+                                        : previewingTx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى'
+                                          : '📤 مصروفات عامة / نقدية مباشرة'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Car Details if applicable */}
+              {previewingTx.car_plate_number && (
+                <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '14px', padding: '0.9rem', marginBottom: '1.25rem' }}>
+                  <div style={{ fontWeight: 'bold', color: '#fb923c', fontSize: '0.9rem', marginBottom: '0.3rem' }}>🚗 بيانات السيارة المربوطة بالطلب:</div>
+                  <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', fontSize: '0.85rem', color: '#f8fafc' }}>
+                    <div>رقم اللوحة: <strong>{previewingTx.car_plate_number}</strong></div>
+                    {previewingTx.car_driver_name && <div>السائق: <strong>{previewingTx.car_driver_name}</strong></div>}
+                    {previewingTx.car_odometer_km && <div>قراءة العداد: <strong>{previewingTx.car_odometer_km} كم</strong></div>}
+                  </div>
+                </div>
+              )}
+
+              {/* Denominations breakdown if present */}
+              {(previewingTx.denom_200 > 0 || previewingTx.denom_100 > 0 || previewingTx.denom_50 > 0 || previewingTx.denom_20 > 0 || previewingTx.denom_10 > 0 || previewingTx.denom_5 > 0 || previewingTx.denom_1 > 0) && (
+                <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '14px', padding: '0.9rem', marginBottom: '1.25rem' }}>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#cbd5e1', marginBottom: '0.5rem' }}>🧮 تفكيك الفئات النقدية المطلوبة من الخزينة:</div>
+                  <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                    {previewingTx.denom_200 > 0 && <span className="denom-badge">200 × {previewingTx.denom_200}</span>}
+                    {previewingTx.denom_100 > 0 && <span className="denom-badge">100 × {previewingTx.denom_100}</span>}
+                    {previewingTx.denom_50 > 0 && <span className="denom-badge">50 × {previewingTx.denom_50}</span>}
+                    {previewingTx.denom_20 > 0 && <span className="denom-badge">20 × {previewingTx.denom_20}</span>}
+                    {previewingTx.denom_10 > 0 && <span className="denom-badge">10 × {previewingTx.denom_10}</span>}
+                    {previewingTx.denom_5 > 0 && <span className="denom-badge">5 × {previewingTx.denom_5}</span>}
+                    {previewingTx.denom_1 > 0 && <span className="denom-badge">1 × {previewingTx.denom_1}</span>}
+                  </div>
+                </div>
+              )}
+
+              {/* Notes & Receipt */}
+              <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '14px', padding: '0.9rem', marginBottom: '1.5rem' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#cbd5e1', marginBottom: '0.3rem' }}>📝 ملاحظات المحاسب والبيانات الإضافية:</div>
+                <div style={{ fontSize: '0.9rem', color: '#f8fafc', lineHeight: '1.5' }}>{previewingTx.notes || 'لا توجد ملاحظات مدونة لهذا الطلب.'}</div>
+
+                {previewingTx.receipt_image && (
+                  <div style={{ marginTop: '0.85rem', borderTop: '1px solid #334155', paddingTop: '0.75rem' }}>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#a78bfa', marginBottom: '0.4rem' }}>📎 المستند والإيصال المرفق:</div>
+                    <img
+                      src={previewingTx.receipt_image}
+                      alt="إيصال الصرف"
+                      style={{ maxWidth: '100%', maxHeight: '250px', borderRadius: '12px', border: '1px solid #475569', cursor: 'pointer' }}
+                      onClick={() => setActiveImageModal(previewingTx.receipt_image)}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Decision Action Buttons */}
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <button
+                  className="btn btn-primary"
+                  style={{ flex: 2, padding: '0.75rem 1rem', background: 'linear-gradient(135deg, #10b981, #059669)', fontSize: '0.95rem', fontWeight: 'bold', border: 'none', boxShadow: '0 4px 14px rgba(16,185,129,0.3)', cursor: 'pointer' }}
+                  onClick={() => {
+                    const txId = previewingTx.id;
+                    setPreviewingTx(null);
+                    handleApproveTx(txId);
+                  }}
+                >
+                  ✔️ اعتماد وموافقة على الطلب الآن
+                </button>
+
+                <button
+                  className="btn btn-secondary"
+                  style={{ flex: 1, padding: '0.75rem 1rem', fontSize: '0.9rem', cursor: 'pointer' }}
+                  onClick={() => {
+                    const targetTx = previewingTx;
+                    setPreviewingTx(null);
+                    setEditingTx({
+                      ...targetTx,
+                      denominations: {
+                        denom_200: targetTx.denom_200 || 0,
+                        denom_100: targetTx.denom_100 || 0,
+                        denom_50: targetTx.denom_50 || 0,
+                        denom_20: targetTx.denom_20 || 0,
+                        denom_10: targetTx.denom_10 || 0,
+                        denom_5: targetTx.denom_5 || 0,
+                        denom_1: targetTx.denom_1 || 0
+                      }
+                    });
+                  }}
+                >
+                  ✏️ تعديل الطلب
+                </button>
+
+                <button
+                  className="btn btn-secondary"
+                  style={{ flex: 1, padding: '0.75rem 1rem', background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)', fontSize: '0.9rem', fontWeight: 'bold', cursor: 'pointer' }}
+                  onClick={() => {
+                    const txId = previewingTx.id;
+                    setPreviewingTx(null);
+                    handleRejectTx(txId);
+                  }}
+                >
+                  ❌ رفض الطلب
+                </button>
+              </div>
+
             </div>
-
-            {/* Decision Action Buttons */}
-            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-              <button
-                className="btn btn-primary"
-                style={{ flex: 2, padding: '0.75rem 1rem', background: 'linear-gradient(135deg, #10b981, #059669)', fontSize: '0.95rem', fontWeight: 'bold', border: 'none', boxShadow: '0 4px 14px rgba(16,185,129,0.3)', cursor: 'pointer' }}
-                onClick={() => {
-                  const txId = previewingTx.id;
-                  setPreviewingTx(null);
-                  handleApproveTx(txId);
-                }}
-              >
-                ✔️ اعتماد وموافقة على الطلب الآن
-              </button>
-
-              <button
-                className="btn btn-secondary"
-                style={{ flex: 1, padding: '0.75rem 1rem', fontSize: '0.9rem', cursor: 'pointer' }}
-                onClick={() => {
-                  const targetTx = previewingTx;
-                  setPreviewingTx(null);
-                  setEditingTx({
-                    ...targetTx,
-                    denominations: {
-                      denom_200: targetTx.denom_200 || 0,
-                      denom_100: targetTx.denom_100 || 0,
-                      denom_50: targetTx.denom_50 || 0,
-                      denom_20: targetTx.denom_20 || 0,
-                      denom_10: targetTx.denom_10 || 0,
-                      denom_5: targetTx.denom_5 || 0,
-                      denom_1: targetTx.denom_1 || 0
-                    }
-                  });
-                }}
-              >
-                ✏️ تعديل الطلب
-              </button>
-
-              <button
-                className="btn btn-secondary"
-                style={{ flex: 1, padding: '0.75rem 1rem', background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)', fontSize: '0.9rem', fontWeight: 'bold', cursor: 'pointer' }}
-                onClick={() => {
-                  const txId = previewingTx.id;
-                  setPreviewingTx(null);
-                  handleRejectTx(txId);
-                }}
-              >
-                ❌ رفض الطلب
-              </button>
-            </div>
-
           </div>
-        </div>
       )}
 
-      {/* EDIT TRANSACTION OVERLAY MODAL */}
-      {editingTx && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-          direction: 'rtl', padding: '1.5rem'
-        }}>
-          <div className="panel" style={{ width: '100%', maxWidth: '520px', maxHeight: '90vh', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
-            <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h2 className="panel-title">✏️ تعديل حركة مالية</h2>
-              <button className="btn btn-secondary" onClick={() => setEditingTx(null)} style={{ padding: '0.3rem 0.6rem' }}>✕ إغلاق</button>
-            </div>
-            
-            {editError && <div className="alert alert-error">⚠️ {editError}</div>}
-            {editSuccess && <div className="alert alert-success">✔️ {editSuccess}</div>}
-            
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              setEditError('');
-              setEditSuccess('');
-              
-              if (editingTx.type === 'deposit' && editingTx.payment_method === 'cash') {
-                const d = editingTx.denominations;
-                const calc = 
-                  (Number(d.denom_200 || 0) * 200) + 
-                  (Number(d.denom_100 || 0) * 100) + 
-                  (Number(d.denom_50 || 0) * 50) + 
-                  (Number(d.denom_20 || 0) * 20) + 
-                  (Number(d.denom_10 || 0) * 10) + 
-                  (Number(d.denom_5 || 0) * 5) + 
-                  (Number(d.denom_1 || 0) * 1);
-                if (isNaN(calc) || Math.abs(calc - Number(editingTx.amount)) > 0.01) {
-                  const msg = `مجموع الفئات (${(calc || 0).toLocaleString()} ج.م) لا يطابق قيمة المبلغ (${Number(editingTx.amount).toLocaleString()} ج.م)!`;
-                  setEditError(msg);
-                  alert(msg);
-                  return;
-                }
-              }
-              
-              try {
-                const res = await fetch(`/api/transactions/${editingTx.id}`, {
-                  method: 'PUT',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    amount: Number(editingTx.amount),
-                    notes: editingTx.notes,
-                    withdrawal_sub_type: editingTx.withdrawal_sub_type,
-                    car_id: editingTx.withdrawal_sub_type && editingTx.withdrawal_sub_type.startsWith('car') ? (editingTx.car_id ? Number(editingTx.car_id) : null) : null,
-                    ...(editingTx.rep_id ? { rep_id: editingTx.rep_id } : {}),
-                    ...(editingTx.bank_id ? { bank_id: editingTx.bank_id } : {}),
-                    ...(editingTx.agency_id ? { agency_id: editingTx.agency_id } : {}),
-                    denominations: editingTx.type === 'deposit' && editingTx.payment_method === 'cash' ? editingTx.denominations : null
-                  })
-                });
-                const data = await res.json();
-                if (res.ok) {
-                  setEditSuccess('تم تعديل العملية بنجاح!');
-                  setTimeout(() => {
-                    setEditingTx(null);
-                    loadDashboard();
-                    loadTransactions();
-                    loadCarExpenses();
-                    loadBanks();
-                    loadAgencies();
-                    loadReps();
-                  }, 1000);
-                } else {
-                  setEditError(data.error || 'حدث خطأ أثناء تعديل العملية');
-                }
-              } catch (err) {
-                setEditError('تعذر الاتصال بالسيرفر');
-              }
+          {/* EDIT TRANSACTION OVERLAY MODAL */}
+          {editingTx && (
+            <div style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+              direction: 'rtl', padding: '1.5rem'
             }}>
-              
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>المبلغ (ج.م) <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  required
-                  value={editingTx.amount}
-                  onChange={(e) => setEditingTx({ ...editingTx, amount: e.target.value })}
-                  style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
-                />
-              </div>
-              
-              {editingTx.type === 'withdrawal' && (
-                <>
-                  <div className="form-group" style={{ marginBottom: '1rem' }}>
-                    <label>نوع الصرف <span style={{ color: 'var(--danger)' }}>*</span></label>
-                    <select
-                      value={editingTx.withdrawal_sub_type || ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setEditingTx({ ...editingTx, withdrawal_sub_type: val });
-                      }}
-                      required
-                      style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
-                    >
-                      <option value="">اختر نوع الصرف...</option>
-                      {(() => {
-                        const carOpts = [
-                          { value: 'car_gas', label: '🚗 مصاريف سيارات (جاز)' },
-                          { value: 'car_oil', label: '🚗 مصاريف سيارات (زيت)' },
-                          { value: 'car_other', label: '🚗 مصاريف سيارات (مصاريف أخرى)' },
-                          { value: 'car', label: '🚗 مصاريف سيارات (عام)' }
-                        ];
-                        if (!editingTx.rep_id) {
-                          return [
-                            ...carOpts,
-                            { value: 'direct_rent', label: '🏢 الإيجار' },
-                            { value: 'direct_operational', label: '🔧 مصاريف تشغيل عامة' },
-                            { value: 'direct_other', label: '📝 مصاريف عامة أخرى' }
-                          ];
-                        }
-                        return [
-                          ...carOpts,
-                          { value: 'salary', label: '💵 راتب' },
-                          { value: 'commission', label: '💰 عمولة' },
-                          { value: 'loan', label: '💸 سلفة' },
-                          { value: 'other', label: '📝 أخرى / صرف عام' }
-                        ];
-                      })().map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  </div>
-{/* عرض نوع المعاملة المختار */}
-<div className="form-group" style={{ marginTop: '0.5rem' }}>
-  <label>نوع المعاملة</label>
-  <div style={{ padding: '0.4rem', background: 'var(--bg-secondary)', borderRadius: '6px', color: 'var(--text-primary)' }}>
-    {(() => {
-      switch (editingTx.withdrawal_sub_type) {
-        case 'car':
-          return 'مصاريف سيارات (عام)';
-        case 'car_gas':
-          return 'مصاريف سيارات (جاز)';
-        case 'car_oil':
-          return 'مصاريف سيارات (زيت)';
-        case 'car_other':
-          return 'مصاريف سيارات (مصاريف أخرى)';
-        case 'salary':
-          return 'رواتب وأجور';
-        case 'commission':
-          return 'عمولات';
-        case 'loan':
-          return 'سلفة';
-        case 'other':
-          return 'صرف عام';
-        default:
-          return editingTx.withdrawal_sub_type || '';
-      }
-    })()}
-  </div>
-</div>
+              <div className="panel" style={{ width: '100%', maxWidth: '520px', maxHeight: '90vh', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
+                <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <h2 className="panel-title">✏️ تعديل حركة مالية</h2>
+                  <button className="btn btn-secondary" onClick={() => setEditingTx(null)} style={{ padding: '0.3rem 0.6rem' }}>✕ إغلاق</button>
+                </div>
 
-                  {editingTx.withdrawal_sub_type && editingTx.withdrawal_sub_type.startsWith('car') && (
+                {editError && <div className="alert alert-error">⚠️ {editError}</div>}
+                {editSuccess && <div className="alert alert-success">✔️ {editSuccess}</div>}
+
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  setEditError('');
+                  setEditSuccess('');
+
+                  if (editingTx.type === 'deposit' && editingTx.payment_method === 'cash') {
+                    const d = editingTx.denominations;
+                    const calc =
+                      (Number(d.denom_200 || 0) * 200) +
+                      (Number(d.denom_100 || 0) * 100) +
+                      (Number(d.denom_50 || 0) * 50) +
+                      (Number(d.denom_20 || 0) * 20) +
+                      (Number(d.denom_10 || 0) * 10) +
+                      (Number(d.denom_5 || 0) * 5) +
+                      (Number(d.denom_1 || 0) * 1);
+                    if (isNaN(calc) || Math.abs(calc - Number(editingTx.amount)) > 0.01) {
+                      const msg = `مجموع الفئات (${(calc || 0).toLocaleString()} ج.م) لا يطابق قيمة المبلغ (${Number(editingTx.amount).toLocaleString()} ج.م)!`;
+                      setEditError(msg);
+                      alert(msg);
+                      return;
+                    }
+                  }
+
+                  try {
+                    const res = await fetch(`/api/transactions/${editingTx.id}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        amount: Number(editingTx.amount),
+                        notes: editingTx.notes,
+                        withdrawal_sub_type: editingTx.withdrawal_sub_type,
+                        car_id: editingTx.withdrawal_sub_type && editingTx.withdrawal_sub_type.startsWith('car') ? (editingTx.car_id ? Number(editingTx.car_id) : null) : null,
+                        ...(editingTx.rep_id ? { rep_id: editingTx.rep_id } : {}),
+                        ...(editingTx.bank_id ? { bank_id: editingTx.bank_id } : {}),
+                        ...(editingTx.agency_id ? { agency_id: editingTx.agency_id } : {}),
+                        denominations: editingTx.type === 'deposit' && editingTx.payment_method === 'cash' ? editingTx.denominations : null
+                      })
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                      setEditSuccess('تم تعديل العملية بنجاح!');
+                      setTimeout(() => {
+                        setEditingTx(null);
+                        loadDashboard();
+                        loadTransactions();
+                        loadCarExpenses();
+                        loadBanks();
+                        loadAgencies();
+                        loadReps();
+                      }, 1000);
+                    } else {
+                      setEditError(data.error || 'حدث خطأ أثناء تعديل العملية');
+                    }
+                  } catch (err) {
+                    setEditError('تعذر الاتصال بالسيرفر');
+                  }
+                }}>
+
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label>المبلغ (ج.م) <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      required
+                      value={editingTx.amount}
+                      onChange={(e) => setEditingTx({ ...editingTx, amount: e.target.value })}
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                    />
+                  </div>
+
+                  {editingTx.type === 'withdrawal' && (
                     <>
-                      <div className="form-group" style={{ marginBottom: '1rem', paddingRight: '1rem', borderRight: '3px solid var(--primary)' }}>
-                        <label>السيارة <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <div className="form-group" style={{ marginBottom: '1rem' }}>
+                        <label>نوع الصرف <span style={{ color: 'var(--danger)' }}>*</span></label>
                         <select
-                          value={editingTx.car_id || ''}
-                          onChange={(e) => setEditingTx({ ...editingTx, car_id: e.target.value })}
+                          value={editingTx.withdrawal_sub_type || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setEditingTx({ ...editingTx, withdrawal_sub_type: val });
+                          }}
                           required
                           style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
                         >
-                          <option value="">اختر السيارة...</option>
-                          {carsList.map(c => (
-                            <option key={c.id} value={c.id}>
-                              {c.plate_letters && c.plate_numbers ? `${c.plate_letters} - ${c.plate_numbers}` : c.plate_number}
-                              {c.driver_name ? ` — 👤 ${c.driver_name}` : ''}
-                            </option>
+                          <option value="">اختر نوع الصرف...</option>
+                          {(() => {
+                            const carOpts = [
+                              { value: 'car_gas', label: '🚗 مصاريف سيارات (جاز)' },
+                              { value: 'car_oil', label: '🚗 مصاريف سيارات (زيت)' },
+                              { value: 'car_other', label: '🚗 مصاريف سيارات (مصاريف أخرى)' },
+                              { value: 'car', label: '🚗 مصاريف سيارات (عام)' }
+                            ];
+                            if (!editingTx.rep_id) {
+                              return [
+                                ...carOpts,
+                                { value: 'direct_rent', label: '🏢 الإيجار' },
+                                { value: 'direct_operational', label: '🔧 مصاريف تشغيل عامة' },
+                                { value: 'direct_other', label: '📝 مصاريف عامة أخرى' }
+                              ];
+                            }
+                            return [
+                              ...carOpts,
+                              { value: 'salary', label: '💵 راتب' },
+                              { value: 'commission', label: '💰 عمولة' },
+                              { value: 'loan', label: '💸 سلفة' },
+                              { value: 'other', label: '📝 أخرى / صرف عام' }
+                            ];
+                          })().map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
                           ))}
                         </select>
                       </div>
-                      <div className="form-group" style={{ marginBottom: '1rem', paddingRight: '1rem', borderRight: '3px solid var(--primary)' }}>
-                        <label>بند مصروفات السيارة <span style={{ color: 'var(--danger)' }}>*</span></label>
-                        <select
-                          value={editingTx.withdrawal_sub_type}
-                          onChange={(e) => setEditingTx({ ...editingTx, withdrawal_sub_type: e.target.value })}
-                          required
-                          style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
-                        >
-                          <option value="car_gas">جاز</option>
-                          <option value="car_oil">زيت</option>
-                          <option value="car_other">مصاريف أخرى</option>
-                        </select>
+                      {/* عرض نوع المعاملة المختار */}
+                      <div className="form-group" style={{ marginTop: '0.5rem' }}>
+                        <label>نوع المعاملة</label>
+                        <div style={{ padding: '0.4rem', background: 'var(--bg-secondary)', borderRadius: '6px', color: 'var(--text-primary)' }}>
+                          {(() => {
+                            switch (editingTx.withdrawal_sub_type) {
+                              case 'car':
+                                return 'مصاريف سيارات (عام)';
+                              case 'car_gas':
+                                return 'مصاريف سيارات (جاز)';
+                              case 'car_oil':
+                                return 'مصاريف سيارات (زيت)';
+                              case 'car_other':
+                                return 'مصاريف سيارات (مصاريف أخرى)';
+                              case 'salary':
+                                return 'رواتب وأجور';
+                              case 'commission':
+                                return 'عمولات';
+                              case 'loan':
+                                return 'سلفة';
+                              case 'other':
+                                return 'صرف عام';
+                              default:
+                                return editingTx.withdrawal_sub_type || '';
+                            }
+                          })()}
+                        </div>
                       </div>
+
+                      {editingTx.withdrawal_sub_type && editingTx.withdrawal_sub_type.startsWith('car') && (
+                        <>
+                          <div className="form-group" style={{ marginBottom: '1rem', paddingRight: '1rem', borderRight: '3px solid var(--primary)' }}>
+                            <label>السيارة <span style={{ color: 'var(--danger)' }}>*</span></label>
+                            <select
+                              value={editingTx.car_id || ''}
+                              onChange={(e) => setEditingTx({ ...editingTx, car_id: e.target.value })}
+                              required
+                              style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                            >
+                              <option value="">اختر السيارة...</option>
+                              {carsList.map(c => (
+                                <option key={c.id} value={c.id}>
+                                  {c.plate_letters && c.plate_numbers ? `${c.plate_letters} - ${c.plate_numbers}` : c.plate_number}
+                                  {c.driver_name ? ` — 👤 ${c.driver_name}` : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="form-group" style={{ marginBottom: '1rem', paddingRight: '1rem', borderRight: '3px solid var(--primary)' }}>
+                            <label>بند مصروفات السيارة <span style={{ color: 'var(--danger)' }}>*</span></label>
+                            <select
+                              value={editingTx.withdrawal_sub_type}
+                              onChange={(e) => setEditingTx({ ...editingTx, withdrawal_sub_type: e.target.value })}
+                              required
+                              style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                            >
+                              <option value="car_gas">جاز</option>
+                              <option value="car_oil">زيت</option>
+                              <option value="car_other">مصاريف أخرى</option>
+                            </select>
+                          </div>
+                        </>
+                      )}
                     </>
                   )}
-                </>
-              )}
-              
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>ملاحظات</label>
-                <textarea
-                  rows="3"
-                  value={editingTx.notes || ''}
-                  onChange={(e) => setEditingTx({ ...editingTx, notes: e.target.value })}
-                  style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
-                />
-              </div>
-              
-              {editingTx.type === 'deposit' && editingTx.payment_method === 'cash' && (
-                <div className="denom-section" style={{ marginTop: '1.5rem', marginBottom: '1.5rem' }}>
-                  <div className="denom-section-title">💵 فئات المبالغ النقدية</div>
-                  <div className="denom-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                    {[200, 100, 50, 20, 10, 5, 1].map(denom => (
-                      <div className="denom-input-group" key={denom} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
-                        <span className="denom-label" style={{ minWidth: '50px' }}>{denom} ج.م</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={editingTx.denominations[`denom_${denom}`] || 0}
-                          onChange={(e) => {
-                            const val = Math.max(0, parseInt(e.target.value) || 0);
-                            setEditingTx({
-                              ...editingTx,
-                              denominations: {
-                                ...editingTx.denominations,
-                                [`denom_${denom}`]: val
-                              }
-                            });
-                          }}
-                          style={{ width: '100%', padding: '0.4rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', textAlign: 'center' }}
-                        />
+
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label>ملاحظات</label>
+                    <textarea
+                      rows="3"
+                      value={editingTx.notes || ''}
+                      onChange={(e) => setEditingTx({ ...editingTx, notes: e.target.value })}
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                    />
+                  </div>
+
+                  {editingTx.type === 'deposit' && editingTx.payment_method === 'cash' && (
+                    <div className="denom-section" style={{ marginTop: '1.5rem', marginBottom: '1.5rem' }}>
+                      <div className="denom-section-title">💵 فئات المبالغ النقدية</div>
+                      <div className="denom-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                        {[200, 100, 50, 20, 10, 5, 1].map(denom => (
+                          <div className="denom-input-group" key={denom} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                            <span className="denom-label" style={{ minWidth: '50px' }}>{denom} ج.م</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editingTx.denominations[`denom_${denom}`] || 0}
+                              onChange={(e) => {
+                                const val = Math.max(0, parseInt(e.target.value) || 0);
+                                setEditingTx({
+                                  ...editingTx,
+                                  denominations: {
+                                    ...editingTx.denominations,
+                                    [`denom_${denom}`]: val
+                                  }
+                                });
+                              }}
+                              style={{ width: '100%', padding: '0.4rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', textAlign: 'center' }}
+                            />
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    </div>
+                  )}
+
+                  <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '1rem' }}>💾 حفظ التعديلات</button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* DISBURSE TRANSACTION OVERLAY MODAL */}
+          {disbursingTx && (
+            <div style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+              direction: 'rtl', padding: '1.5rem'
+            }}>
+              <div className="panel" style={{ width: '100%', maxWidth: '520px', maxHeight: '90vh', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
+                <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <h2 className="panel-title">💵 إتمام عملية الصرف الفعلي</h2>
+                  <button className="btn btn-secondary" onClick={() => setDisbursingTx(null)} style={{ padding: '0.3rem 0.6rem' }}>✕ إغلاق</button>
+                </div>
+
+                {disburseError && <div className="alert alert-error">⚠️ {disburseError}</div>}
+
+                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.9rem' }}>
+                    <div><strong>المستلم:</strong> {disbursingTx.rep_name || 'خزينة مباشرة'} ({disbursingTx.rep_code || '-'})</div>
+                    <div><strong>المبلغ المطلوب:</strong> <span style={{ color: 'var(--danger)', fontWeight: 'bold' }}>{Number(disbursingTx.amount).toLocaleString()} ج.م</span></div>
+                    <div style={{ gridColumn: 'span 2' }}><strong>بند الصرف:</strong> {getWithdrawalSubTypes().find(o => o.value === disbursingTx.withdrawal_sub_type)?.label || disbursingTx.withdrawal_sub_type || 'عام'}</div>
+                    {disbursingTx.notes && <div style={{ gridColumn: 'span 2' }}><strong>الملاحظات:</strong> {disbursingTx.notes}</div>}
                   </div>
                 </div>
-              )}
-              
-              <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '1rem' }}>💾 حفظ التعديلات</button>
-            </form>
-          </div>
-        </div>
-      )}
 
-      {/* DISBURSE TRANSACTION OVERLAY MODAL */}
-      {disbursingTx && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-          direction: 'rtl', padding: '1.5rem'
-        }}>
-          <div className="panel" style={{ width: '100%', maxWidth: '520px', maxHeight: '90vh', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
-            <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h2 className="panel-title">💵 إتمام عملية الصرف الفعلي</h2>
-              <button className="btn btn-secondary" onClick={() => setDisbursingTx(null)} style={{ padding: '0.3rem 0.6rem' }}>✕ إغلاق</button>
-            </div>
-            
-            {disburseError && <div className="alert alert-error">⚠️ {disburseError}</div>}
-            
-            <div style={{ background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.9rem' }}>
-                <div><strong>المستلم:</strong> {disbursingTx.rep_name || 'خزينة مباشرة'} ({disbursingTx.rep_code || '-'})</div>
-                <div><strong>المبلغ المطلوب:</strong> <span style={{ color: 'var(--danger)', fontWeight: 'bold' }}>{Number(disbursingTx.amount).toLocaleString()} ج.م</span></div>
-                <div style={{ gridColumn: 'span 2' }}><strong>بند الصرف:</strong> {getWithdrawalSubTypes().find(o => o.value === disbursingTx.withdrawal_sub_type)?.label || disbursingTx.withdrawal_sub_type || 'عام'}</div>
-                {disbursingTx.notes && <div style={{ gridColumn: 'span 2' }}><strong>الملاحظات:</strong> {disbursingTx.notes}</div>}
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  setDisburseError('');
+
+                  const calc =
+                    (Number(disburseDenominations.denom_200 || 0) * 200) +
+                    (Number(disburseDenominations.denom_100 || 0) * 100) +
+                    (Number(disburseDenominations.denom_50 || 0) * 50) +
+                    (Number(disburseDenominations.denom_20 || 0) * 20) +
+                    (Number(disburseDenominations.denom_10 || 0) * 10) +
+                    (Number(disburseDenominations.denom_5 || 0) * 5) +
+                    (Number(disburseDenominations.denom_1 || 0) * 1);
+                  if (isNaN(calc) || Math.abs(calc - Number(disbursingTx.amount)) > 0.01) {
+                    const msg = `مجموع الفئات (${(calc || 0).toLocaleString()} ج.م) لا يطابق قيمة المبلغ المطلوبة (${Number(disbursingTx.amount).toLocaleString()} ج.م)!`;
+                    setDisburseError(msg);
+                    return;
+                  }
+
+                  try {
+                    const res = await fetch(`/api/transactions/${disbursingTx.id}/disburse`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ denominations: disburseDenominations })
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                      setDisbursingTx(null);
+                      loadDashboard();
+                      loadTransactions();
+                      loadCarExpenses();
+                    } else {
+                      setDisburseError(data.error || 'حدث خطأ أثناء إتمام الصرف');
+                    }
+                  } catch (err) {
+                    setDisburseError('تعذر الاتصال بالسيرفر');
+                  }
+                }}>
+
+                  <div className="denom-section" style={{ marginBottom: '1.5rem', background: 'transparent', border: 'none', padding: 0 }}>
+                    <div className="denom-section-title" style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '1rem', fontWeight: 'bold' }}>💵 توزيع الفئات النقدية للتسليم</span>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                        onClick={() => {
+                          let remaining = parseFloat(disbursingTx.amount) || 0;
+                          const breakdown = { denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0 };
+                          breakdown.denom_200 = Math.floor(remaining / 200); remaining %= 200;
+                          breakdown.denom_100 = Math.floor(remaining / 100); remaining %= 100;
+                          breakdown.denom_50 = Math.floor(remaining / 50); remaining %= 50;
+                          breakdown.denom_20 = Math.floor(remaining / 20); remaining %= 20;
+                          breakdown.denom_10 = Math.floor(remaining / 10); remaining %= 10;
+                          breakdown.denom_5 = Math.floor(remaining / 5); remaining %= 5;
+                          breakdown.denom_1 = Math.floor(remaining);
+                          setDisburseDenominations(breakdown);
+                        }}
+                      >
+                        💡 ملء تلقائي للفئات
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                      {[200, 100, 50, 20, 10, 5, 1].map((denom) => (
+                        <div key={denom} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{denom} ج.م</span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={disburseDenominations[`denom_${denom}`] || ''}
+                            onChange={(e) => {
+                              const val = Math.max(0, parseInt(e.target.value) || 0);
+                              setDisburseDenominations(prev => ({
+                                ...prev,
+                                [`denom_${denom}`]: val
+                              }));
+                            }}
+                            style={{ width: '100%', padding: '0.4rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', textAlign: 'center' }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Calculator Summary */}
+                  {(() => {
+                    const totalCalculated =
+                      (Number(disburseDenominations.denom_200 || 0) * 200) +
+                      (Number(disburseDenominations.denom_100 || 0) * 100) +
+                      (Number(disburseDenominations.denom_50 || 0) * 50) +
+                      (Number(disburseDenominations.denom_20 || 0) * 20) +
+                      (Number(disburseDenominations.denom_10 || 0) * 10) +
+                      (Number(disburseDenominations.denom_5 || 0) * 5) +
+                      (Number(disburseDenominations.denom_1 || 0) * 1);
+                    const diff = Number(disbursingTx.amount) - totalCalculated;
+                    const isMatch = Math.abs(diff) < 0.01;
+
+                    return (
+                      <div style={{
+                        padding: '1rem', borderRadius: '8px',
+                        background: isMatch ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
+                        border: '1px solid',
+                        borderColor: isMatch ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)',
+                        fontSize: '0.9rem', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span>إجمالي الفئات المدخلة:</span>
+                          <strong style={{ color: isMatch ? 'var(--success)' : 'var(--danger)' }}>
+                            {totalCalculated.toLocaleString()} ج.م
+                          </strong>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span>المتبقي:</span>
+                          <strong style={{ color: isMatch ? 'var(--success)' : 'var(--danger)' }}>
+                            {diff.toLocaleString()} ج.م
+                          </strong>
+                        </div>
+                        <div style={{ textAlign: 'center', marginTop: '0.4rem', fontWeight: 'bold', color: isMatch ? '#10b981' : '#ef4444' }}>
+                          {isMatch ? '✅ الفئات مطابقة تماماً للمبلغ المطلوب' : '❌ الفئات لا تطابق المبلغ المطلوب'}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '0.8rem', background: 'linear-gradient(135deg, var(--success), var(--success-hover))' }}>
+                    💵 تأكيد صرف المبلغ الفعلي وتسليمه
+                  </button>
+                </form>
               </div>
             </div>
+          )}
 
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              setDisburseError('');
-              
-              const calc = 
-                (Number(disburseDenominations.denom_200 || 0) * 200) + 
-                (Number(disburseDenominations.denom_100 || 0) * 100) + 
-                (Number(disburseDenominations.denom_50 || 0) * 50) + 
-                (Number(disburseDenominations.denom_20 || 0) * 20) + 
-                (Number(disburseDenominations.denom_10 || 0) * 10) + 
-                (Number(disburseDenominations.denom_5 || 0) * 5) + 
-                (Number(disburseDenominations.denom_1 || 0) * 1);
-              if (isNaN(calc) || Math.abs(calc - Number(disbursingTx.amount)) > 0.01) {
-                const msg = `مجموع الفئات (${(calc || 0).toLocaleString()} ج.م) لا يطابق قيمة المبلغ المطلوبة (${Number(disbursingTx.amount).toLocaleString()} ج.م)!`;
-                setDisburseError(msg);
-                return;
-              }
-              
-              try {
-                const res = await fetch(`/api/transactions/${disbursingTx.id}/disburse`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ denominations: disburseDenominations })
-                });
-                const data = await res.json();
-                if (res.ok) {
-                  setDisbursingTx(null);
-                  loadDashboard();
-                  loadTransactions();
-                  loadCarExpenses();
-                } else {
-                  setDisburseError(data.error || 'حدث خطأ أثناء إتمام الصرف');
-                }
-              } catch (err) {
-                setDisburseError('تعذر الاتصال بالسيرفر');
-              }
-            }}>
-              
-              <div className="denom-section" style={{ marginBottom: '1.5rem', background: 'transparent', border: 'none', padding: 0 }}>
-                <div className="denom-section-title" style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '1rem', fontWeight: 'bold' }}>💵 توزيع الفئات النقدية للتسليم</span>
-                  <button 
-                    type="button" 
-                    className="btn btn-secondary" 
-                    style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
-                    onClick={() => {
-                      let remaining = parseFloat(disbursingTx.amount) || 0;
-                      const breakdown = { denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0 };
-                      breakdown.denom_200 = Math.floor(remaining / 200); remaining %= 200;
-                      breakdown.denom_100 = Math.floor(remaining / 100); remaining %= 100;
-                      breakdown.denom_50 = Math.floor(remaining / 50); remaining %= 50;
-                      breakdown.denom_20 = Math.floor(remaining / 20); remaining %= 20;
-                      breakdown.denom_10 = Math.floor(remaining / 10); remaining %= 10;
-                      breakdown.denom_5 = Math.floor(remaining / 5); remaining %= 5;
-                      breakdown.denom_1 = Math.floor(remaining);
-                      setDisburseDenominations(breakdown);
-                    }}
-                  >
-                    💡 ملء تلقائي للفئات
-                  </button>
+          {/* USERS MANAGEMENT TAB */}
+          {activeTab === 'users' && currentUser.role === 'manager' && (
+            <div className="grid-2col" style={{ gridTemplateColumns: '2fr 1fr', gap: '1.5rem' }}>
+              {/* Users List Panel */}
+              <div className="panel" style={{ width: '100%' }}>
+                <div className="panel-header">
+                  <h2 className="panel-title">👥 إدارة مستخدمي النظام</h2>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '1.5rem' }}>
-                  {[200, 100, 50, 20, 10, 5, 1].map((denom) => (
-                    <div key={denom} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{denom} ج.م</span>
-                      <input 
-                        type="number" 
-                        min="0"
-                        value={disburseDenominations[`denom_${denom}`] || ''}
+                <div className="table-container" style={{ marginTop: '1.5rem' }}>
+                  {usersList.length === 0 ? (
+                    <div className="no-data-msg">لا يوجد مستخدمين مسجلين حالياً.</div>
+                  ) : (
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>اسم المستخدم</th>
+                          <th>الدور</th>
+                          <th>التوكيل المخصص</th>
+                          <th>تاريخ الإنشاء</th>
+                          <th>الإجراءات</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {usersList.map((usr) => (
+                          <tr key={usr.id}>
+                            <td><strong>{usr.username}</strong></td>
+                            <td>
+                              <span className={`badge badge-${usr.role === 'manager' ? 'deposit' : 'wholesale'}`}>
+                                {usr.role === 'manager' ? '👑 مدير' : '👤 محاسب'}
+                              </span>
+                            </td>
+                            <td>
+                              {usr.role === 'accountant' ? (
+                                usr.agency_name ? (
+                                  <span>🏢 {usr.agency_name} <small style={{ color: 'var(--text-muted)' }}>({usr.agency_code})</small></span>
+                                ) : (
+                                  <em style={{ color: 'var(--danger)' }}>كل التوكيلات (صلاحية عامة)</em>
+                                )
+                              ) : (
+                                <span style={{ color: 'var(--text-muted)' }}>—</span>
+                              )}
+                            </td>
+                            <td>{new Date(usr.created_at || new Date()).toLocaleDateString('en-US')}</td>
+                            <td>
+                              <button
+                                className="btn btn-secondary"
+                                style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                                onClick={() => {
+                                  setEditingUser({
+                                    id: usr.id,
+                                    username: usr.username,
+                                    password: '', // Clear so we don't display password hash, leaving it optional
+                                    role: usr.role,
+                                    assigned_agency_id: usr.assigned_agency_id || ''
+                                  });
+                                  setEditUserError('');
+                                  setEditUserSuccess('');
+                                }}
+                              >
+                                ✏️ تعديل
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+
+              {/* Add User Panel */}
+              <div className="panel">
+                <div className="panel-header">
+                  <h2 className="panel-title">➕ إضافة مستخدم جديد</h2>
+                </div>
+
+                {userError && <div className="alert alert-error">⚠️ {userError}</div>}
+                {userSuccess && <div className="alert alert-success">✔️ {userSuccess}</div>}
+
+                <form onSubmit={handleAddUser}>
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label>اسم المستخدم <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <input
+                      type="text"
+                      placeholder="مثال: acc_cairo"
+                      value={newUser.username}
+                      onChange={(e) => setNewUser({ ...newUser, username: e.target.value.toLowerCase().replace(/\s+/g, '') })}
+                      required
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label>كلمة المرور <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <input
+                      type="password"
+                      placeholder="أدخل كلمة مرور قوية..."
+                      value={newUser.password}
+                      onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                      required
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label>الدور <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <select
+                      value={newUser.role}
+                      onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                      required
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontFamily: 'var(--font-cairo)' }}
+                    >
+                      <option value="accountant">👤 محاسب (صلاحيات محدودة)</option>
+                      <option value="manager">👑 مدير (صلاحيات كاملة)</option>
+                    </select>
+                  </div>
+
+                  {newUser.role === 'accountant' && (
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                      <label>التوكيل المسؤول عنه المحاسب</label>
+                      <select
+                        value={newUser.assigned_agency_id}
+                        onChange={(e) => setNewUser({ ...newUser, assigned_agency_id: e.target.value })}
+                        style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontFamily: 'var(--font-cairo)' }}
+                      >
+                        <option value="">كل التوكيلات (صلاحية عامة)</option>
+                        {agencies.map(a => (
+                          <option key={a.id} value={a.id}>{a.name} ({a.code})</option>
+                        ))}
+                      </select>
+                      <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '0.25rem', fontSize: '0.75rem' }}>
+                        سيتم تصفية المعاملات والتقارير والمناديب وتوريدات هذا المحاسب للتوكيل المختار فقط.
+                      </small>
+                    </div>
+                  )}
+
+                  <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>حفظ المستخدم الجديد</button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* AUDIT LOGS TAB */}
+          {activeTab === 'audit-logs' && currentUser.role === 'manager' && (
+            <AuditLogViewer />
+          )}
+
+          {/* LOANS & INSTALLMENTS TAB */}
+          {activeTab === 'loans' && (currentUser.role === 'manager' || currentUser.role === 'accountant') && (
+            <LoanManagement banks={banks} carsList={carsList} onRefreshDashboard={loadDashboard} />
+          )}
+
+          {/* PAYROLL MANAGEMENT TAB */}
+          {activeTab === 'payroll' && (currentUser.role === 'manager' || currentUser.role === 'accountant') && (
+            <PayrollManagement currentUser={currentUser} banks={banks} onRefreshDashboard={loadDashboard} />
+          )}
+
+          {/* EDIT USER OVERLAY MODAL */}
+          {editingUser && (
+            <div style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+              direction: 'rtl', padding: '1.5rem'
+            }}>
+              <div className="panel" style={{ width: '100%', maxWidth: '460px', maxHeight: '90vh', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
+                <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <h2 className="panel-title">✏️ تعديل بيانات المستخدم</h2>
+                  <button className="btn btn-secondary" onClick={() => setEditingUser(null)} style={{ padding: '0.3rem 0.6rem' }}>✕ إغلاق</button>
+                </div>
+
+                {editUserError && <div className="alert alert-error">⚠️ {editUserError}</div>}
+                {editUserSuccess && <div className="alert alert-success">✔️ {editUserSuccess}</div>}
+
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  setEditUserError('');
+                  setEditUserSuccess('');
+
+                  if (!editingUser.username || !editingUser.role) {
+                    setEditUserError('اسم المستخدم والدور مطلوبان');
+                    return;
+                  }
+
+                  try {
+                    const res = await fetch(`/api/users/${editingUser.id}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        username: editingUser.username,
+                        password: editingUser.password,
+                        role: editingUser.role,
+                        assigned_agency_id: editingUser.role === 'accountant' ? (editingUser.assigned_agency_id || null) : null
+                      })
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                      setEditUserSuccess('تم تعديل بيانات المستخدم بنجاح!');
+                      setTimeout(() => {
+                        setEditingUser(null);
+                        loadUsers();
+                      }, 1000);
+                    } else {
+                      setEditUserError(data.error || 'حدث خطأ أثناء تعديل بيانات المستخدم');
+                    }
+                  } catch (err) {
+                    setEditUserError('تعذر الاتصال بالسيرفر');
+                  }
+                }}>
+
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label>اسم المستخدم <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <input
+                      type="text"
+                      value={editingUser.username}
+                      onChange={(e) => setEditingUser({ ...editingUser, username: e.target.value.toLowerCase().replace(/\s+/g, '') })}
+                      required
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label>كلمة المرور الجديدة <span style={{ color: 'var(--text-muted)' }}>(اختياري)</span></label>
+                    <input
+                      type="password"
+                      placeholder="اتركها فارغة للاحتفاظ بكلمة المرور الحالية"
+                      value={editingUser.password}
+                      onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })}
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label>الدور <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <select
+                      value={editingUser.role}
+                      onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
+                      required
+                      style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontFamily: 'var(--font-cairo)' }}
+                    >
+                      <option value="accountant">👤 محاسب (صلاحيات محدودة)</option>
+                      <option value="manager">👑 مدير (صلاحيات كاملة)</option>
+                    </select>
+                  </div>
+
+                  {editingUser.role === 'accountant' && (
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                      <label>التوكيل المسؤول عنه المحاسب</label>
+                      <select
+                        value={editingUser.assigned_agency_id}
+                        onChange={(e) => setEditingUser({ ...editingUser, assigned_agency_id: e.target.value })}
+                        style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontFamily: 'var(--font-cairo)' }}
+                      >
+                        <option value="">كل التوكيلات (صلاحية عامة)</option>
+                        {agencies.map(a => (
+                          <option key={a.id} value={a.id}>{a.name} ({a.code})</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '1rem' }}>💾 حفظ التعديلات</button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* DAILY & PERIOD REPORT TAB */}
+          {activeTab === 'daily-report' && currentUser.role === 'manager' && (
+            <div className="panel" style={{ width: '100%' }}>
+              <div className="panel-header no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
+                <h2 className="panel-title">📋 تقرير حركة الخزينة والمصارف</h2>
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+
+                  {/* Report Mode Selector Switch */}
+                  <div style={{ display: 'flex', gap: '0.25rem', background: 'var(--bg-secondary)', padding: '0.25rem', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                    <button
+                      type="button"
+                      style={{
+                        padding: '0.4rem 0.85rem',
+                        borderRadius: '8px',
+                        border: 'none',
+                        fontSize: '0.85rem',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        background: reportMode === 'single' ? 'var(--primary)' : 'transparent',
+                        color: reportMode === 'single' ? '#ffffff' : 'var(--text-secondary)'
+                      }}
+                      onClick={() => {
+                        setReportMode('single');
+                        handleFetchDailyReport({ mode: 'single', date: dailyReportDate });
+                      }}
+                    >
+                      📅 يوم محدد
+                    </button>
+                    <button
+                      type="button"
+                      style={{
+                        padding: '0.4rem 0.85rem',
+                        borderRadius: '8px',
+                        border: 'none',
+                        fontSize: '0.85rem',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        background: reportMode === 'range' ? 'var(--primary)' : 'transparent',
+                        color: reportMode === 'range' ? '#ffffff' : 'var(--text-secondary)'
+                      }}
+                      onClick={() => {
+                        setReportMode('range');
+                        handleFetchDailyReport({ mode: 'range', startDate: reportStartDate, endDate: reportEndDate });
+                      }}
+                    >
+                      🗓️ فترة زمنيـة (من - إلى)
+                    </button>
+                  </div>
+
+                  {/* Date Inputs based on selected mode */}
+                  {reportMode === 'single' ? (
+                    <div className="form-group" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <label style={{ whiteSpace: 'nowrap', fontWeight: 'bold' }}>اختر التاريخ:</label>
+                      <input
+                        type="date"
+                        value={dailyReportDate}
                         onChange={(e) => {
-                          const val = Math.max(0, parseInt(e.target.value) || 0);
-                          setDisburseDenominations(prev => ({
-                            ...prev,
-                            [`denom_${denom}`]: val
-                          }));
+                          setDailyReportDate(e.target.value);
+                          handleFetchDailyReport({ mode: 'single', date: e.target.value });
                         }}
-                        style={{ width: '100%', padding: '0.4rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', textAlign: 'center' }}
+                        style={{ padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontFamily: 'var(--font-cairo)' }}
                       />
                     </div>
-                  ))}
-                </div>
-              </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <label style={{ whiteSpace: 'nowrap', fontWeight: 'bold' }}>من:</label>
+                      <input
+                        type="date"
+                        value={reportStartDate}
+                        onChange={(e) => {
+                          setReportStartDate(e.target.value);
+                          handleFetchDailyReport({ mode: 'range', startDate: e.target.value, endDate: reportEndDate });
+                        }}
+                        style={{ padding: '0.4rem 0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontFamily: 'var(--font-cairo)' }}
+                      />
+                      <label style={{ whiteSpace: 'nowrap', fontWeight: 'bold' }}>إلى:</label>
+                      <input
+                        type="date"
+                        value={reportEndDate}
+                        onChange={(e) => {
+                          setReportEndDate(e.target.value);
+                          handleFetchDailyReport({ mode: 'range', startDate: reportStartDate, endDate: e.target.value });
+                        }}
+                        style={{ padding: '0.4rem 0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontFamily: 'var(--font-cairo)' }}
+                      />
+                    </div>
+                  )}
 
-              {/* Calculator Summary */}
-              {(() => {
-                const totalCalculated = 
-                  (Number(disburseDenominations.denom_200 || 0) * 200) + 
-                  (Number(disburseDenominations.denom_100 || 0) * 100) + 
-                  (Number(disburseDenominations.denom_50 || 0) * 50) + 
-                  (Number(disburseDenominations.denom_20 || 0) * 20) + 
-                  (Number(disburseDenominations.denom_10 || 0) * 10) + 
-                  (Number(disburseDenominations.denom_5 || 0) * 5) + 
-                  (Number(disburseDenominations.denom_1 || 0) * 1);
-                const diff = Number(disbursingTx.amount) - totalCalculated;
-                const isMatch = Math.abs(diff) < 0.01;
-                
-                return (
-                  <div style={{
-                    padding: '1rem', borderRadius: '8px', 
-                    background: isMatch ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
-                    border: '1px solid',
-                    borderColor: isMatch ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)',
-                    fontSize: '0.9rem', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem'
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>إجمالي الفئات المدخلة:</span>
-                      <strong style={{ color: isMatch ? 'var(--success)' : 'var(--danger)' }}>
-                        {totalCalculated.toLocaleString()} ج.م
-                      </strong>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>المتبقي:</span>
-                      <strong style={{ color: isMatch ? 'var(--success)' : 'var(--danger)' }}>
-                        {diff.toLocaleString()} ج.م
-                      </strong>
-                    </div>
-                    <div style={{ textAlign: 'center', marginTop: '0.4rem', fontWeight: 'bold', color: isMatch ? '#10b981' : '#ef4444' }}>
-                      {isMatch ? '✅ الفئات مطابقة تماماً للمبلغ المطلوب' : '❌ الفئات لا تطابق المبلغ المطلوب'}
-                    </div>
-                  </div>
-                );
-              })()}
-              
-              <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '0.8rem', background: 'linear-gradient(135deg, var(--success), var(--success-hover))' }}>
-                💵 تأكيد صرف المبلغ الفعلي وتسليمه
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+                  <button className="btn btn-secondary" onClick={() => handleFetchDailyReport()} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>🔄 تحديث</button>
 
-      {/* USERS MANAGEMENT TAB */}
-      {activeTab === 'users' && currentUser.role === 'manager' && (
-        <div className="grid-2col" style={{ gridTemplateColumns: '2fr 1fr', gap: '1.5rem' }}>
-          {/* Users List Panel */}
-          <div className="panel" style={{ width: '100%' }}>
-            <div className="panel-header">
-              <h2 className="panel-title">👥 إدارة مستخدمي النظام</h2>
-            </div>
-            
-            <div className="table-container" style={{ marginTop: '1.5rem' }}>
-              {usersList.length === 0 ? (
-                <div className="no-data-msg">لا يوجد مستخدمين مسجلين حالياً.</div>
-              ) : (
-                <table>
-                  <thead>
-                    <tr>
-                      <th>اسم المستخدم</th>
-                      <th>الدور</th>
-                      <th>التوكيل المخصص</th>
-                      <th>تاريخ الإنشاء</th>
-                      <th>الإجراءات</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {usersList.map((usr) => (
-                      <tr key={usr.id}>
-                        <td><strong>{usr.username}</strong></td>
-                        <td>
-                          <span className={`badge badge-${usr.role === 'manager' ? 'deposit' : 'wholesale'}`}>
-                            {usr.role === 'manager' ? '👑 مدير' : '👤 محاسب'}
-                          </span>
-                        </td>
-                        <td>
-                          {usr.role === 'accountant' ? (
-                            usr.agency_name ? (
-                              <span>🏢 {usr.agency_name} <small style={{ color: 'var(--text-muted)' }}>({usr.agency_code})</small></span>
-                            ) : (
-                              <em style={{ color: 'var(--danger)' }}>كل التوكيلات (صلاحية عامة)</em>
-                            )
-                          ) : (
-                            <span style={{ color: 'var(--text-muted)' }}>—</span>
-                          )}
-                        </td>
-                        <td>{new Date(usr.created_at || new Date()).toLocaleDateString('en-US')}</td>
-                        <td>
-                          <button
-                            className="btn btn-secondary"
-                            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
-                            onClick={() => {
-                              setEditingUser({
-                                id: usr.id,
-                                username: usr.username,
-                                password: '', // Clear so we don't display password hash, leaving it optional
-                                role: usr.role,
-                                assigned_agency_id: usr.assigned_agency_id || ''
-                              });
-                              setEditUserError('');
-                              setEditUserSuccess('');
-                            }}
-                          >
-                            ✏️ تعديل
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
-          
-          {/* Add User Panel */}
-          <div className="panel">
-            <div className="panel-header">
-              <h2 className="panel-title">➕ إضافة مستخدم جديد</h2>
-            </div>
-            
-            {userError && <div className="alert alert-error">⚠️ {userError}</div>}
-            {userSuccess && <div className="alert alert-success">✔️ {userSuccess}</div>}
-            
-            <form onSubmit={handleAddUser}>
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>اسم المستخدم <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input 
-                  type="text" 
-                  placeholder="مثال: acc_cairo"
-                  value={newUser.username}
-                  onChange={(e) => setNewUser({ ...newUser, username: e.target.value.toLowerCase().replace(/\s+/g, '') })}
-                  required
-                  style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
-                />
-              </div>
-              
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>كلمة المرور <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input 
-                  type="password" 
-                  placeholder="أدخل كلمة مرور قوية..."
-                  value={newUser.password}
-                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                  required
-                  style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
-                />
-              </div>
-              
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>الدور <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <select 
-                  value={newUser.role}
-                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-                  required
-                  style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontFamily: 'var(--font-cairo)' }}
-                >
-                  <option value="accountant">👤 محاسب (صلاحيات محدودة)</option>
-                  <option value="manager">👑 مدير (صلاحيات كاملة)</option>
-                </select>
-              </div>
-              
-              {newUser.role === 'accountant' && (
-                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                  <label>التوكيل المسؤول عنه المحاسب</label>
-                  <select 
-                    value={newUser.assigned_agency_id}
-                    onChange={(e) => setNewUser({ ...newUser, assigned_agency_id: e.target.value })}
-                    style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontFamily: 'var(--font-cairo)' }}
+                  {/* Excel Export Button */}
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => handleExportReportToExcel(dailyReportData)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', background: '#16a34a', color: '#ffffff', borderColor: '#16a34a', fontWeight: 'bold' }}
                   >
-                    <option value="">كل التوكيلات (صلاحية عامة)</option>
-                    {agencies.map(a => (
-                      <option key={a.id} value={a.id}>{a.name} ({a.code})</option>
-                    ))}
-                  </select>
-                  <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '0.25rem', fontSize: '0.75rem' }}>
-                    سيتم تصفية المعاملات والتقارير والمناديب وتوريدات هذا المحاسب للتوكيل المختار فقط.
-                  </small>
-                </div>
-              )}
-              
-              <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>حفظ المستخدم الجديد</button>
-            </form>
-          </div>
-        </div>
-      )}
+                    📊 حفظ Excel
+                  </button>
 
-      {/* AUDIT LOGS TAB */}
-      {activeTab === 'audit-logs' && currentUser.role === 'manager' && (
-        <AuditLogViewer />
-      )}
+                  {/* Print Button */}
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => {
+                      if (!dailyReportData) return;
+                      const d = dailyReportData;
+                      const reportDateStr = d.isRange ? `الفترة من ${d.startDate} إلى ${d.endDate}` : d.date;
 
-      {/* LOANS & INSTALLMENTS TAB */}
-      {activeTab === 'loans' && (currentUser.role === 'manager' || currentUser.role === 'accountant') && (
-        <LoanManagement banks={banks} carsList={carsList} onRefreshDashboard={loadDashboard} />
-      )}
-
-      {/* PAYROLL MANAGEMENT TAB */}
-      {activeTab === 'payroll' && (currentUser.role === 'manager' || currentUser.role === 'accountant') && (
-        <PayrollManagement currentUser={currentUser} banks={banks} onRefreshDashboard={loadDashboard} />
-      )}
-
-      {/* EDIT USER OVERLAY MODAL */}
-      {editingUser && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-          direction: 'rtl', padding: '1.5rem'
-        }}>
-          <div className="panel" style={{ width: '100%', maxWidth: '460px', maxHeight: '90vh', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
-            <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h2 className="panel-title">✏️ تعديل بيانات المستخدم</h2>
-              <button className="btn btn-secondary" onClick={() => setEditingUser(null)} style={{ padding: '0.3rem 0.6rem' }}>✕ إغلاق</button>
-            </div>
-            
-            {editUserError && <div className="alert alert-error">⚠️ {editUserError}</div>}
-            {editUserSuccess && <div className="alert alert-success">✔️ {editUserSuccess}</div>}
-            
-            <form onSubmit={async (e) => {
-              e.preventDefault();
-              setEditUserError('');
-              setEditUserSuccess('');
-              
-              if (!editingUser.username || !editingUser.role) {
-                setEditUserError('اسم المستخدم والدور مطلوبان');
-                return;
-              }
-              
-              try {
-                const res = await fetch(`/api/users/${editingUser.id}`, {
-                  method: 'PUT',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    username: editingUser.username,
-                    password: editingUser.password,
-                    role: editingUser.role,
-                    assigned_agency_id: editingUser.role === 'accountant' ? (editingUser.assigned_agency_id || null) : null
-                  })
-                });
-                const data = await res.json();
-                if (res.ok) {
-                  setEditUserSuccess('تم تعديل بيانات المستخدم بنجاح!');
-                  setTimeout(() => {
-                    setEditingUser(null);
-                    loadUsers();
-                  }, 1000);
-                } else {
-                  setEditUserError(data.error || 'حدث خطأ أثناء تعديل بيانات المستخدم');
-                }
-              } catch (err) {
-                setEditUserError('تعذر الاتصال بالسيرفر');
-              }
-            }}>
-              
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>اسم المستخدم <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input 
-                  type="text" 
-                  value={editingUser.username}
-                  onChange={(e) => setEditingUser({ ...editingUser, username: e.target.value.toLowerCase().replace(/\s+/g, '') })}
-                  required
-                  style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
-                />
-              </div>
-              
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>كلمة المرور الجديدة <span style={{ color: 'var(--text-muted)' }}>(اختياري)</span></label>
-                <input 
-                  type="password" 
-                  placeholder="اتركها فارغة للاحتفاظ بكلمة المرور الحالية"
-                  value={editingUser.password}
-                  onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })}
-                  style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
-                />
-              </div>
-              
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label>الدور <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <select 
-                  value={editingUser.role}
-                  onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
-                  required
-                  style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontFamily: 'var(--font-cairo)' }}
-                >
-                  <option value="accountant">👤 محاسب (صلاحيات محدودة)</option>
-                  <option value="manager">👑 مدير (صلاحيات كاملة)</option>
-                </select>
-              </div>
-              
-              {editingUser.role === 'accountant' && (
-                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                  <label>التوكيل المسؤول عنه المحاسب</label>
-                  <select 
-                    value={editingUser.assigned_agency_id}
-                    onChange={(e) => setEditingUser({ ...editingUser, assigned_agency_id: e.target.value })}
-                    style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontFamily: 'var(--font-cairo)' }}
-                  >
-                    <option value="">كل التوكيلات (صلاحية عامة)</option>
-                    {agencies.map(a => (
-                      <option key={a.id} value={a.id}>{a.name} ({a.code})</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              
-              <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '1rem' }}>💾 حفظ التعديلات</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* DAILY & PERIOD REPORT TAB */}
-      {activeTab === 'daily-report' && currentUser.role === 'manager' && (
-        <div className="panel" style={{ width: '100%' }}>
-          <div className="panel-header no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
-            <h2 className="panel-title">📋 تقرير حركة الخزينة والمصارف</h2>
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              
-              {/* Report Mode Selector Switch */}
-              <div style={{ display: 'flex', gap: '0.25rem', background: 'var(--bg-secondary)', padding: '0.25rem', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
-                <button
-                  type="button"
-                  style={{
-                    padding: '0.4rem 0.85rem',
-                    borderRadius: '8px',
-                    border: 'none',
-                    fontSize: '0.85rem',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    background: reportMode === 'single' ? 'var(--primary)' : 'transparent',
-                    color: reportMode === 'single' ? '#ffffff' : 'var(--text-secondary)'
-                  }}
-                  onClick={() => {
-                    setReportMode('single');
-                    handleFetchDailyReport({ mode: 'single', date: dailyReportDate });
-                  }}
-                >
-                  📅 يوم محدد
-                </button>
-                <button
-                  type="button"
-                  style={{
-                    padding: '0.4rem 0.85rem',
-                    borderRadius: '8px',
-                    border: 'none',
-                    fontSize: '0.85rem',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    background: reportMode === 'range' ? 'var(--primary)' : 'transparent',
-                    color: reportMode === 'range' ? '#ffffff' : 'var(--text-secondary)'
-                  }}
-                  onClick={() => {
-                    setReportMode('range');
-                    handleFetchDailyReport({ mode: 'range', startDate: reportStartDate, endDate: reportEndDate });
-                  }}
-                >
-                  🗓️ فترة زمنيـة (من - إلى)
-                </button>
-              </div>
-
-              {/* Date Inputs based on selected mode */}
-              {reportMode === 'single' ? (
-                <div className="form-group" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <label style={{ whiteSpace: 'nowrap', fontWeight: 'bold' }}>اختر التاريخ:</label>
-                  <input 
-                    type="date" 
-                    value={dailyReportDate} 
-                    onChange={(e) => {
-                      setDailyReportDate(e.target.value);
-                      handleFetchDailyReport({ mode: 'single', date: e.target.value });
-                    }}
-                    style={{ padding: '0.4rem 0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontFamily: 'var(--font-cairo)' }}
-                  />
-                </div>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <label style={{ whiteSpace: 'nowrap', fontWeight: 'bold' }}>من:</label>
-                  <input 
-                    type="date" 
-                    value={reportStartDate} 
-                    onChange={(e) => {
-                      setReportStartDate(e.target.value);
-                      handleFetchDailyReport({ mode: 'range', startDate: e.target.value, endDate: reportEndDate });
-                    }}
-                    style={{ padding: '0.4rem 0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontFamily: 'var(--font-cairo)' }}
-                  />
-                  <label style={{ whiteSpace: 'nowrap', fontWeight: 'bold' }}>إلى:</label>
-                  <input 
-                    type="date" 
-                    value={reportEndDate} 
-                    onChange={(e) => {
-                      setReportEndDate(e.target.value);
-                      handleFetchDailyReport({ mode: 'range', startDate: reportStartDate, endDate: e.target.value });
-                    }}
-                    style={{ padding: '0.4rem 0.6rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontFamily: 'var(--font-cairo)' }}
-                  />
-                </div>
-              )}
-
-              <button className="btn btn-secondary" onClick={() => handleFetchDailyReport()} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>🔄 تحديث</button>
-              
-              {/* Excel Export Button */}
-              <button 
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => handleExportReportToExcel(dailyReportData)}
-                style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', background: '#16a34a', color: '#ffffff', borderColor: '#16a34a', fontWeight: 'bold' }}
-              >
-                📊 حفظ Excel
-              </button>
-
-              {/* Print Button */}
-              <button 
-                type="button"
-                className="btn btn-primary" 
-                onClick={() => {
-                  if (!dailyReportData) return;
-                  const d = dailyReportData;
-                  const reportDateStr = d.isRange ? `الفترة من ${d.startDate} إلى ${d.endDate}` : d.date;
-
-                  const safeSummaryRows = `
+                      const safeSummaryRows = `
                     <tr>
                       <td>${d.safeSummary.openingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
                       <td style="color:green;font-weight:bold">+${d.safeSummary.deposits.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
@@ -8176,7 +8174,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                       <td style="font-weight:bold">${d.safeSummary.closingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
                     </tr>`;
 
-                  const bankRows = d.banksSummary.map(bank => `
+                      const bankRows = d.banksSummary.map(bank => `
                     <tr>
                       <td style="font-weight:bold">${bank.code}</td>
                       <td>${bank.name}</td>
@@ -8187,29 +8185,29 @@ const [showCarModal, setShowCarModal] = useState(false);
                       <td style="font-weight:bold">${bank.closingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
                     </tr>`).join('');
 
-                  const txRows = d.transactions.length === 0
-                    ? `<tr><td colspan="7" style="text-align:center;padding:8px">لا توجد عمليات مسجلة في هذه الفترة.</td></tr>`
-                    : d.transactions.map(tx => {
-                        const subTypeLabel = tx.withdrawal_sub_type === 'car' ? 'مصاريف سيارات'
-                          : tx.withdrawal_sub_type === 'car_gas' ? 'جاز سيارات'
-                          : tx.withdrawal_sub_type === 'car_oil' ? 'زيت/صيانة'
-                          : tx.withdrawal_sub_type === 'salary' ? 'رواتب'
-                          : tx.withdrawal_sub_type === 'commission' ? 'عمولات'
-                          : tx.withdrawal_sub_type === 'loan' ? 'سلفة'
-                          : tx.withdrawal_sub_type === 'direct_rent' ? 'إيجار'
-                          : tx.withdrawal_sub_type === 'direct_operational' ? 'تشغيل عامة'
-                          : tx.withdrawal_sub_type ? 'أخرى' : '';
-                        const typeLabel = tx.type === 'deposit' ? 'وارد' : tx.type === 'company_transfer' ? 'حوالة لشركة' : 'منصرف';
-                        const details = [
-                          tx.type === 'company_transfer' && tx.company_name ? `تحويل لشركة: ${tx.company_name}` : '',
-                          tx.rep_name ? `المندوب: ${tx.rep_name}` : '',
-                          subTypeLabel ? `(بند: ${subTypeLabel})` : '',
-                          tx.notes ? `- ${tx.notes}` : ''
-                        ].filter(Boolean).join(' ');
-                        const payMethod = tx.bank_name ? `بنك: ${tx.bank_name}` : 'نقدي بالخزينة';
-                        const txTime = new Date(tx.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-                        const txColor = tx.type === 'deposit' ? 'color:#166534' : tx.type === 'company_transfer' ? 'color:#0369a1' : 'color:#991b1b';
-                        return `<tr>
+                      const txRows = d.transactions.length === 0
+                        ? `<tr><td colspan="7" style="text-align:center;padding:8px">لا توجد عمليات مسجلة في هذه الفترة.</td></tr>`
+                        : d.transactions.map(tx => {
+                          const subTypeLabel = tx.withdrawal_sub_type === 'car' ? 'مصاريف سيارات'
+                            : tx.withdrawal_sub_type === 'car_gas' ? 'جاز سيارات'
+                              : tx.withdrawal_sub_type === 'car_oil' ? 'زيت/صيانة'
+                                : tx.withdrawal_sub_type === 'salary' ? 'رواتب'
+                                  : tx.withdrawal_sub_type === 'commission' ? 'عمولات'
+                                    : tx.withdrawal_sub_type === 'loan' ? 'سلفة'
+                                      : tx.withdrawal_sub_type === 'direct_rent' ? 'إيجار'
+                                        : tx.withdrawal_sub_type === 'direct_operational' ? 'تشغيل عامة'
+                                          : tx.withdrawal_sub_type ? 'أخرى' : '';
+                          const typeLabel = tx.type === 'deposit' ? 'وارد' : tx.type === 'company_transfer' ? 'حوالة لشركة' : 'منصرف';
+                          const details = [
+                            tx.type === 'company_transfer' && tx.company_name ? `تحويل لشركة: ${tx.company_name}` : '',
+                            tx.rep_name ? `المندوب: ${tx.rep_name}` : '',
+                            subTypeLabel ? `(بند: ${subTypeLabel})` : '',
+                            tx.notes ? `- ${tx.notes}` : ''
+                          ].filter(Boolean).join(' ');
+                          const payMethod = tx.bank_name ? `بنك: ${tx.bank_name}` : 'نقدي بالخزينة';
+                          const txTime = new Date(tx.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                          const txColor = tx.type === 'deposit' ? 'color:#166534' : tx.type === 'company_transfer' ? 'color:#0369a1' : 'color:#991b1b';
+                          return `<tr>
                           <td>TX-${String(tx.id).padStart(6, '0')}</td>
                           <td>${txTime}</td>
                           <td style="${txColor};font-weight:bold">${typeLabel}</td>
@@ -8218,13 +8216,13 @@ const [showCarModal, setShowCarModal] = useState(false);
                           <td style="font-weight:bold">${Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
                           <td>${tx.creator_name || 'أمين الخزينة'}</td>
                         </tr>`;
-                      }).join('');
+                        }).join('');
 
-                  const tableStyle = `width:100%;border-collapse:collapse;margin-bottom:8mm;font-size:9pt`;
-                  const thStyle = `border:1px solid #333;padding:3mm;background:#e8e8e8;font-weight:bold;text-align:center`;
-                  const tdStyle = `border:1px solid #555;padding:2.5mm;text-align:center`;
+                      const tableStyle = `width:100%;border-collapse:collapse;margin-bottom:8mm;font-size:9pt`;
+                      const thStyle = `border:1px solid #333;padding:3mm;background:#e8e8e8;font-weight:bold;text-align:center`;
+                      const tdStyle = `border:1px solid #555;padding:2.5mm;text-align:center`;
 
-                  const html = `<!DOCTYPE html>
+                      const html = `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
 <meta charset="utf-8"/>
@@ -8276,575 +8274,573 @@ const [showCarModal, setShowCarModal] = useState(false);
 </body>
 </html>`;
 
-                  const win = window.open('', '_blank', 'width=900,height=700');
-                  if (!win) return alert('يرجى السماح بفتح النوافذ المنبثقة للطباعة');
-                  win.document.write(html);
-                  win.document.close();
-                  win.focus();
-                  setTimeout(() => { win.print(); }, 500);
-                }} 
-                style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', background: 'linear-gradient(135deg, var(--primary), var(--primary-hover))' }}
-              >
-                🖨️ طباعة التقرير (A4)
-              </button>
-            </div>
-          </div>
+                      const win = window.open('', '_blank', 'width=900,height=700');
+                      if (!win) return alert('يرجى السماح بفتح النوافذ المنبثقة للطباعة');
+                      win.document.write(html);
+                      win.document.close();
+                      win.focus();
+                      setTimeout(() => { win.print(); }, 500);
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', background: 'linear-gradient(135deg, var(--primary), var(--primary-hover))' }}
+                  >
+                    🖨️ طباعة التقرير (A4)
+                  </button>
+                </div>
+              </div>
 
-          {dailyReportLoading && (
-            <div style={{ textAlign: 'center', padding: '3rem' }}>
-              <div className="spinner" style={{ display: 'inline-block', width: '40px', height: '40px', border: '4px solid rgba(255,255,255,0.1)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-              <p style={{ marginTop: '1rem', color: 'var(--text-secondary)' }}>جاري جلب البيانات وتوليد التقرير المالي...</p>
+              {dailyReportLoading && (
+                <div style={{ textAlign: 'center', padding: '3rem' }}>
+                  <div className="spinner" style={{ display: 'inline-block', width: '40px', height: '40px', border: '4px solid rgba(255,255,255,0.1)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                  <p style={{ marginTop: '1rem', color: 'var(--text-secondary)' }}>جاري جلب البيانات وتوليد التقرير المالي...</p>
+                </div>
+              )}
+
+              {dailyReportError && (
+                <div className="alert alert-error" style={{ margin: '1.5rem 0' }}>⚠️ {dailyReportError}</div>
+              )}
+
+              {!dailyReportLoading && !dailyReportError && dailyReportData && (
+                <div className="report-preview-container" style={{ marginTop: '1.5rem', direction: 'rtl' }}>
+                  <div style={{ textAlign: 'center', marginBottom: '2rem', borderBottom: '2px double var(--border-color)', paddingBottom: '1.5rem' }}>
+                    <h1 style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-primary)', margin: '0.5rem 0' }}>
+                      {dailyReportData.isRange ? '📊 تقرير حركة الخزينة والمصارف التفصيلي (فترة زمنية)' : '📋 تقرير حركة الخزينة والمصارف التفصيلي'}
+                    </h1>
+                    <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', margin: 0 }}>
+                      تاريخ التقرير: <strong>{dailyReportData.isRange ? `من ${dailyReportData.startDate} إلى ${dailyReportData.endDate}` : dailyReportData.date}</strong>
+                    </p>
+                  </div>
+
+                  <div className="report-section" style={{ marginBottom: '2rem' }}>
+                    <h3 style={{ borderRight: '4px solid var(--primary)', paddingRight: '0.5rem', marginBottom: '1rem', color: 'var(--text-primary)' }}>💵 ملخص الخزينة النقدية (الخزنة الفعلية)</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                      <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>الرصيد الافتتاحي (بداية اليوم):</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 800, marginTop: '0.25rem' }}>{dailyReportData.safeSummary.openingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</div>
+                      </div>
+                      <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>إجمالي الوارد (الإيداعات النقدية):</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--success)', marginTop: '0.25rem' }}>+{dailyReportData.safeSummary.deposits.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</div>
+                      </div>
+                      <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>إجمالي المنصرف (الصرفيات النقدية):</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--danger)', marginTop: '0.25rem' }}>-{dailyReportData.safeSummary.withdrawals.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</div>
+                      </div>
+                      <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>الرصيد الختامي (نهاية اليوم):</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--primary)', marginTop: '0.25rem' }}>{dailyReportData.safeSummary.closingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="report-section" style={{ marginBottom: '2rem' }}>
+                    <h3 style={{ borderRight: '4px solid var(--info)', paddingRight: '0.5rem', marginBottom: '1rem', color: 'var(--text-primary)' }}>🏦 ملخص الحسابات البنكية والمصارف</h3>
+                    <div className="table-container">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>كود البنك</th>
+                            <th>اسم الحساب البنكي</th>
+                            <th>رقم الحساب</th>
+                            <th>الرصيد الافتتاحي</th>
+                            <th>إجمالي الوارد</th>
+                            <th>إجمالي المنصرف</th>
+                            <th>الرصيد الختامي</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dailyReportData.banksSummary.map(bank => (
+                            <tr key={bank.id}>
+                              <td><strong>{bank.code}</strong></td>
+                              <td>{bank.name}</td>
+                              <td>{bank.account_number}</td>
+                              <td>{bank.openingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                              <td style={{ color: 'var(--success)' }}>+{bank.deposits.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                              <td style={{ color: 'var(--danger)' }}>-{bank.withdrawals.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                              <td><strong style={{ color: 'var(--info)' }}>{bank.closingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</strong></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="report-section" style={{ marginBottom: '2rem' }}>
+                    <h3 style={{ borderRight: '4px solid var(--warning)', paddingRight: '0.5rem', marginBottom: '1rem', color: 'var(--text-primary)' }}>📝 كشف العمليات التفصيلي خلال اليوم</h3>
+                    <div className="table-container">
+                      {dailyReportData.transactions.length === 0 ? (
+                        <div className="no-data-msg">لا توجد عمليات مسجلة في هذا اليوم.</div>
+                      ) : (
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>رقم الحركة</th>
+                              <th>الوقت</th>
+                              <th>نوع العملية</th>
+                              <th>التفاصيل والمستفيد</th>
+                              <th>طريقة الدفع / الحساب</th>
+                              <th>المبلغ</th>
+                              <th>المحاسب</th>
+                              <th>الحالة</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dailyReportData.transactions.map(tx => (
+                              <tr key={tx.id}>
+                                <td><code>TX-{String(tx.id).padStart(6, '0')}</code></td>
+                                <td>{new Date(tx.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</td>
+                                <td>
+                                  <span className={`badge ${tx.type === 'deposit' ? 'badge-success' : tx.type === 'company_transfer' ? 'badge-company-transfer' : 'badge-danger'
+                                    }`}>
+                                    {tx.type === 'deposit' ? 'وارد' : tx.type === 'company_transfer' ? 'حوالة شركة' : 'منصرف'}
+                                  </span>
+                                </td>
+                                <td>
+                                  {tx.type === 'company_transfer' && (
+                                    <div>تحويل لشركة: <strong>{tx.company_name}</strong></div>
+                                  )}
+                                  {tx.rep_name && (
+                                    <div>المندوب: <strong>{tx.rep_name}</strong></div>
+                                  )}
+                                  {tx.withdrawal_sub_type && (
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                      بند: {tx.withdrawal_sub_type === 'car' ? 'مصاريف سيارات'
+                                        : tx.withdrawal_sub_type === 'car_gas' ? 'مصاريف سيارات (جاز)'
+                                          : tx.withdrawal_sub_type === 'salary' ? 'رواتب وأجور'
+                                            : tx.withdrawal_sub_type === 'commission' ? 'عمولات'
+                                              : tx.withdrawal_sub_type === 'loan' ? 'سلفة'
+                                                : 'أخرى'}
+                                    </div>
+                                  )}
+                                  {tx.notes && <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>({tx.notes})</div>}
+                                </td>
+                                <td>
+                                  {tx.bank_name ? `🏦 ${tx.bank_name}` : '💵 نقدي بالخزينة'}
+                                </td>
+                                <td>
+                                  <strong className={tx.type === 'deposit' ? 'amount-deposit' : tx.type === 'company_transfer' ? 'amount-company-transfer' : 'amount-withdrawal'}>
+                                    {tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.m
+                                  </strong>
+                                </td>
+                                <td>{tx.creator_name || 'أمين الخزينة'}</td>
+                                <td>
+                                  <span style={{
+                                    display: 'inline-block',
+                                    padding: '0.2rem 0.5rem',
+                                    borderRadius: '4px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 700,
+                                    background: tx.status === 'disbursed' || tx.status === 'approved' || tx.status === null ? 'rgba(34, 197, 94, 0.2)' : 'rgba(234, 179, 8, 0.2)',
+                                    color: tx.status === 'disbursed' || tx.status === 'approved' || tx.status === null ? '#22c55e' : '#eab308'
+                                  }}>
+                                    {tx.status === 'disbursed' || tx.status === 'approved' || tx.status === null ? 'مكتمل' : 'قيد الانتظار'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '2rem', marginTop: '4rem', borderTop: '1px solid var(--border-color)', paddingTop: '2rem' }} className="no-print">
+                    <div style={{ textAlign: 'center', flex: 1 }}>
+                      <p style={{ margin: 0, fontWeight: 700 }}>توقيع المحاسب المستلم:</p>
+                      <p style={{ marginTop: '3rem', borderBottom: '1px dashed var(--text-secondary)', width: '70%', marginInline: 'auto' }}></p>
+                    </div>
+                    <div style={{ textAlign: 'center', flex: 1 }}>
+                      <p style={{ margin: 0, fontWeight: 700 }}>توقيع المراجع المالي:</p>
+                      <p style={{ marginTop: '3rem', borderBottom: '1px dashed var(--text-secondary)', width: '70%', marginInline: 'auto' }}></p>
+                    </div>
+                    <div style={{ textAlign: 'center', flex: 1 }}>
+                      <p style={{ margin: 0, fontWeight: 700 }}>توقيع المدير العام:</p>
+                      <p style={{ marginTop: '3rem', borderBottom: '1px dashed var(--text-secondary)', width: '70%', marginInline: 'auto' }}></p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {dailyReportError && (
-            <div className="alert alert-error" style={{ margin: '1.5rem 0' }}>⚠️ {dailyReportError}</div>
+          {/* PRINTABLE RECEIPT TEMPLATE */}
+          {printingTx && (
+            <div className="receipt-print-wrapper">
+              {/* ===== HEADER ===== */}
+              <div className="receipt-header">
+                <h1 className="receipt-title">خزينة التوريد والصرف</h1>
+                <p className="receipt-subtitle">الاحلام للتوكيلات التجاريه</p>
+                <div className="receipt-divider"></div>
+                <strong style={{ fontSize: '11pt', display: 'block', margin: '2mm 0', textAlign: 'center' }}>
+                  {printingTx.type === 'deposit'
+                    ? (printingTx.payment_method === 'bank_transfer' ? 'إيصال إيداع تحويل بنكي' : 'إيصال توريد نقدية (وارد)')
+                    : printingTx.type === 'company_transfer'
+                      ? 'إيصال تحويل بنكي لشركة (حوالة)'
+                      : 'إيصال صرف نقدية (منصرف)'}
+                </strong>
+                <div style={{ textAlign: 'center', marginTop: '1mm' }}>
+                  <span className="receipt-status-badge">
+                    {printingTx.type === 'deposit' ? '✔ مكتمل'
+                      : printingTx.type === 'company_transfer' ? (printingTx.status === 'approved' ? '✔ مكتمل - تم التحويل' : '⏳ قيد المراجعة')
+                        : (printingTx.status === 'disbursed' ? '✔ مكتمل - تم الصرف الفعلي'
+                          : printingTx.status === 'approved' ? '✓ معتمد - بانتظار التسليم'
+                            : printingTx.status === 'pending' ? '⏳ قيد المراجعة'
+                              : '✔ مكتمل')}
+                  </span>
+                </div>
+              </div>
+
+              {/* ===== META INFO ===== */}
+              <div className="receipt-meta">
+                <div className="receipt-meta-row">
+                  <span className="receipt-meta-label">رقم الإيصال:</span>
+                  <span className="receipt-meta-value">TX-{String(printingTx.id).padStart(6, '0')}</span>
+                </div>
+                <div className="receipt-meta-row">
+                  <span className="receipt-meta-label">التاريخ والوقت:</span>
+                  <span className="receipt-meta-value">{new Date(printingTx.date).toLocaleString('en-US')}</span>
+                </div>
+                <div className="receipt-meta-row">
+                  <span className="receipt-meta-label">نوع العملية:</span>
+                  <span className="receipt-meta-value">
+                    {printingTx.type === 'deposit' ? 'توريد (دخول أموال)' : printingTx.type === 'company_transfer' ? 'تحويل لشركة (حوالة)' : 'صرف (خروج أموال)'}
+                  </span>
+                </div>
+                <div className="receipt-meta-row">
+                  <span className="receipt-meta-label">طريقة الدفع:</span>
+                  <span className="receipt-meta-value">
+                    {printingTx.type === 'company_transfer' || printingTx.payment_method === 'bank_transfer' ? 'تحويل بنكي' : 'نقدي بالخزينة'}
+                  </span>
+                </div>
+                <div className="receipt-meta-row">
+                  <span className="receipt-meta-label">المحاسب:</span>
+                  <span className="receipt-meta-value">{printingTx.creator_name || 'أمين الخزينة'}</span>
+                </div>
+                {printingTx.approver_name && (
+                  <div className="receipt-meta-row">
+                    <span className="receipt-meta-label">اعتماد (المدير):</span>
+                    <span className="receipt-meta-value">{printingTx.approver_name}</span>
+                  </div>
+                )}
+                {printingTx.rep_name && (
+                  <div className="receipt-meta-row">
+                    <span className="receipt-meta-label">المندوب:</span>
+                    <span className="receipt-meta-value">
+                      {printingTx.rep_name}{printingTx.rep_code ? ` (${printingTx.rep_code})` : ''}
+                    </span>
+                  </div>
+                )}
+                {printingTx.agency_name && (
+                  <div className="receipt-meta-row">
+                    <span className="receipt-meta-label">التوكيل:</span>
+                    <span className="receipt-meta-value">
+                      {printingTx.agency_name}{printingTx.agency_code ? ` (${printingTx.agency_code})` : ''}
+                    </span>
+                  </div>
+                )}
+                {printingTx.supervisor_name && (
+                  <div className="receipt-meta-row">
+                    <span className="receipt-meta-label">المشرف:</span>
+                    <span className="receipt-meta-value">
+                      {printingTx.supervisor_name}{printingTx.supervisor_code ? ` (${printingTx.supervisor_code})` : ''}
+                    </span>
+                  </div>
+                )}
+                {printingTx.bank_name && (
+                  <div className="receipt-meta-row">
+                    <span className="receipt-meta-label">الحساب البنكي:</span>
+                    <span className="receipt-meta-value">
+                      {printingTx.bank_name}{printingTx.bank_code ? ` (${printingTx.bank_code})` : ''}
+                    </span>
+                  </div>
+                )}
+                {printingTx.type === 'company_transfer' && printingTx.company_name && (
+                  <div className="receipt-meta-row">
+                    <span className="receipt-meta-label">الشركة المستلمة:</span>
+                    <span className="receipt-meta-value">
+                      {printingTx.company_name}{printingTx.company_code ? ` (${printingTx.company_code})` : ''}
+                    </span>
+                  </div>
+                )}
+                {printingTx.type === 'withdrawal' && printingTx.withdrawal_sub_type && (
+                  <div className="receipt-meta-row">
+                    <span className="receipt-meta-label">بند الصرف:</span>
+                    <span className="receipt-meta-value">
+                      {printingTx.withdrawal_sub_type === 'car' ? 'مصاريف سيارات'
+                        : printingTx.withdrawal_sub_type === 'car_gas' ? 'مصاريف سيارات (جاز)'
+                          : printingTx.withdrawal_sub_type === 'car_oil' ? 'مصاريف سيارات (زيت)'
+                            : printingTx.withdrawal_sub_type === 'car_other' ? 'مصاريف سيارات (مصاريف أخرى)'
+                              : printingTx.withdrawal_sub_type === 'salary' ? 'رواتب وأجور'
+                                : printingTx.withdrawal_sub_type === 'commission' ? 'عمولات / مكافآت'
+                                  : printingTx.withdrawal_sub_type === 'loan' ? 'سلفة'
+                                    : printingTx.withdrawal_sub_type === 'direct_rent' ? 'إيجار'
+                                      : printingTx.withdrawal_sub_type === 'direct_operational' ? 'مصاريف تشغيل عامة'
+                                        : printingTx.withdrawal_sub_type === 'direct_other' ? 'مصاريف عامة أخرى'
+                                          : printingTx.withdrawal_sub_type === 'other' ? 'صرف عام / أخرى'
+                                            : printingTx.withdrawal_sub_type}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* ===== AMOUNT BOX ===== */}
+              <div className="receipt-amount-section">
+                <div className="receipt-amount-title">إجمالي المبلغ</div>
+                <div className="receipt-amount-value">
+                  {Number(printingTx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
+                </div>
+                <div className="receipt-amount-text">
+                  فقط وقدره: {(() => {
+                    const pounds = Math.floor(Number(printingTx.amount));
+                    const piasters = Math.round((Number(printingTx.amount) - pounds) * 100);
+                    return `${pounds.toLocaleString('en-US')} جنيه مصري${piasters > 0 ? ` و${piasters.toLocaleString('en-US')} قرشاً` : ''} لا غير`;
+                  })()}
+                </div>
+              </div>
+
+              {/* ===== DENOMINATIONS TABLE ===== */}
+              {printingTx.type === 'deposit' && printingTx.payment_method !== 'bank_transfer' &&
+                [200, 100, 50, 20, 10, 5, 1].some(d => (printingTx[`denom_${d}`] || 0) > 0) && (
+                  <div>
+                    <div style={{ fontSize: '8.5pt', fontWeight: 800, marginBottom: '1.5mm' }}>
+                      تفاصيل فئات الأوراق النقدية المودعة:
+                    </div>
+                    <table className="receipt-table">
+                      <thead>
+                        <tr>
+                          <th>الفئة</th>
+                          <th>العدد</th>
+                          <th>القيمة الإجمالية</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[200, 100, 50, 20, 10, 5, 1].map(denom => {
+                          const count = printingTx[`denom_${denom}`] || 0;
+                          if (count > 0) {
+                            return (
+                              <tr key={denom}>
+                                <td>{denom} ج.م</td>
+                                <td>{count.toLocaleString('en-US')}</td>
+                                <td>{(denom * count).toLocaleString('en-US')} ج.م</td>
+                              </tr>
+                            );
+                          }
+                          return null;
+                        })}
+                        <tr>
+                          <td style={{ fontWeight: 900, borderTop: '2px solid #000' }}>الإجمالي</td>
+                          <td style={{ fontWeight: 900, borderTop: '2px solid #000' }}>
+                            {[200, 100, 50, 20, 10, 5, 1]
+                              .reduce((sum, d) => sum + (printingTx[`denom_${d}`] || 0), 0)
+                              .toLocaleString('en-US')}
+                          </td>
+                          <td style={{ fontWeight: 900, borderTop: '2px solid #000' }}>
+                            {Number(printingTx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+              {/* ===== NOTES ===== */}
+              {printingTx.notes && (
+                <div className="receipt-notes">
+                  <strong>ملاحظات:</strong>
+                  {printingTx.notes}
+                </div>
+              )}
+
+              {/* ===== SIGNATURE LINES ===== */}
+              <div className="receipt-signatures">
+                <div className="signature-box">
+                  توقيع المندوب / المستلم
+                </div>
+                <div className="signature-box">
+                  توقيع أمين الخزينة
+                </div>
+              </div>
+
+              {/* ===== FOOTER ===== */}
+              <div className="receipt-footer">
+                <p>شكراً لتعاملكم معنا</p>
+                <p style={{ marginTop: '0.5mm' }}>نظام إدارة الخزينة الذكي — Cash Safe</p>
+              </div>
+            </div>
           )}
 
-          {!dailyReportLoading && !dailyReportError && dailyReportData && (
-            <div className="report-preview-container" style={{ marginTop: '1.5rem', direction: 'rtl' }}>
-              <div style={{ textAlign: 'center', marginBottom: '2rem', borderBottom: '2px double var(--border-color)', paddingBottom: '1.5rem' }}>
-                <h1 style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-primary)', margin: '0.5rem 0' }}>
-                  {dailyReportData.isRange ? '📊 تقرير حركة الخزينة والمصارف التفصيلي (فترة زمنية)' : '📋 تقرير حركة الخزينة والمصارف التفصيلي'}
+          {/* A4 DAILY REPORT PRINTABLE */}
+          {dailyReportData && (
+            <div className="daily-report-print-wrapper">
+              <div style={{ textAlign: 'center', marginBottom: '15mm', borderBottom: '3px double #000', paddingBottom: '5mm' }}>
+                <h1 style={{ fontSize: '20pt', fontWeight: 900, margin: '2mm 0' }}>
+                  {dailyReportData.isRange ? 'تقرير حركة الخزينة والمصارف التفصيلي (فترة زمنية)' : 'تقرير حركة الخزينة والمصارف اليومي التفصيلي'}
                 </h1>
-                <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', margin: 0 }}>
+                <p style={{ fontSize: '11pt', margin: 0 }}>
                   تاريخ التقرير: <strong>{dailyReportData.isRange ? `من ${dailyReportData.startDate} إلى ${dailyReportData.endDate}` : dailyReportData.date}</strong>
                 </p>
               </div>
 
-              <div className="report-section" style={{ marginBottom: '2rem' }}>
-                <h3 style={{ borderRight: '4px solid var(--primary)', paddingRight: '0.5rem', marginBottom: '1rem', color: 'var(--text-primary)' }}>💵 ملخص الخزينة النقدية (الخزنة الفعلية)</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                  <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>الرصيد الافتتاحي (بداية اليوم):</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 800, marginTop: '0.25rem' }}>{dailyReportData.safeSummary.openingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</div>
-                  </div>
-                  <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>إجمالي الوارد (الإيداعات النقدية):</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--success)', marginTop: '0.25rem' }}>+{dailyReportData.safeSummary.deposits.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</div>
-                  </div>
-                  <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>إجمالي المنصرف (الصرفيات النقدية):</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--danger)', marginTop: '0.25rem' }}>-{dailyReportData.safeSummary.withdrawals.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</div>
-                  </div>
-                  <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>الرصيد الختامي (نهاية اليوم):</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--primary)', marginTop: '0.25rem' }}>{dailyReportData.safeSummary.closingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="report-section" style={{ marginBottom: '2rem' }}>
-                <h3 style={{ borderRight: '4px solid var(--info)', paddingRight: '0.5rem', marginBottom: '1rem', color: 'var(--text-primary)' }}>🏦 ملخص الحسابات البنكية والمصارف</h3>
-                <div className="table-container">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>كود البنك</th>
-                        <th>اسم الحساب البنكي</th>
-                        <th>رقم الحساب</th>
-                        <th>الرصيد الافتتاحي</th>
-                        <th>إجمالي الوارد</th>
-                        <th>إجمالي المنصرف</th>
-                        <th>الرصيد الختامي</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {dailyReportData.banksSummary.map(bank => (
-                        <tr key={bank.id}>
-                          <td><strong>{bank.code}</strong></td>
-                          <td>{bank.name}</td>
-                          <td>{bank.account_number}</td>
-                          <td>{bank.openingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
-                          <td style={{ color: 'var(--success)' }}>+{bank.deposits.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
-                          <td style={{ color: 'var(--danger)' }}>-{bank.withdrawals.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
-                          <td><strong style={{ color: 'var(--info)' }}>{bank.closingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</strong></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div className="report-section" style={{ marginBottom: '2rem' }}>
-                <h3 style={{ borderRight: '4px solid var(--warning)', paddingRight: '0.5rem', marginBottom: '1rem', color: 'var(--text-primary)' }}>📝 كشف العمليات التفصيلي خلال اليوم</h3>
-                <div className="table-container">
-                  {dailyReportData.transactions.length === 0 ? (
-                    <div className="no-data-msg">لا توجد عمليات مسجلة في هذا اليوم.</div>
-                  ) : (
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>رقم الحركة</th>
-                          <th>الوقت</th>
-                          <th>نوع العملية</th>
-                          <th>التفاصيل والمستفيد</th>
-                          <th>طريقة الدفع / الحساب</th>
-                          <th>المبلغ</th>
-                          <th>المحاسب</th>
-                          <th>الحالة</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dailyReportData.transactions.map(tx => (
-                          <tr key={tx.id}>
-                            <td><code>TX-{String(tx.id).padStart(6, '0')}</code></td>
-                            <td>{new Date(tx.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</td>
-                            <td>
-                              <span className={`badge ${
-                                tx.type === 'deposit' ? 'badge-success' : tx.type === 'company_transfer' ? 'badge-company-transfer' : 'badge-danger'
-                              }`}>
-                                {tx.type === 'deposit' ? 'وارد' : tx.type === 'company_transfer' ? 'حوالة شركة' : 'منصرف'}
-                              </span>
-                            </td>
-                            <td>
-                              {tx.type === 'company_transfer' && (
-                                <div>تحويل لشركة: <strong>{tx.company_name}</strong></div>
-                              )}
-                              {tx.rep_name && (
-                                <div>المندوب: <strong>{tx.rep_name}</strong></div>
-                              )}
-                              {tx.withdrawal_sub_type && (
-                                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                                  بند: {tx.withdrawal_sub_type === 'car' ? 'مصاريف سيارات'
-                                    : tx.withdrawal_sub_type === 'car_gas' ? 'مصاريف سيارات (جاز)'
-                                    : tx.withdrawal_sub_type === 'salary' ? 'رواتب وأجور'
-                                    : tx.withdrawal_sub_type === 'commission' ? 'عمولات'
-                                    : tx.withdrawal_sub_type === 'loan' ? 'سلفة'
-                                    : 'أخرى'}
-                                </div>
-                              )}
-                              {tx.notes && <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>({tx.notes})</div>}
-                            </td>
-                            <td>
-                              {tx.bank_name ? `🏦 ${tx.bank_name}` : '💵 نقدي بالخزينة'}
-                            </td>
-                            <td>
-                              <strong className={tx.type === 'deposit' ? 'amount-deposit' : tx.type === 'company_transfer' ? 'amount-company-transfer' : 'amount-withdrawal'}>
-                                {tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.m
-                              </strong>
-                            </td>
-                            <td>{tx.creator_name || 'أمين الخزينة'}</td>
-                            <td>
-                              <span style={{
-                                display: 'inline-block',
-                                padding: '0.2rem 0.5rem',
-                                borderRadius: '4px',
-                                fontSize: '0.75rem',
-                                fontWeight: 700,
-                                background: tx.status === 'disbursed' || tx.status === 'approved' || tx.status === null ? 'rgba(34, 197, 94, 0.2)' : 'rgba(234, 179, 8, 0.2)',
-                                color: tx.status === 'disbursed' || tx.status === 'approved' || tx.status === null ? '#22c55e' : '#eab308'
-                              }}>
-                                {tx.status === 'disbursed' || tx.status === 'approved' || tx.status === null ? 'مكتمل' : 'قيد الانتظار'}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '2rem', marginTop: '4rem', borderTop: '1px solid var(--border-color)', paddingTop: '2rem' }} className="no-print">
-                <div style={{ textAlign: 'center', flex: 1 }}>
-                  <p style={{ margin: 0, fontWeight: 700 }}>توقيع المحاسب المستلم:</p>
-                  <p style={{ marginTop: '3rem', borderBottom: '1px dashed var(--text-secondary)', width: '70%', marginInline: 'auto' }}></p>
-                </div>
-                <div style={{ textAlign: 'center', flex: 1 }}>
-                  <p style={{ margin: 0, fontWeight: 700 }}>توقيع المراجع المالي:</p>
-                  <p style={{ marginTop: '3rem', borderBottom: '1px dashed var(--text-secondary)', width: '70%', marginInline: 'auto' }}></p>
-                </div>
-                <div style={{ textAlign: 'center', flex: 1 }}>
-                  <p style={{ margin: 0, fontWeight: 700 }}>توقيع المدير العام:</p>
-                  <p style={{ marginTop: '3rem', borderBottom: '1px dashed var(--text-secondary)', width: '70%', marginInline: 'auto' }}></p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* PRINTABLE RECEIPT TEMPLATE */}
-      {printingTx && (
-        <div className="receipt-print-wrapper">
-          {/* ===== HEADER ===== */}
-          <div className="receipt-header">
-            <h1 className="receipt-title">خزينة التوريد والصرف</h1>
-            <p className="receipt-subtitle">الاحلام للتوكيلات التجاريه</p>
-            <div className="receipt-divider"></div>
-            <strong style={{ fontSize: '11pt', display: 'block', margin: '2mm 0', textAlign: 'center' }}>
-              {printingTx.type === 'deposit'
-                ? (printingTx.payment_method === 'bank_transfer' ? 'إيصال إيداع تحويل بنكي' : 'إيصال توريد نقدية (وارد)')
-                : printingTx.type === 'company_transfer'
-                  ? 'إيصال تحويل بنكي لشركة (حوالة)'
-                  : 'إيصال صرف نقدية (منصرف)'}
-            </strong>
-            <div style={{ textAlign: 'center', marginTop: '1mm' }}>
-              <span className="receipt-status-badge">
-                {printingTx.type === 'deposit' ? '✔ مكتمل'
-                  : printingTx.type === 'company_transfer' ? (printingTx.status === 'approved' ? '✔ مكتمل - تم التحويل' : '⏳ قيد المراجعة')
-                  : (printingTx.status === 'disbursed' ? '✔ مكتمل - تم الصرف الفعلي'
-                     : printingTx.status === 'approved' ? '✓ معتمد - بانتظار التسليم'
-                     : printingTx.status === 'pending' ? '⏳ قيد المراجعة'
-                     : '✔ مكتمل')}
-              </span>
-            </div>
-          </div>
-
-          {/* ===== META INFO ===== */}
-          <div className="receipt-meta">
-            <div className="receipt-meta-row">
-              <span className="receipt-meta-label">رقم الإيصال:</span>
-              <span className="receipt-meta-value">TX-{String(printingTx.id).padStart(6, '0')}</span>
-            </div>
-            <div className="receipt-meta-row">
-              <span className="receipt-meta-label">التاريخ والوقت:</span>
-              <span className="receipt-meta-value">{new Date(printingTx.date).toLocaleString('en-US')}</span>
-            </div>
-            <div className="receipt-meta-row">
-              <span className="receipt-meta-label">نوع العملية:</span>
-              <span className="receipt-meta-value">
-                {printingTx.type === 'deposit' ? 'توريد (دخول أموال)' : printingTx.type === 'company_transfer' ? 'تحويل لشركة (حوالة)' : 'صرف (خروج أموال)'}
-              </span>
-            </div>
-            <div className="receipt-meta-row">
-              <span className="receipt-meta-label">طريقة الدفع:</span>
-              <span className="receipt-meta-value">
-                {printingTx.type === 'company_transfer' || printingTx.payment_method === 'bank_transfer' ? 'تحويل بنكي' : 'نقدي بالخزينة'}
-              </span>
-            </div>
-            <div className="receipt-meta-row">
-              <span className="receipt-meta-label">المحاسب:</span>
-              <span className="receipt-meta-value">{printingTx.creator_name || 'أمين الخزينة'}</span>
-            </div>
-            {printingTx.approver_name && (
-              <div className="receipt-meta-row">
-                <span className="receipt-meta-label">اعتماد (المدير):</span>
-                <span className="receipt-meta-value">{printingTx.approver_name}</span>
-              </div>
-            )}
-            {printingTx.rep_name && (
-              <div className="receipt-meta-row">
-                <span className="receipt-meta-label">المندوب:</span>
-                <span className="receipt-meta-value">
-                  {printingTx.rep_name}{printingTx.rep_code ? ` (${printingTx.rep_code})` : ''}
-                </span>
-              </div>
-            )}
-            {printingTx.agency_name && (
-              <div className="receipt-meta-row">
-                <span className="receipt-meta-label">التوكيل:</span>
-                <span className="receipt-meta-value">
-                  {printingTx.agency_name}{printingTx.agency_code ? ` (${printingTx.agency_code})` : ''}
-                </span>
-              </div>
-            )}
-            {printingTx.supervisor_name && (
-              <div className="receipt-meta-row">
-                <span className="receipt-meta-label">المشرف:</span>
-                <span className="receipt-meta-value">
-                  {printingTx.supervisor_name}{printingTx.supervisor_code ? ` (${printingTx.supervisor_code})` : ''}
-                </span>
-              </div>
-            )}
-            {printingTx.bank_name && (
-              <div className="receipt-meta-row">
-                <span className="receipt-meta-label">الحساب البنكي:</span>
-                <span className="receipt-meta-value">
-                  {printingTx.bank_name}{printingTx.bank_code ? ` (${printingTx.bank_code})` : ''}
-                </span>
-              </div>
-            )}
-            {printingTx.type === 'company_transfer' && printingTx.company_name && (
-              <div className="receipt-meta-row">
-                <span className="receipt-meta-label">الشركة المستلمة:</span>
-                <span className="receipt-meta-value">
-                  {printingTx.company_name}{printingTx.company_code ? ` (${printingTx.company_code})` : ''}
-                </span>
-              </div>
-            )}
-            {printingTx.type === 'withdrawal' && printingTx.withdrawal_sub_type && (
-              <div className="receipt-meta-row">
-                <span className="receipt-meta-label">بند الصرف:</span>
-                <span className="receipt-meta-value">
-                  {printingTx.withdrawal_sub_type === 'car' ? 'مصاريف سيارات'
-                    : printingTx.withdrawal_sub_type === 'car_gas' ? 'مصاريف سيارات (جاز)'
-                    : printingTx.withdrawal_sub_type === 'car_oil' ? 'مصاريف سيارات (زيت)'
-                    : printingTx.withdrawal_sub_type === 'car_other' ? 'مصاريف سيارات (مصاريف أخرى)'
-                    : printingTx.withdrawal_sub_type === 'salary' ? 'رواتب وأجور'
-                    : printingTx.withdrawal_sub_type === 'commission' ? 'عمولات / مكافآت'
-                    : printingTx.withdrawal_sub_type === 'loan' ? 'سلفة'
-                    : printingTx.withdrawal_sub_type === 'direct_rent' ? 'إيجار'
-                    : printingTx.withdrawal_sub_type === 'direct_operational' ? 'مصاريف تشغيل عامة'
-                    : printingTx.withdrawal_sub_type === 'direct_other' ? 'مصاريف عامة أخرى'
-                    : printingTx.withdrawal_sub_type === 'other' ? 'صرف عام / أخرى'
-                    : printingTx.withdrawal_sub_type}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* ===== AMOUNT BOX ===== */}
-          <div className="receipt-amount-section">
-            <div className="receipt-amount-title">إجمالي المبلغ</div>
-            <div className="receipt-amount-value">
-              {Number(printingTx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
-            </div>
-            <div className="receipt-amount-text">
-              فقط وقدره: {(() => {
-                const pounds = Math.floor(Number(printingTx.amount));
-                const piasters = Math.round((Number(printingTx.amount) - pounds) * 100);
-                return `${pounds.toLocaleString('en-US')} جنيه مصري${piasters > 0 ? ` و${piasters.toLocaleString('en-US')} قرشاً` : ''} لا غير`;
-              })()}
-            </div>
-          </div>
-
-          {/* ===== DENOMINATIONS TABLE ===== */}
-          {printingTx.type === 'deposit' && printingTx.payment_method !== 'bank_transfer' &&
-            [200, 100, 50, 20, 10, 5, 1].some(d => (printingTx[`denom_${d}`] || 0) > 0) && (
-            <div>
-              <div style={{ fontSize: '8.5pt', fontWeight: 800, marginBottom: '1.5mm' }}>
-                تفاصيل فئات الأوراق النقدية المودعة:
-              </div>
-              <table className="receipt-table">
-                <thead>
-                  <tr>
-                    <th>الفئة</th>
-                    <th>العدد</th>
-                    <th>القيمة الإجمالية</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[200, 100, 50, 20, 10, 5, 1].map(denom => {
-                    const count = printingTx[`denom_${denom}`] || 0;
-                    if (count > 0) {
-                      return (
-                        <tr key={denom}>
-                          <td>{denom} ج.م</td>
-                          <td>{count.toLocaleString('en-US')}</td>
-                          <td>{(denom * count).toLocaleString('en-US')} ج.م</td>
-                        </tr>
-                      );
-                    }
-                    return null;
-                  })}
-                  <tr>
-                    <td style={{ fontWeight: 900, borderTop: '2px solid #000' }}>الإجمالي</td>
-                    <td style={{ fontWeight: 900, borderTop: '2px solid #000' }}>
-                      {[200, 100, 50, 20, 10, 5, 1]
-                        .reduce((sum, d) => sum + (printingTx[`denom_${d}`] || 0), 0)
-                        .toLocaleString('en-US')}
-                    </td>
-                    <td style={{ fontWeight: 900, borderTop: '2px solid #000' }}>
-                      {Number(printingTx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* ===== NOTES ===== */}
-          {printingTx.notes && (
-            <div className="receipt-notes">
-              <strong>ملاحظات:</strong>
-              {printingTx.notes}
-            </div>
-          )}
-
-          {/* ===== SIGNATURE LINES ===== */}
-          <div className="receipt-signatures">
-            <div className="signature-box">
-              توقيع المندوب / المستلم
-            </div>
-            <div className="signature-box">
-              توقيع أمين الخزينة
-            </div>
-          </div>
-
-          {/* ===== FOOTER ===== */}
-          <div className="receipt-footer">
-            <p>شكراً لتعاملكم معنا</p>
-            <p style={{ marginTop: '0.5mm' }}>نظام إدارة الخزينة الذكي — Cash Safe</p>
-          </div>
-        </div>
-      )}
-
-      {/* A4 DAILY REPORT PRINTABLE */}
-      {dailyReportData && (
-        <div className="daily-report-print-wrapper">
-          <div style={{ textAlign: 'center', marginBottom: '15mm', borderBottom: '3px double #000', paddingBottom: '5mm' }}>
-            <h1 style={{ fontSize: '20pt', fontWeight: 900, margin: '2mm 0' }}>
-              {dailyReportData.isRange ? 'تقرير حركة الخزينة والمصارف التفصيلي (فترة زمنية)' : 'تقرير حركة الخزينة والمصارف اليومي التفصيلي'}
-            </h1>
-            <p style={{ fontSize: '11pt', margin: 0 }}>
-              تاريخ التقرير: <strong>{dailyReportData.isRange ? `من ${dailyReportData.startDate} إلى ${dailyReportData.endDate}` : dailyReportData.date}</strong>
-            </p>
-          </div>
-
-          <div style={{ marginBottom: '10mm' }}>
-            <h3 style={{ borderRight: '4px solid #000', paddingRight: '2mm', marginBottom: '3mm', fontSize: '12pt', fontWeight: 800 }}>💵 أولاً: ملخص حركة الخزينة النقدية (الخزنة الفعلية)</h3>
-            <table className="report-print-table">
-              <thead>
-                <tr>
-                  <th>الرصيد الافتتاحي (بداية اليوم)</th>
-                  <th>إجمالي الإيداعات (الوارد)</th>
-                  <th>إجمالي الصرفيات (المنصرف)</th>
-                  <th>الرصيد الختامي (نهاية اليوم)</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr style={{ textAlign: 'center' }}>
-                  <td>{dailyReportData.safeSummary.openingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
-                  <td style={{ fontWeight: 'bold' }}>+{dailyReportData.safeSummary.deposits.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
-                  <td style={{ fontWeight: 'bold' }}>-{dailyReportData.safeSummary.withdrawals.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
-                  <td style={{ fontWeight: 'bold' }}>{dailyReportData.safeSummary.closingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div style={{ marginBottom: '10mm' }}>
-            <h3 style={{ borderRight: '4px solid #000', paddingRight: '2mm', marginBottom: '3mm', fontSize: '12pt', fontWeight: 800 }}>🏦 ثانياً: ملخص حركة الحسابات البنكية والمصارف</h3>
-            <table className="report-print-table">
-              <thead>
-                <tr>
-                  <th>كود البنك</th>
-                  <th>اسم البنك</th>
-                  <th>رقم الحساب</th>
-                  <th>الرصيد الافتتاحي</th>
-                  <th>إجمالي الوارد</th>
-                  <th>إجمالي المنصرف</th>
-                  <th>الرصيد الختامي</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dailyReportData.banksSummary.map(bank => (
-                  <tr key={bank.id} style={{ textAlign: 'center' }}>
-                    <td style={{ fontWeight: 'bold' }}>{bank.code}</td>
-                    <td>{bank.name}</td>
-                    <td>{bank.account_number}</td>
-                    <td>{bank.openingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
-                    <td>+{bank.deposits.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
-                    <td>-{bank.withdrawals.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
-                    <td style={{ fontWeight: 'bold' }}>{bank.closingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div style={{ marginBottom: '10mm' }}>
-            <h3 style={{ borderRight: '4px solid #000', paddingRight: '2mm', marginBottom: '3mm', fontSize: '12pt', fontWeight: 800 }}>📝 ثالثاً: كشف العمليات اليومي المفصل</h3>
-            <table className="report-print-table">
-              <thead>
-                <tr>
-                  <th>رقم الحركة</th>
-                  <th>الوقت</th>
-                  <th>النوع</th>
-                  <th>التفاصيل والمستفيد</th>
-                  <th>طريقة الدفع / الحساب</th>
-                  <th>المبلغ</th>
-                  <th>المحاسب</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dailyReportData.transactions.length === 0 ? (
-                  <tr>
-                    <td colSpan="7" style={{ padding: '4mm', textAlign: 'center' }}>لا توجد عمليات مسجلة في هذا اليوم.</td>
-                  </tr>
-                ) : (
-                  dailyReportData.transactions.map(tx => (
-                    <tr key={tx.id} style={{ textAlign: 'center' }}>
-                      <td>TX-{String(tx.id).padStart(6, '0')}</td>
-                      <td>{new Date(tx.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</td>
-                      <td style={{ fontWeight: 'bold' }}>
-                        {tx.type === 'deposit' ? 'وارد' : tx.type === 'company_transfer' ? 'حوالة لشركة' : 'منصرف'}
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        {tx.type === 'company_transfer' && `تحويل لشركة: ${tx.company_name}`}
-                        {tx.rep_name && `المندوب: ${tx.rep_name}`}
-                        {tx.withdrawal_sub_type && ` (بند: ${
-                          tx.withdrawal_sub_type === 'car' ? 'مصاريف سيارات' : tx.withdrawal_sub_type === 'car_gas' ? 'جاز سيارات' : tx.withdrawal_sub_type === 'salary' ? 'رواتب' : tx.withdrawal_sub_type === 'commission' ? 'عمولات' : tx.withdrawal_sub_type === 'loan' ? 'سلفة' : 'أخرى'
-                        })`}
-                        {tx.notes && ` - ${tx.notes}`}
-                      </td>
-                      <td>
-                        {tx.bank_name ? `🏦 ${tx.bank_name}` : '💵 نقدي بالخزينة'}
-                      </td>
-                      <td style={{ fontWeight: 'bold' }}>
-                        {tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
-                      </td>
-                      <td>{tx.creator_name || 'أمين الخزينة'}</td>
+              <div style={{ marginBottom: '10mm' }}>
+                <h3 style={{ borderRight: '4px solid #000', paddingRight: '2mm', marginBottom: '3mm', fontSize: '12pt', fontWeight: 800 }}>💵 أولاً: ملخص حركة الخزينة النقدية (الخزنة الفعلية)</h3>
+                <table className="report-print-table">
+                  <thead>
+                    <tr>
+                      <th>الرصيد الافتتاحي (بداية اليوم)</th>
+                      <th>إجمالي الإيداعات (الوارد)</th>
+                      <th>إجمالي الصرفيات (المنصرف)</th>
+                      <th>الرصيد الختامي (نهاية اليوم)</th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    <tr style={{ textAlign: 'center' }}>
+                      <td>{dailyReportData.safeSummary.openingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                      <td style={{ fontWeight: 'bold' }}>+{dailyReportData.safeSummary.deposits.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                      <td style={{ fontWeight: 'bold' }}>-{dailyReportData.safeSummary.withdrawals.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                      <td style={{ fontWeight: 'bold' }}>{dailyReportData.safeSummary.closingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20mm', marginTop: '20mm' }}>
-            <div style={{ textAlign: 'center', flex: 1 }}>
-              <p style={{ margin: 0, fontWeight: 700, fontSize: '10pt' }}>توقيع المحاسب المستلم</p>
-              <p style={{ marginTop: '15mm', borderBottom: '1px solid #000', width: '80%', marginInline: 'auto' }}></p>
-            </div>
-            <div style={{ textAlign: 'center', flex: 1 }}>
-              <p style={{ margin: 0, fontWeight: 700, fontSize: '10pt' }}>توقيع المراجع المالي</p>
-              <p style={{ marginTop: '15mm', borderBottom: '1px solid #000', width: '80%', marginInline: 'auto' }}></p>
-            </div>
-            <div style={{ textAlign: 'center', flex: 1 }}>
-              <p style={{ margin: 0, fontWeight: 700, fontSize: '10pt' }}>توقيع المدير العام</p>
-              <p style={{ marginTop: '15mm', borderBottom: '1px solid #000', width: '80%', marginInline: 'auto' }}></p>
-            </div>
-          </div>
-        </div>
-      )}
+              <div style={{ marginBottom: '10mm' }}>
+                <h3 style={{ borderRight: '4px solid #000', paddingRight: '2mm', marginBottom: '3mm', fontSize: '12pt', fontWeight: 800 }}>🏦 ثانياً: ملخص حركة الحسابات البنكية والمصارف</h3>
+                <table className="report-print-table">
+                  <thead>
+                    <tr>
+                      <th>كود البنك</th>
+                      <th>اسم البنك</th>
+                      <th>رقم الحساب</th>
+                      <th>الرصيد الافتتاحي</th>
+                      <th>إجمالي الوارد</th>
+                      <th>إجمالي المنصرف</th>
+                      <th>الرصيد الختامي</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dailyReportData.banksSummary.map(bank => (
+                      <tr key={bank.id} style={{ textAlign: 'center' }}>
+                        <td style={{ fontWeight: 'bold' }}>{bank.code}</td>
+                        <td>{bank.name}</td>
+                        <td>{bank.account_number}</td>
+                        <td>{bank.openingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                        <td>+{bank.deposits.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                        <td>-{bank.withdrawals.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                        <td style={{ fontWeight: 'bold' }}>{bank.closingBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
-      {/* IMAGE VIEWER MODAL */}
-      {activeImageModal && (
-        <div 
-          style={{
-            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-            background: 'rgba(15, 23, 42, 0.9)', backdropFilter: 'blur(10px)',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            zIndex: 1100, direction: 'rtl', padding: '1.5rem'
-          }}
-          onClick={() => setActiveImageModal(null)}
-        >
-          <div 
-            style={{
-              position: 'relative', width: '100%', maxWidth: '800px', 
-              maxHeight: '85vh', display: 'flex', flexDirection: 'column', 
-              alignItems: 'center', justifyContent: 'center'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Close Button */}
-            <button 
-              onClick={() => setActiveImageModal(null)}
+              <div style={{ marginBottom: '10mm' }}>
+                <h3 style={{ borderRight: '4px solid #000', paddingRight: '2mm', marginBottom: '3mm', fontSize: '12pt', fontWeight: 800 }}>📝 ثالثاً: كشف العمليات اليومي المفصل</h3>
+                <table className="report-print-table">
+                  <thead>
+                    <tr>
+                      <th>رقم الحركة</th>
+                      <th>الوقت</th>
+                      <th>النوع</th>
+                      <th>التفاصيل والمستفيد</th>
+                      <th>طريقة الدفع / الحساب</th>
+                      <th>المبلغ</th>
+                      <th>المحاسب</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dailyReportData.transactions.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" style={{ padding: '4mm', textAlign: 'center' }}>لا توجد عمليات مسجلة في هذا اليوم.</td>
+                      </tr>
+                    ) : (
+                      dailyReportData.transactions.map(tx => (
+                        <tr key={tx.id} style={{ textAlign: 'center' }}>
+                          <td>TX-{String(tx.id).padStart(6, '0')}</td>
+                          <td>{new Date(tx.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</td>
+                          <td style={{ fontWeight: 'bold' }}>
+                            {tx.type === 'deposit' ? 'وارد' : tx.type === 'company_transfer' ? 'حوالة لشركة' : 'منصرف'}
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            {tx.type === 'company_transfer' && `تحويل لشركة: ${tx.company_name}`}
+                            {tx.rep_name && `المندوب: ${tx.rep_name}`}
+                            {tx.withdrawal_sub_type && ` (بند: ${tx.withdrawal_sub_type === 'car' ? 'مصاريف سيارات' : tx.withdrawal_sub_type === 'car_gas' ? 'جاز سيارات' : tx.withdrawal_sub_type === 'salary' ? 'رواتب' : tx.withdrawal_sub_type === 'commission' ? 'عمولات' : tx.withdrawal_sub_type === 'loan' ? 'سلفة' : 'أخرى'
+                              })`}
+                            {tx.notes && ` - ${tx.notes}`}
+                          </td>
+                          <td>
+                            {tx.bank_name ? `🏦 ${tx.bank_name}` : '💵 نقدي بالخزينة'}
+                          </td>
+                          <td style={{ fontWeight: 'bold' }}>
+                            {tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
+                          </td>
+                          <td>{tx.creator_name || 'أمين الخزينة'}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20mm', marginTop: '20mm' }}>
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '10pt' }}>توقيع المحاسب المستلم</p>
+                  <p style={{ marginTop: '15mm', borderBottom: '1px solid #000', width: '80%', marginInline: 'auto' }}></p>
+                </div>
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '10pt' }}>توقيع المراجع المالي</p>
+                  <p style={{ marginTop: '15mm', borderBottom: '1px solid #000', width: '80%', marginInline: 'auto' }}></p>
+                </div>
+                <div style={{ textAlign: 'center', flex: 1 }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '10pt' }}>توقيع المدير العام</p>
+                  <p style={{ marginTop: '15mm', borderBottom: '1px solid #000', width: '80%', marginInline: 'auto' }}></p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* IMAGE VIEWER MODAL */}
+          {activeImageModal && (
+            <div
               style={{
-                position: 'absolute', top: '-40px', left: '0', 
-                background: 'rgba(255,255,255,0.1)', color: '#fff', 
-                border: 'none', borderRadius: '50%', width: '36px', height: '36px',
-                fontSize: '1.2rem', cursor: 'pointer', display: 'flex', 
-                alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s'
+                position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                background: 'rgba(15, 23, 42, 0.9)', backdropFilter: 'blur(10px)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                zIndex: 1100, direction: 'rtl', padding: '1.5rem'
               }}
+              onClick={() => setActiveImageModal(null)}
             >
-              ✕
-            </button>
-            <img 
-              src={activeImageModal} 
-              alt="إيصال التحويل بالحجم الكامل" 
-              style={{ 
-                maxWidth: '100%', maxHeight: '80vh', 
-                borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)',
-                boxShadow: '0 25px 50px rgba(0,0,0,0.5)', objectFit: 'contain'
-              }} 
-            />
-          </div>
+              <div
+                style={{
+                  position: 'relative', width: '100%', maxWidth: '800px',
+                  maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Close Button */}
+                <button
+                  onClick={() => setActiveImageModal(null)}
+                  style={{
+                    position: 'absolute', top: '-40px', left: '0',
+                    background: 'rgba(255,255,255,0.1)', color: '#fff',
+                    border: 'none', borderRadius: '50%', width: '36px', height: '36px',
+                    fontSize: '1.2rem', cursor: 'pointer', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s'
+                  }}
+                >
+                  ✕
+                </button>
+                <img
+                  src={activeImageModal}
+                  alt="إيصال التحويل بالحجم الكامل"
+                  style={{
+                    maxWidth: '100%', maxHeight: '80vh',
+                    borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)',
+                    boxShadow: '0 25px 50px rgba(0,0,0,0.5)', objectFit: 'contain'
+                  }}
+                />
+              </div>
+            </div>
+          )}
         </div>
-      )}
-    </div>
-  );
+      );
 }

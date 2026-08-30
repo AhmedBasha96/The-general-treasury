@@ -18,6 +18,32 @@ export default function AttendanceManagement() {
   const [manualCheckIn, setManualCheckIn] = useState(new Date().toISOString().slice(0, 16));
   const [manualNotes, setManualNotes] = useState('');
 
+  // Geofence Work Zones State
+  const [workZones, setWorkZones] = useState([]);
+  const [showZonesModal, setShowZonesModal] = useState(false);
+  const [newZoneName, setNewZoneName] = useState('');
+  const [newZoneLat, setNewZoneLat] = useState('');
+  const [newZoneLng, setNewZoneLng] = useState('');
+  const [newZoneRadius, setNewZoneRadius] = useState(100);
+  const [newZoneAddress, setNewZoneAddress] = useState('');
+
+  // Live GPS Mobile Check-in State
+  const [showGpsCheckinModal, setShowGpsCheckinModal] = useState(false);
+  const [gpsRepId, setGpsRepId] = useState('');
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [gpsResult, setGpsResult] = useState(null);
+
+  const loadWorkZones = async () => {
+    try {
+      const res = await fetch('/api/attendance/work-zones');
+      if (res.ok) {
+        setWorkZones(await res.json());
+      }
+    } catch (e) {
+      console.error('Error fetching work zones:', e);
+    }
+  };
+
   const loadAttendance = async () => {
     setLoading(true);
     try {
@@ -51,7 +77,116 @@ export default function AttendanceManagement() {
   useEffect(() => {
     loadAttendance();
     loadReps();
+    loadWorkZones();
   }, [dateFilter, statusFilter]);
+
+  // Fetch current GPS position to prefill Zone form
+  const handleFetchCurrentGpsForZone = () => {
+    if (!navigator.geolocation) {
+      return alert('المتصفح لا يدعم تحديد الموقع الجغرافي GPS');
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setNewZoneLat(pos.coords.latitude.toFixed(6));
+        setNewZoneLng(pos.coords.longitude.toFixed(6));
+        setSuccessMsg(`📍 تم جلب موقعك الحالي بنجاح (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)})`);
+      },
+      (err) => {
+        alert('تعذر جلب موقع الـ GPS الحالي. يرجى تفعيل السماح بالموقع للمتصفح.');
+      },
+      { enableHighAccuracy: true }
+    );
+  };
+
+  // Save new Work Zone
+  const handleAddWorkZone = async (e) => {
+    e.preventDefault();
+    if (!newZoneName || !newZoneLat || !newZoneLng) {
+      return alert('يرجى كتابة اسم النطاق وإحداثيات الموقع (Lat & Lng)');
+    }
+    try {
+      const res = await fetch('/api/attendance/work-zones', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newZoneName,
+          latitude: newZoneLat,
+          longitude: newZoneLng,
+          radius_meters: newZoneRadius,
+          address_description: newZoneAddress
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setNewZoneName('');
+        setNewZoneLat('');
+        setNewZoneLng('');
+        setNewZoneRadius(100);
+        setNewZoneAddress('');
+        loadWorkZones();
+        setSuccessMsg('تم إضافة نطاق العمل الجغرافي بنجاح');
+      } else {
+        alert(data.error || 'فشل إضافة نطاق العمل');
+      }
+    } catch (e) {
+      alert('خطأ في الاتصال بالخادم');
+    }
+  };
+
+  // Delete Work Zone
+  const handleDeleteWorkZone = async (id) => {
+    if (!window.confirm('هل أنت تأكد من حذف نطاق العمل هذا؟')) return;
+    try {
+      const res = await fetch(`/api/attendance/work-zones/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        loadWorkZones();
+        setSuccessMsg('تم حذف نطاق العمل');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Execute Live Mobile GPS Check-In
+  const handleExecuteGpsCheckin = () => {
+    if (!navigator.geolocation) {
+      return alert('المتصفح لا يدعم تحديد الموقع الجغرافي (GPS)');
+    }
+    setGpsLoading(true);
+    setGpsResult(null);
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const res = await fetch('/api/attendance/mobile-checkin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              rep_id: gpsRepId || null,
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude
+            })
+          });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            setGpsResult({ type: 'success', message: data.message, zoneName: data.zoneName, distance: data.distanceMeters });
+            loadAttendance();
+          } else {
+            setGpsResult({ type: 'error', message: data.error || 'فشل إثبات الحضور بالبصمة الجغرافية' });
+          }
+        } catch (e) {
+          setGpsResult({ type: 'error', message: 'خطأ في الاتصال بالسيرفر أثناء التحقق من الموقع' });
+        } finally {
+          setGpsLoading(false);
+        }
+      },
+      (err) => {
+        setGpsLoading(false);
+        setGpsResult({ type: 'error', message: '❌ تم رفض صلاحية تحديد الموقع (GPS)! يرجى السماح بتحديد الموقع في المتصفح لمتابعة البصمة الحية.' });
+      },
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
+  };
 
   // Handle manual attendance submission
   const handleManualSubmit = async (e) => {
@@ -331,11 +466,26 @@ export default function AttendanceManagement() {
 
         <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
           <button 
+            onClick={() => setShowGpsCheckinModal(true)}
+            style={{ padding: '0.65rem 1.1rem', background: 'linear-gradient(135deg, #10b981, #059669)', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '0.88rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', boxShadow: '0 4px 14px rgba(16,185,129,0.3)' }}
+          >
+            📍 بصمة حية بالـ GPS
+          </button>
+
+          <button 
+            onClick={() => setShowZonesModal(true)}
+            style={{ padding: '0.65rem 1.1rem', background: 'rgba(56,189,248,0.15)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.3)', borderRadius: '12px', fontSize: '0.88rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+          >
+            🗺️ نطاقات العمل (Geofence Zones)
+          </button>
+
+          <button 
             onClick={handleLivePing}
             style={{ padding: '0.65rem 1.1rem', background: '#0284c7', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '0.88rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', boxShadow: '0 4px 12px rgba(2,132,199,0.25)' }}
           >
-            📡 فحص اتصال البصمة (Live Ping)
+            📡 فحص اتصال ZK
           </button>
+
           <label style={{ padding: '0.65rem 1.1rem', background: '#059669', color: '#ffffff', borderRadius: '12px', fontSize: '0.88rem', fontWeight: '800', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
             📁 استيراد ملف ZK
             <input type="file" accept=".csv,.txt,.dat" onChange={handleFileUpload} style={{ display: 'none' }} />
@@ -345,14 +495,14 @@ export default function AttendanceManagement() {
             onClick={handleClearAll}
             style={{ padding: '0.65rem 1.1rem', background: '#dc2626', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '0.88rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
           >
-            🗑️ مسح السجلات التجريبية
+            🗑️ مسح السجلات
           </button>
 
           <button 
             onClick={() => setShowManualModal(true)}
             style={{ padding: '0.65rem 1.1rem', background: '#7c3aed', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '0.88rem', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', boxShadow: '0 4px 12px rgba(124,58,237,0.25)' }}
           >
-            ➕ تسجيل حضور يدوي (استثنائي)
+            ➕ حضور يدوي
           </button>
         </div>
       </div>
@@ -565,6 +715,149 @@ export default function AttendanceManagement() {
                 <button type="button" className="btn btn-secondary" onClick={() => setShowManualModal(false)} style={{ padding: '0.75rem 1.25rem' }}>إلغاء</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 1: Live Mobile GPS Check-In */}
+      {showGpsCheckinModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '1rem' }}>
+          <div style={{ background: 'linear-gradient(145deg, #1e293b 0%, #0f172a 100%)', borderRadius: '24px', maxWidth: '520px', width: '100%', padding: '1.75rem', border: '1px solid rgba(16,185,129,0.3)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6)', direction: 'rtl', color: '#f8fafc' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #334155', paddingBottom: '0.75rem' }}>
+              <h3 style={{ margin: 0, fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#10b981' }}>
+                📍 إثبات حضور بالبصمة الحية (GPS Geofence)
+              </h3>
+              <button onClick={() => { setShowGpsCheckinModal(false); setGpsResult(null); }} style={{ background: 'none', border: 'none', fontSize: '1.5rem', color: '#94a3b8', cursor: 'pointer' }}>✕</button>
+            </div>
+
+            <div style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '16px', padding: '1rem', marginBottom: '1.25rem', fontSize: '0.88rem', color: '#cbd5e1', lineHeight: '1.5' }}>
+              سيقوم النظام بالتحقق التلقائي من موقعك الجغرافي الحالي (GPS) والتأكد أنك متواجد داخل إحدى نطاقات العمل (Zones) المسموحة بالشركة.
+            </div>
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 'bold', fontSize: '0.85rem', color: '#cbd5e1' }}>اختر الموظف / المندوب:</label>
+              <select className="input-field" style={{ width: '100%', background: '#0f172a', color: '#f8fafc', padding: '0.65rem' }} value={gpsRepId} onChange={(e) => setGpsRepId(e.target.value)}>
+                <option value="">-- اختار الموظف أو المندوب (أو حسابك الحقيقي) --</option>
+                {representatives.map(r => (
+                  <option key={r.id} value={r.id}>
+                    {r.classification === 'driver' ? '🚚 ' : '👤 '}{r.name} ({r.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button 
+              onClick={handleExecuteGpsCheckin}
+              disabled={gpsLoading}
+              style={{ width: '100%', padding: '0.85rem', background: 'linear-gradient(135deg, #10b981, #059669)', color: '#ffffff', border: 'none', borderRadius: '14px', fontSize: '1rem', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', boxShadow: '0 4px 16px rgba(16,185,129,0.35)' }}
+            >
+              {gpsLoading ? '⏳ جاري تحديد موقعك الجغرافي والتحقق من النطاق...' : '🎯 تسجيل بصمة الحضور الآن (GPS)'}
+            </button>
+
+            {gpsResult && (
+              <div style={{
+                marginTop: '1.25rem',
+                padding: '1rem',
+                borderRadius: '16px',
+                fontSize: '0.9rem',
+                fontWeight: 'bold',
+                lineHeight: '1.6',
+                background: gpsResult.type === 'success' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                color: gpsResult.type === 'success' ? '#4ade80' : '#f87171',
+                border: `1px solid ${gpsResult.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`
+              }}>
+                {gpsResult.message}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => { setShowGpsCheckinModal(false); setGpsResult(null); }} style={{ padding: '0.6rem 1.25rem' }}>إغلاق</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: Geofence Work Zones Settings */}
+      {showZonesModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15,23,42,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '1rem' }}>
+          <div style={{ background: 'linear-gradient(145deg, #1e293b 0%, #0f172a 100%)', borderRadius: '24px', maxWidth: '640px', width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '1.75rem', border: '1px solid rgba(56,189,248,0.3)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6)', direction: 'rtl', color: '#f8fafc' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #334155', paddingBottom: '0.75rem' }}>
+              <h3 style={{ margin: 0, fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#38bdf8' }}>
+                🗺️ إدارة نطاقات العمل المسموحة (Geofence Zones)
+              </h3>
+              <button onClick={() => setShowZonesModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', color: '#94a3b8', cursor: 'pointer' }}>✕</button>
+            </div>
+
+            {/* List of active Work Zones */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h4 style={{ margin: '0 0 0.75rem 0', color: '#cbd5e1', fontSize: '0.95rem' }}>المواقع المعتمدة حالياً بالسيستم:</h4>
+              {workZones.length === 0 ? (
+                <div style={{ background: 'rgba(15,23,42,0.5)', padding: '1rem', borderRadius: '14px', border: '1px dashed #334155', textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>
+                  لم يتم إضافة نطاقات عمل بعد. يرجى إضافة نطاق العمل المعتمد أدناه.
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gap: '0.75rem' }}>
+                  {workZones.map(z => (
+                    <div key={z.id} style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '14px', padding: '0.85rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontWeight: '900', color: '#38bdf8', fontSize: '0.95rem' }}>🏢 {z.name}</div>
+                        <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '0.2rem' }}>
+                          الإحداثيات: ({z.latitude}, {z.longitude}) | النطاق المسموح: <strong style={{ color: '#4ade80' }}>{z.radius_meters} متر</strong>
+                        </div>
+                        {z.address_description && <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.15rem' }}>📌 {z.address_description}</div>}
+                      </div>
+                      <button onClick={() => handleDeleteWorkZone(z.id)} style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)', padding: '0.35rem 0.65rem', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                        🗑️ حذف
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Add New Work Zone Form */}
+            <form onSubmit={handleAddWorkZone} style={{ background: 'rgba(15,23,42,0.6)', border: '1px solid #334155', borderRadius: '16px', padding: '1.15rem' }}>
+              <h4 style={{ margin: '0 0 1rem 0', color: '#f8fafc', fontWeight: 'bold', fontSize: '0.95rem' }}>➕ إضافة نطاق عمل جغرافي جديد (Zone):</h4>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.85rem', marginBottom: '0.85rem' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.8rem', color: '#cbd5e1' }}>اسم الموقع / الفرع:</label>
+                  <input type="text" className="input-field" placeholder="مثال: المقر الرئيسي أو فرع المعادي" value={newZoneName} onChange={(e) => setNewZoneName(e.target.value)} required />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.8rem', color: '#cbd5e1' }}>نصف قطر النطاق المسموح (بالأمتار):</label>
+                  <input type="number" className="input-field" placeholder="100" value={newZoneRadius} onChange={(e) => setNewZoneRadius(e.target.value)} required />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem', marginBottom: '0.85rem' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.8rem', color: '#cbd5e1' }}>خط العرض (Latitude):</label>
+                  <input type="number" step="any" className="input-field" placeholder="30.0444" value={newZoneLat} onChange={(e) => setNewZoneLat(e.target.value)} required />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.8rem', color: '#cbd5e1' }}>خط الطول (Longitude):</label>
+                  <input type="number" step="any" className="input-field" placeholder="31.2357" value={newZoneLng} onChange={(e) => setNewZoneLng(e.target.value)} required />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.6rem', marginBottom: '1rem' }}>
+                <button type="button" onClick={handleFetchCurrentGpsForZone} style={{ padding: '0.45rem 0.85rem', background: '#0284c7', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer' }}>
+                  🎯 جلب موقعي الحالي كمرجع للزون
+                </button>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.3rem', fontSize: '0.8rem', color: '#cbd5e1' }}>الوصف أو العنوان التفصيلي (اختياري):</label>
+                <input type="text" className="input-field" placeholder="مثال: شارع التحرير - الدقي" value={newZoneAddress} onChange={(e) => setNewZoneAddress(e.target.value)} />
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.15rem' }}>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1, padding: '0.7rem', fontWeight: 'bold', background: '#38bdf8', color: '#0f172a' }}>حفظ نطاق العمل</button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowZonesModal(false)} style={{ padding: '0.7rem 1.25rem' }}>إغلاق</button>
+              </div>
+            </form>
+
           </div>
         </div>
       )}

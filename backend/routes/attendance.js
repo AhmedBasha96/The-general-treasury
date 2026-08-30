@@ -424,10 +424,163 @@ router.post('/clear-all', async (req, res) => {
   try {
     const pool = getPool();
     await pool.request().query("DELETE FROM attendance_logs");
-    res.json({ success: true, message: 'تم مسح السجلات التجريبية وتنظيف جدول الحضور بنجاح' });
+// Helper to calculate distance in meters between two GPS coordinates (Haversine Formula)
+function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000; // Earth radius in meters
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c);
+}
+
+// 8. GET /api/attendance/work-zones - Get all geofence work zones
+router.get('/work-zones', async (req, res) => {
+  try {
+    const pool = getPool();
+    const result = await pool.request().query('SELECT * FROM work_zones ORDER BY created_at DESC');
+    res.json(result.recordset);
   } catch (error) {
-    console.error('Error clearing attendance logs:', error);
-    res.status(500).json({ error: 'فشل مسح السجلات' });
+    console.error('Error fetching work zones:', error);
+    res.status(500).json({ error: 'فشل جلب نطاقات العمل الجغرافية' });
+  }
+});
+
+// 9. POST /api/attendance/work-zones - Add new geofence work zone
+router.post('/work-zones', async (req, res) => {
+  const { name, latitude, longitude, radius_meters, address_description } = req.body;
+  if (!name || latitude === undefined || longitude === undefined) {
+    return res.status(400).json({ error: 'اسم النطاق وإحداثيات الموقع (Latitude & Longitude) مطلوبة' });
+  }
+  try {
+    const pool = getPool();
+    const result = await pool.request()
+      .input('name', sql.NVarChar, name.trim())
+      .input('latitude', sql.Float, parseFloat(latitude))
+      .input('longitude', sql.Float, parseFloat(longitude))
+      .input('radius_meters', sql.Int, parseInt(radius_meters) || 100)
+      .input('address_description', sql.NVarChar, address_description ? address_description.trim() : null)
+      .query(`
+        INSERT INTO work_zones (name, latitude, longitude, radius_meters, address_description, is_active, created_at)
+        VALUES (@name, @latitude, @longitude, @radius_meters, @address_description, 1, GETDATE());
+        SELECT SCOPE_IDENTITY() AS id;
+      `);
+    res.json({ success: true, message: 'تم إضافة نطاق العمل الجغرافي بنجاح', id: result.recordset[0].id });
+  } catch (error) {
+    console.error('Error adding work zone:', error);
+    res.status(500).json({ error: 'فشل إضافة نطاق العمل الجغرافي' });
+  }
+});
+
+// 10. DELETE /api/attendance/work-zones/:id - Delete a geofence work zone
+router.delete('/work-zones/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const pool = getPool();
+    await pool.request().input('id', sql.Int, parseInt(id)).query('DELETE FROM work_zones WHERE id = @id');
+    res.json({ success: true, message: 'تم حذف نطاق العمل الجغرافي بنجاح' });
+  } catch (error) {
+    console.error('Error deleting work zone:', error);
+    res.status(500).json({ error: 'فشل حذف نطاق العمل الجغرافي' });
+  }
+});
+
+// 11. POST /api/attendance/mobile-checkin - Geofenced Live Mobile Attendance Check-In
+router.post('/mobile-checkin', async (req, res) => {
+  const { rep_id, latitude, longitude, notes } = req.body;
+  if (latitude === undefined || longitude === undefined) {
+    return res.status(400).json({ error: 'إحداثيات الموقع الحالي (GPS) مطلوبة لإثبات الحضور الحي' });
+  }
+
+  try {
+    const pool = getPool();
+    const userLat = parseFloat(latitude);
+    const userLng = parseFloat(longitude);
+
+    // Fetch active work zones
+    const zonesRes = await pool.request().query('SELECT * FROM work_zones WHERE is_active = 1');
+    const zones = zonesRes.recordset;
+
+    if (zones.length === 0) {
+      return res.status(400).json({ error: 'لم يتم إعداد نطاقات عمل (Zones) مسموحة في النظام بعد. يرجى التواصل مع المدير لإضافة مواقع العمل.' });
+    }
+
+    // Check distance to each zone
+    let matchedZone = null;
+    let closestDistance = Infinity;
+    let closestZoneName = '';
+
+    for (const zone of zones) {
+      const dist = calculateDistanceMeters(userLat, userLng, zone.latitude, zone.longitude);
+      if (dist < closestDistance) {
+        closestDistance = dist;
+        closestZoneName = zone.name;
+      }
+      if (dist <= zone.radius_meters) {
+        matchedZone = { ...zone, distance: dist };
+        break;
+      }
+    }
+
+    if (!matchedZone) {
+      return res.status(403).json({
+        success: false,
+        error: `❌ أنت خارج نطاق العمل المسموح به! موقعك الحالي يبعد ${closestDistance} متر عن أقرب نطاق عمل معتمد (${closestZoneName}).`,
+        closestDistance,
+        closestZoneName
+      });
+    }
+
+    // Get Representative Details
+    let targetRepId = rep_id ? parseInt(rep_id) : null;
+    let zkCode = 'GPS_MOBILE';
+    let matchedRep = null;
+
+    if (targetRepId) {
+      const repRes = await pool.request().input('id', sql.Int, targetRepId).query('SELECT id, code, name, zk_user_id FROM representatives WHERE id = @id');
+      if (repRes.recordset.length > 0) {
+        matchedRep = repRes.recordset[0];
+        zkCode = matchedRep.zk_user_id || matchedRep.code;
+      }
+    }
+
+    const checkInDate = new Date();
+    const dateStr = checkInDate.toISOString().slice(0, 10);
+    const { status, lateMinutes } = calculateAttendanceStatus(checkInDate);
+    const deviceName = `📍 بصمة جغرافية حية (${matchedZone.name})`;
+
+    await pool.request()
+      .input('rep_id', sql.Int, targetRepId)
+      .input('zk_user_id', sql.VarChar, String(zkCode))
+      .input('date', sql.VarChar, dateStr)
+      .input('check_in', sql.DateTime, checkInDate)
+      .input('status', sql.VarChar, status)
+      .input('late_minutes', sql.Int, lateMinutes)
+      .input('device_name', sql.NVarChar, deviceName)
+      .input('notes', sql.NVarChar, notes ? notes.trim() : `مسافة النطاق: ${matchedZone.distance} متر من ${matchedZone.name}`)
+      .input('latitude', sql.Float, userLat)
+      .input('longitude', sql.Float, userLng)
+      .input('work_zone_id', sql.Int, matchedZone.id)
+      .input('checkin_method', sql.VarChar, 'mobile_gps')
+      .query(`
+        INSERT INTO attendance_logs (rep_id, zk_user_id, date, check_in, status, late_minutes, device_name, notes, latitude, longitude, work_zone_id, checkin_method, created_at)
+        VALUES (@rep_id, @zk_user_id, @date, @check_in, @status, @late_minutes, @device_name, @notes, @latitude, @longitude, @work_zone_id, @checkin_method, GETDATE());
+      `);
+
+    res.json({
+      success: true,
+      message: `🟢 تم إثبات الحضور بنجاح داخل نطاق (${matchedZone.name}) على مسافة ${matchedZone.distance} متر.`,
+      zoneName: matchedZone.name,
+      distanceMeters: matchedZone.distance,
+      checkInTime: checkInDate
+    });
+
+  } catch (error) {
+    console.error('Error recording mobile geofenced attendance:', error);
+    res.status(500).json({ error: 'فشل إثبات الحضور بالبصمة الجغرافية' });
   }
 });
 

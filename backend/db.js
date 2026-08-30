@@ -619,6 +619,30 @@ async function createTables() {
             FOREIGN KEY (rep_id) REFERENCES representatives(id) ON DELETE SET NULL
           );
         END
+
+        -- Create work_zones table (نطاقات العمل المسموحة بالبصمة الجغرافية)
+        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'work_zones')
+        BEGIN
+          CREATE TABLE work_zones (
+            id INT IDENTITY(1,1) PRIMARY KEY,
+            name NVARCHAR(250) NOT NULL,
+            latitude FLOAT NOT NULL,
+            longitude FLOAT NOT NULL,
+            radius_meters INT NOT NULL DEFAULT 100,
+            address_description NVARCHAR(500) NULL,
+            is_active BIT NOT NULL DEFAULT 1,
+            created_at DATETIME DEFAULT GETDATE()
+          );
+        END
+
+        -- Add GPS & Geofence columns to attendance_logs if missing
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('attendance_logs') AND name = 'latitude')
+        BEGIN
+          ALTER TABLE attendance_logs ADD latitude FLOAT NULL;
+          ALTER TABLE attendance_logs ADD longitude FLOAT NULL;
+          ALTER TABLE attendance_logs ADD work_zone_id INT NULL;
+          ALTER TABLE attendance_logs ADD checkin_method VARCHAR(50) DEFAULT 'zk_fingerprint';
+        END
         
         -- Create audit_logs table (سجل حركة ونشاط المستخدمين والتدقيق)
         IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'audit_logs')
