@@ -916,5 +916,6 @@ function getPool() {
 module.exports = {
   connectDB,
   getPool,
+  logAuditLog,
   sql
 };

@@ -3,12 +3,22 @@ import React, { useState, useEffect } from 'react';
 export default function PayrollManagement({ currentUser, banks = [], onRefreshDashboard }) {
   const [subTab, setSubTab] = useState('runs'); // 'runs' | 'profiles' | 'history'
 
+  // Aux Data State
+  const [agencies, setAgencies] = useState([]);
+  const [supervisors, setSupervisors] = useState([]);
+
   // Salary Profiles State
   const [profiles, setProfiles] = useState([]);
   const [loadingProfiles, setLoadingProfiles] = useState(false);
   const [editingProfile, setEditingProfile] = useState(null);
   const [profileMsg, setProfileMsg] = useState({ error: '', success: '' });
+
+  // Filters State
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterAgency, setFilterAgency] = useState('');
+  const [filterSupervisor, setFilterSupervisor] = useState('');
+  const [filterClassification, setFilterClassification] = useState('');
+  const [filterConfigured, setFilterConfigured] = useState(''); // 'configured' | 'missing' | ''
 
   // Payroll Runs State
   const [runs, setRuns] = useState([]);
@@ -16,6 +26,10 @@ export default function PayrollManagement({ currentUser, banks = [], onRefreshDa
   const [selectedRun, setSelectedRun] = useState(null);
   const [runItems, setRunItems] = useState([]);
   const [loadingItems, setLoadingItems] = useState(false);
+
+  // Checkbox Selection State for Bulk Action
+  const [selectedItemIds, setSelectedItemIds] = useState([]);
+  const [expandedItemId, setExpandedItemId] = useState(null);
 
   // Generate Run State
   const [genYear, setGenYear] = useState(new Date().getFullYear());
@@ -42,9 +56,23 @@ export default function PayrollManagement({ currentUser, banks = [], onRefreshDa
   const [printingPayslip, setPrintingPayslip] = useState(null);
 
   useEffect(() => {
+    loadAuxData();
     loadProfiles();
     loadRuns();
   }, []);
+
+  const loadAuxData = async () => {
+    try {
+      const [agRes, supRes] = await Promise.all([
+        fetch('/api/agencies'),
+        fetch('/api/supervisors')
+      ]);
+      if (agRes.ok) setAgencies(await agRes.json());
+      if (supRes.ok) setSupervisors(await supRes.json());
+    } catch (err) {
+      console.error('Failed to load agencies/supervisors:', err);
+    }
+  };
 
   const loadProfiles = async () => {
     setLoadingProfiles(true);
@@ -81,6 +109,7 @@ export default function PayrollManagement({ currentUser, banks = [], onRefreshDa
 
   const handleSelectRun = async (runId) => {
     setLoadingItems(true);
+    setSelectedItemIds([]);
     try {
       const res = await fetch(`/api/payroll/runs/${runId}`);
       if (res.ok) {
@@ -239,10 +268,102 @@ export default function PayrollManagement({ currentUser, banks = [], onRefreshDa
     }
   };
 
-  const filteredProfiles = profiles.filter(p => 
-    p.rep_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.rep_code.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // EXPORT PAYROLL TO FORMATED EXCEL
+  const handleExportToExcel = () => {
+    if (!selectedRun || runItems.length === 0) return alert('لا توجد بيانات مسير رواتب لتصديرها');
+
+    const titleStr = `كشف مسير رواتب رسمية - ${selectedRun.title}`;
+    const rows = filteredItems.map(item => `
+      <tr>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center">${item.rep_code}</td>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:right;font-weight:bold">${item.rep_name}</td>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center">${item.classification || 'موظف'}</td>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center">${Number(item.basic_salary).toFixed(2)}</td>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center;color:blue">+${Number(item.allowances).toFixed(2)}</td>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center;color:green">+${Number(item.commission_amount).toFixed(2)}</td>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center;color:red">-${Number(item.absence_deduction + item.late_deduction).toFixed(2)}</td>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center;color:orange">-${Number(item.loan_deduction).toFixed(2)}</td>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center;color:green">+${Number(item.bonus_amount).toFixed(2)}</td>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center;color:red">-${Number(item.other_deduction).toFixed(2)}</td>
+        <td style="border:1px solid #cbd5e1;padding:8px;text-align:center;font-weight:bold;background:#e6f4ea">${Number(item.net_salary).toFixed(2)}</td>
+      </tr>
+    `).join('');
+
+    const excelHtml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8" />
+        <style>
+          body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; }
+          th { background-color: #0f172a; color: #ffffff; font-weight: bold; border: 1px solid #0f172a; padding: 10px; text-align: center; }
+          h2 { color: #0f172a; }
+        </style>
+      </head>
+      <body dir="rtl">
+        <h2 style="text-align:center">${titleStr}</h2>
+        <table border="1" style="border-collapse:collapse;width:100%">
+          <thead>
+            <tr>
+              <th>كود الموظف</th>
+              <th>اسم الموظف / المندوب</th>
+              <th>التصنيف</th>
+              <th>الأساسي</th>
+              <th>البدلات</th>
+              <th>العمولة</th>
+              <th>خصم البصمة</th>
+              <th>قسط السلفة</th>
+              <th>مكافأة</th>
+              <th>خصم آخر</th>
+              <th>صافي الراتب (ج.م)</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob(['\uFEFF' + excelHtml], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `مسير_رواتب_${selectedRun.month}_${selectedRun.year}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // CHECKBOX SELECTION HELPERS
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedItemIds(filteredItems.map(i => i.id));
+    } else {
+      setSelectedItemIds([]);
+    }
+  };
+
+  const handleSelectItem = (id) => {
+    setSelectedItemIds(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  // FILTERED PROFILES
+  const filteredProfiles = profiles.filter(p => {
+    if (searchQuery && !p.rep_name.toLowerCase().includes(searchQuery.toLowerCase()) && !p.rep_code.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (filterClassification && p.classification !== filterClassification) return false;
+    if (filterConfigured === 'configured' && Number(p.basic_salary) <= 0) return false;
+    if (filterConfigured === 'missing' && Number(p.basic_salary) > 0) return false;
+    return true;
+  });
+
+  // FILTERED RUN ITEMS
+  const filteredItems = runItems.filter(i => {
+    if (searchQuery && !i.rep_name.toLowerCase().includes(searchQuery.toLowerCase()) && !i.rep_code.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (filterClassification && i.classification !== filterClassification) return false;
+    return true;
+  });
 
   const monthNames = [
     'يناير (1)', 'فبراير (2)', 'مارس (3)', 'أبريل (4)', 'مايو (5)', 'يونيو (6)',
@@ -252,7 +373,7 @@ export default function PayrollManagement({ currentUser, banks = [], onRefreshDa
   return (
     <div style={{ animation: 'fadeIn 0.3s ease', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       
-      {/* HEADER HERO SECTION */}
+      {/* TOP HEADER & NAVIGATION */}
       <div style={{
         background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.9) 100%)',
         border: '1px solid var(--border-color)',
@@ -291,7 +412,7 @@ export default function PayrollManagement({ currentUser, banks = [], onRefreshDa
           </div>
         </div>
 
-        {/* MODERN SEGMENTED CONTROLS */}
+        {/* NAVIGATION SEGMENTED CONTROLS */}
         <div style={{
           display: 'inline-flex',
           background: 'rgba(15, 23, 42, 0.6)',
@@ -331,7 +452,7 @@ export default function PayrollManagement({ currentUser, banks = [], onRefreshDa
       {subTab === 'runs' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           
-          {/* CONTROL PANEL FOR GENERATING NEW MONTHLY PAYROLL */}
+          {/* GENERATOR CONTROL PANEL */}
           <div style={{
             background: 'var(--card-bg)',
             border: '1px solid var(--border-color)',
@@ -387,7 +508,7 @@ export default function PayrollManagement({ currentUser, banks = [], onRefreshDa
           {selectedRun ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               
-              {/* HEADER BAR FOR SELECTED RUN */}
+              {/* HEADER BAR FOR SELECTED RUN WITH EXCEL & DISBURSE BUTTONS */}
               <div style={{
                 background: 'var(--card-bg)',
                 border: '1px solid var(--border-color)',
@@ -411,7 +532,16 @@ export default function PayrollManagement({ currentUser, banks = [], onRefreshDa
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ padding: '0.65rem 1.2rem', fontSize: '0.9rem', color: '#10b981', borderColor: 'rgba(16, 185, 129, 0.3)', background: 'rgba(16, 185, 129, 0.1)' }}
+                    onClick={handleExportToExcel}
+                  >
+                    📊 تصدير لـ Excel
+                  </button>
+
                   {selectedRun.status !== 'disbursed' && currentUser?.role === 'manager' && (
                     <button
                       type="button"
@@ -442,9 +572,8 @@ export default function PayrollManagement({ currentUser, banks = [], onRefreshDa
                 </div>
               </div>
 
-              {/* HIGH VISUAL IMPACT STAT CARDS */}
+              {/* STAT CARDS */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '1rem' }}>
-                
                 <div className="metric-card" style={{ padding: '1.25rem', borderLeft: '4px solid #0ea5e9' }}>
                   <span className="metric-title">إجمالي الراتب الأساسي</span>
                   <div className="metric-value" style={{ color: 'var(--text-primary)', fontSize: '1.5rem' }}>
@@ -491,15 +620,63 @@ export default function PayrollManagement({ currentUser, banks = [], onRefreshDa
                     {Number(selectedRun.total_net_salary).toLocaleString()} <span style={{ fontSize: '0.9rem', color: 'var(--success)' }}>ج.م</span>
                   </div>
                 </div>
-
               </div>
 
-              {/* DETAILED ITEMS TABLE */}
+              {/* ADVANCED FILTERING TOOLBAR */}
+              <div style={{
+                background: 'var(--card-bg)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '16px',
+                padding: '1rem 1.25rem',
+                display: 'flex',
+                gap: '1rem',
+                flexWrap: 'wrap',
+                alignItems: 'center'
+              }}>
+                <div style={{ flex: 2, minWidth: '200px' }}>
+                  <input
+                    type="text"
+                    placeholder="🔍 بحث باسم الموظف أو الكود..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                <div style={{ flex: 1, minWidth: '150px' }}>
+                  <select value={filterClassification} onChange={(e) => setFilterClassification(e.target.value)}>
+                    <option value="">كل فئات الوظائف...</option>
+                    <option value="retail_rep">مندوب تجزئة</option>
+                    <option value="wholesale_rep">مندوب جملة</option>
+                    <option value="driver">سائق</option>
+                    <option value="supervisor_staff">مشرف</option>
+                  </select>
+                </div>
+
+                {(searchQuery || filterClassification) && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}
+                    onClick={() => { setSearchQuery(''); setFilterClassification(''); }}
+                  >
+                    ✕ إعادة تصفية
+                  </button>
+                )}
+              </div>
+
+              {/* DETAILED ITEMS TABLE WITH EXPANDABLE ROWS */}
               <div className="table-container" style={{ background: 'var(--card-bg)', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
-                <div style={{ padding: '1.25rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)' }}>
+                <div style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)' }}>
                   <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>
-                    📋 كشف مفردات مرتبات الموظفين والمناديب ({runItems.length})
+                    📋 كشف مفردات مرتبات الموظفين والمناديب ({filteredItems.length})
                   </h4>
+
+                  {selectedItemIds.length > 0 && (
+                    <span style={{ fontSize: '0.85rem', color: 'var(--primary)', fontWeight: 'bold' }}>
+                      تم تحديد {selectedItemIds.length} موظف
+                    </span>
+                  )}
                 </div>
 
                 {loadingItems ? (
@@ -508,6 +685,13 @@ export default function PayrollManagement({ currentUser, banks = [], onRefreshDa
                   <table>
                     <thead>
                       <tr>
+                        <th style={{ width: '40px', textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedItemIds.length === filteredItems.length && filteredItems.length > 0}
+                            onChange={handleSelectAll}
+                          />
+                        </th>
                         <th>الكود</th>
                         <th>اسم الموظف / المندوب</th>
                         <th>الأساسي</th>
@@ -522,73 +706,112 @@ export default function PayrollManagement({ currentUser, banks = [], onRefreshDa
                       </tr>
                     </thead>
                     <tbody>
-                      {runItems.map(item => (
-                        <tr key={item.id}>
-                          <td><strong>{item.rep_code}</strong></td>
-                          <td>
-                            <div style={{ fontWeight: 700 }}>{item.rep_name}</div>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.classification || 'موظف'}</span>
-                          </td>
-                          <td>{Number(item.basic_salary).toLocaleString()} ج.م</td>
-                          <td><span style={{ color: '#06b6d4', fontWeight: 600 }}>+{Number(item.allowances).toLocaleString()}</span></td>
-                          <td><span style={{ color: '#10b981', fontWeight: 600 }}>+{Number(item.commission_amount).toLocaleString()}</span></td>
-                          <td>
-                            {Number(item.absence_deduction + item.late_deduction) > 0 ? (
-                              <span style={{ color: 'var(--danger)', fontWeight: 600 }}>
-                                -{Number(item.absence_deduction + item.late_deduction).toLocaleString()}
-                                <span style={{ fontSize: '0.7rem', display: 'block', color: 'var(--text-muted)' }}>({item.absence_days} يوم غياب)</span>
-                              </span>
-                            ) : '—'}
-                          </td>
-                          <td>
-                            {Number(item.loan_deduction) > 0 ? (
-                              <span style={{ color: '#eab308', fontWeight: 600 }}>-{Number(item.loan_deduction).toLocaleString()}</span>
-                            ) : '—'}
-                          </td>
-                          <td>
-                            {Number(item.bonus_amount) > 0 ? (
-                              <span style={{ color: 'var(--success)', fontWeight: 600 }}>+{Number(item.bonus_amount).toLocaleString()}</span>
-                            ) : '0'}
-                          </td>
-                          <td>
-                            {Number(item.other_deduction) > 0 ? (
-                              <span style={{ color: 'var(--danger)', fontWeight: 600 }}>-{Number(item.other_deduction).toLocaleString()}</span>
-                            ) : '0'}
-                          </td>
-                          <td>
-                            <strong style={{ fontSize: '1.05rem', color: 'var(--success)', fontWeight: 800 }}>
-                              {Number(item.net_salary).toLocaleString()} ج.م
-                            </strong>
-                          </td>
-                          <td>
-                            <div style={{ display: 'flex', gap: '0.4rem' }}>
-                              {selectedRun.status !== 'disbursed' && (
+                      {filteredItems.map(item => (
+                        <React.Fragment key={item.id}>
+                          <tr style={{ background: expandedItemId === item.id ? 'rgba(255,255,255,0.03)' : 'transparent' }}>
+                            <td style={{ textAlign: 'center' }}>
+                              <input
+                                type="checkbox"
+                                checked={selectedItemIds.includes(item.id)}
+                                onChange={() => handleSelectItem(item.id)}
+                              />
+                            </td>
+                            <td>
+                              <strong style={{ cursor: 'pointer', color: 'var(--primary)' }} onClick={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)}>
+                                {expandedItemId === item.id ? '▼' : '►'} {item.rep_code}
+                              </strong>
+                            </td>
+                            <td>
+                              <div style={{ fontWeight: 700 }}>{item.rep_name}</div>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{item.classification || 'موظف'}</span>
+                            </td>
+                            <td>{Number(item.basic_salary).toLocaleString()} ج.م</td>
+                            <td><span style={{ color: '#06b6d4', fontWeight: 600 }}>+{Number(item.allowances).toLocaleString()}</span></td>
+                            <td><span style={{ color: '#10b981', fontWeight: 600 }}>+{Number(item.commission_amount).toLocaleString()}</span></td>
+                            <td>
+                              {Number(item.absence_deduction + item.late_deduction) > 0 ? (
+                                <span style={{ color: 'var(--danger)', fontWeight: 600 }}>
+                                  -{Number(item.absence_deduction + item.late_deduction).toLocaleString()}
+                                </span>
+                              ) : '—'}
+                            </td>
+                            <td>
+                              {Number(item.loan_deduction) > 0 ? (
+                                <span style={{ color: '#eab308', fontWeight: 600 }}>-{Number(item.loan_deduction).toLocaleString()}</span>
+                              ) : '—'}
+                            </td>
+                            <td>
+                              {Number(item.bonus_amount) > 0 ? (
+                                <span style={{ color: 'var(--success)', fontWeight: 600 }}>+{Number(item.bonus_amount).toLocaleString()}</span>
+                              ) : '0'}
+                            </td>
+                            <td>
+                              {Number(item.other_deduction) > 0 ? (
+                                <span style={{ color: 'var(--danger)', fontWeight: 600 }}>-{Number(item.other_deduction).toLocaleString()}</span>
+                              ) : '0'}
+                            </td>
+                            <td>
+                              <strong style={{ fontSize: '1.05rem', color: 'var(--success)', fontWeight: 800 }}>
+                                {Number(item.net_salary).toLocaleString()} ج.م
+                              </strong>
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                {selectedRun.status !== 'disbursed' && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }}
+                                    onClick={() => {
+                                      setEditingItem(item);
+                                      setEditBonus(item.bonus_amount || '');
+                                      setEditOtherDed(item.other_deduction || '');
+                                      setEditNotes(item.notes || '');
+                                    }}
+                                  >
+                                    ✏️ تعديل
+                                  </button>
+                                )}
+
                                 <button
                                   type="button"
                                   className="btn btn-secondary"
-                                  style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem' }}
-                                  onClick={() => {
-                                    setEditingItem(item);
-                                    setEditBonus(item.bonus_amount || '');
-                                    setEditOtherDed(item.other_deduction || '');
-                                    setEditNotes(item.notes || '');
-                                  }}
+                                  style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', color: '#06b6d4', borderColor: 'rgba(6,182,212,0.3)', background: 'rgba(6,182,212,0.08)' }}
+                                  onClick={() => setPrintingPayslip(item)}
                                 >
-                                  ✏️ تعديل
+                                  📄 قسيمة الراتب
                                 </button>
-                              )}
+                              </div>
+                            </td>
+                          </tr>
 
-                              <button
-                                type="button"
-                                className="btn btn-secondary"
-                                style={{ padding: '0.35rem 0.7rem', fontSize: '0.8rem', color: '#06b6d4', borderColor: 'rgba(6,182,212,0.3)', background: 'rgba(6,182,212,0.08)' }}
-                                onClick={() => setPrintingPayslip(item)}
-                              >
-                                📄 قسيمة الراتب
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
+                          {/* EXPANDABLE ROW DETAILS */}
+                          {expandedItemId === item.id && (
+                            <tr>
+                              <td colSpan="12" style={{ padding: '1.25rem', background: 'rgba(15, 23, 42, 0.4)', borderTop: '1px dashed var(--border-color)', borderBottom: '2px solid var(--border-color)' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', fontSize: '0.85rem' }}>
+                                  <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                                    <strong style={{ color: 'var(--primary)', display: 'block', marginBottom: '0.4rem' }}>🕒 سجل الحضور والبصمة:</strong>
+                                    <div>أيام الغياب: {item.absence_days} يوم ({Number(item.absence_deduction).toLocaleString()} ج.م)</div>
+                                    <div>دقائق التأخير: {item.late_minutes} دقيقة ({Number(item.late_deduction).toLocaleString()} ج.م)</div>
+                                  </div>
+
+                                  <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                                    <strong style={{ color: '#10b981', display: 'block', marginBottom: '0.4rem' }}>📈 عمولات التوريد والمبيعات:</strong>
+                                    <div>إجمالي عمولة الشهر: {Number(item.commission_amount).toLocaleString()} ج.م</div>
+                                    <div>ساعات الإضافي: {Number(item.overtime_amount).toLocaleString()} ج.م</div>
+                                  </div>
+
+                                  <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                                    <strong style={{ color: '#eab308', display: 'block', marginBottom: '0.4rem' }}>💳 أقساط السُّلف المستحقة:</strong>
+                                    <div>خصم السلفة الحالي: {Number(item.loan_deduction).toLocaleString()} ج.م</div>
+                                    <div>ملاحظات: {item.notes || 'لا يوجد'}</div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       ))}
                     </tbody>
                   </table>
@@ -609,6 +832,7 @@ export default function PayrollManagement({ currentUser, banks = [], onRefreshDa
       {subTab === 'profiles' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           
+          {/* ADVANCED PROFILE FILTER TOOLBAR */}
           <div style={{
             background: 'var(--card-bg)',
             border: '1px solid var(--border-color)',
@@ -620,14 +844,28 @@ export default function PayrollManagement({ currentUser, banks = [], onRefreshDa
             flexWrap: 'wrap',
             gap: '1rem'
           }}>
-            <div style={{ position: 'relative', maxWidth: '350px', width: '100%' }}>
+            <div style={{ display: 'flex', gap: '1rem', flex: 1, minWidth: '250px', flexWrap: 'wrap' }}>
               <input
                 type="text"
                 placeholder="🔍 بحث باسم الموظف أو الكود..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ width: '100%', paddingRight: '1rem' }}
+                style={{ flex: 2, minWidth: '200px' }}
               />
+
+              <select value={filterClassification} onChange={(e) => setFilterClassification(e.target.value)} style={{ flex: 1, minWidth: '150px' }}>
+                <option value="">كل التصنيفات...</option>
+                <option value="retail_rep">مندوب تجزئة</option>
+                <option value="wholesale_rep">مندوب جملة</option>
+                <option value="driver">سائق</option>
+                <option value="supervisor_staff">مشرف</option>
+              </select>
+
+              <select value={filterConfigured} onChange={(e) => setFilterConfigured(e.target.value)} style={{ flex: 1, minWidth: '150px' }}>
+                <option value="">جميع الحالات...</option>
+                <option value="configured">رواتب محددة ✅</option>
+                <option value="missing">بدون راتب أساسي ⚠️</option>
+              </select>
             </div>
 
             {profileMsg.success && <div className="alert alert-success" style={{ margin: 0, padding: '0.5rem 1rem' }}>{profileMsg.success}</div>}
@@ -654,7 +892,13 @@ export default function PayrollManagement({ currentUser, banks = [], onRefreshDa
                     <td><strong>{p.rep_code}</strong></td>
                     <td><div style={{ fontWeight: 700 }}>{p.rep_name}</div></td>
                     <td><span className="badge badge-secondary">{p.classification || 'موظف'}</span></td>
-                    <td><strong>{Number(p.basic_salary).toLocaleString()} ج.م</strong></td>
+                    <td>
+                      {Number(p.basic_salary) > 0 ? (
+                        <strong>{Number(p.basic_salary).toLocaleString()} ج.م</strong>
+                      ) : (
+                        <span style={{ color: 'var(--warning)', fontSize: '0.8rem' }}>⚠️ لم يحدد</span>
+                      )}
+                    </td>
                     <td>
                       <span style={{ color: '#06b6d4', fontWeight: 600 }}>
                         {(Number(p.transport_allowance) + Number(p.housing_allowance) + Number(p.other_allowance)).toLocaleString()} ج.م
@@ -823,7 +1067,6 @@ export default function PayrollManagement({ currentUser, banks = [], onRefreshDa
                 />
               </div>
 
-              {/* LIVE PREVIEW TOTAL ALLOWANCES */}
               <div style={{ padding: '0.85rem 1rem', background: 'rgba(14, 165, 233, 0.08)', borderRadius: '10px', border: '1px solid rgba(14, 165, 233, 0.2)', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>إجمالي الراتب الأولي + البدلات ثابتة:</span>
                 <strong style={{ color: 'var(--primary)', fontSize: '1.1rem' }}>

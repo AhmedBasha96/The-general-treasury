@@ -4029,7 +4029,11 @@ app.post('/api/payroll/profiles', async (req, res) => {
         `);
     }
 
-    logAuditLog(req, 'تحديث ملف راتب الموظف', 'employee_salary_profile', parseInt(rep_id), { basic_salary });
+    try {
+      await logAuditLog(req, 'تحديث ملف راتب الموظف', 'employee_salary_profile', parseInt(rep_id), { basic_salary });
+    } catch (auditErr) {
+      console.error('Audit log warning:', auditErr);
+    }
     res.json({ message: 'تم حفظ وتحديث ملف راتب الموظف بنجاح' });
   } catch (error) {
     console.error('Error saving salary profile:', error);
