@@ -3091,12 +3091,13 @@ const [showCarModal, setShowCarModal] = useState(false);
                 <table>
                   <thead>
                     <tr>
-                      <th>رقم الطلب والتاريخ</th>
-                      <th>طالب الصرف</th>
-                      <th>بند المصروف</th>
+                      <th>رقم الطلب والمحاسب المنشئ</th>
+                      <th>الجهة المستفيدة والسيارة</th>
+                      <th>طريقة الصرف ومصدر الخصم</th>
+                      <th>بند الصرف</th>
                       <th>المبلغ المطلوب</th>
-                      <th>ملاحظات واختيار السيارة</th>
-                      <th>إجراءات الموافقة والتعديل والرفض</th>
+                      <th>الملاحظات والإيصال</th>
+                      <th>الإجراءات والقرار</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -3116,33 +3117,55 @@ const [showCarModal, setShowCarModal] = useState(false);
                       return (
                         <tr key={tx.id} style={{ background: 'rgba(245, 158, 11, 0.02)' }}>
                           <td>
-                            <div style={{ fontWeight: 'bold', color: 'var(--warning)' }}>TX-{String(tx.id).padStart(6, '0')}</div>
+                            <div style={{ fontWeight: 'bold', color: 'var(--warning)', fontSize: '0.95rem' }}>TX-{String(tx.id).padStart(6, '0')}</div>
                             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
-                              {new Date(tx.date).toLocaleString('en-US')}
+                              {new Date(tx.date).toLocaleString('ar-EG')}
+                            </div>
+                            <div style={{ fontSize: '0.78rem', color: 'var(--primary)', marginTop: '0.2rem', fontWeight: 600 }}>
+                              👤 طالب الصرف: {tx.creator_name || 'المحاسب'}
                             </div>
                           </td>
                           <td>
                             <div>
-                              <strong style={{ color: 'var(--text-primary)' }}>{tx.rep_name || 'خزينة مباشرة'}</strong>
+                              <strong style={{ color: 'var(--text-primary)' }}>{tx.rep_name || tx.company_name || 'خزينة مباشرة'}</strong>
                               {tx.rep_code && <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginRight: '0.3rem' }}>({tx.rep_code})</span>}
                             </div>
                             {tx.agency_name && (
                               <div style={{ fontSize: '0.75rem', color: 'var(--primary)', marginTop: '0.15rem' }}>
-                                🏢 {tx.agency_name}
+                                🏢 توكيل: {tx.agency_name}
+                              </div>
+                            )}
+                            {tx.car_plate_number && (
+                              <div style={{ fontSize: '0.78rem', color: '#fb923c', marginTop: '0.25rem', background: 'rgba(245,158,11,0.1)', padding: '0.2rem 0.5rem', borderRadius: '6px', display: 'inline-block' }}>
+                                🚗 سيارة: {tx.car_plate_number} {tx.car_driver_name ? `(${tx.car_driver_name})` : ''} {tx.car_odometer_km ? `— ${tx.car_odometer_km} كم` : ''}
                               </div>
                             )}
                           </td>
                           <td>
-                            <span className="badge badge-withdrawal" style={{ background: 'rgba(245, 158, 11, 0.12)', color: 'var(--warning)', border: '1px solid rgba(245, 158, 11, 0.25)' }}>
+                            {tx.payment_method === 'bank_transfer' ? (
+                              <div>
+                                <span className="badge badge-company-transfer" style={{ fontSize: '0.8rem' }}>🏦 تحويل بنكي</span>
+                                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                                  {tx.bank_name || 'حساب بنكي'} {tx.bank_account_number ? `(${tx.bank_account_number})` : ''}
+                                </div>
+                              </div>
+                            ) : (
+                              <div>
+                                <span className="badge badge-deposit" style={{ fontSize: '0.8rem', background: 'rgba(16,185,129,0.1)', color: 'var(--success)' }}>💵 نقداً بالخزينة</span>
+                              </div>
+                            )}
+                          </td>
+                          <td>
+                            <span className="badge badge-withdrawal" style={{ background: 'rgba(245, 158, 11, 0.12)', color: 'var(--warning)', border: '1px solid rgba(245, 158, 11, 0.25)', fontSize: '0.85rem' }}>
                               {subTypeLabel}
                             </span>
                           </td>
                           <td>
-                            <strong style={{ color: 'var(--danger)', fontSize: '1.05rem' }}>
-                              {Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
+                            <strong style={{ color: 'var(--danger)', fontSize: '1.1rem', fontWeight: 900 }}>
+                              {Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
                             </strong>
                           </td>
-                          <td style={{ maxWidth: '220px', fontSize: '0.85rem' }}>
+                          <td style={{ maxWidth: '200px', fontSize: '0.85rem' }}>
                             <div>{tx.notes || '—'}</div>
                             {tx.receipt_image && (
                               <div style={{ marginTop: '0.3rem' }}>
@@ -3151,7 +3174,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                                   onClick={(e) => { e.preventDefault(); setActiveImageModal(tx.receipt_image); }} 
                                   style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.78rem', color: '#a78bfa', textDecoration: 'underline', fontWeight: 600 }}
                                 >
-                                  📎 عرض الصورة / الإيصال
+                                  📎 عرض الإيصال المرفق
                                 </a>
                               </div>
                             )}
@@ -3160,14 +3183,14 @@ const [showCarModal, setShowCarModal] = useState(false);
                             <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                               <button
                                 className="btn btn-primary"
-                                style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem', background: 'linear-gradient(135deg, var(--success), var(--success-hover))', border: 'none' }}
+                                style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem', background: 'linear-gradient(135deg, var(--success), #059669)', border: 'none', fontWeight: 'bold' }}
                                 onClick={() => handleApproveTx(tx.id)}
                               >
                                 ✔️ موافقة
                               </button>
                               <button
                                 className="btn btn-secondary"
-                                style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
+                                style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem' }}
                                 onClick={() => {
                                   setEditingTx({
                                     ...tx,
@@ -3189,7 +3212,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                               </button>
                               <button
                                 className="btn btn-secondary"
-                                style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
+                                style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
                                 onClick={() => handleRejectTx(tx.id)}
                               >
                                 ❌ رفض

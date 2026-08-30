@@ -2994,12 +2994,14 @@ app.get('/api/transactions/pending', async (req, res) => {
   try {
     const pool = getPool();
     const result = await pool.request().query(`
-      SELECT t.id, t.rep_id, t.bank_id, t.company_id, t.agency_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
+      SELECT t.id, t.rep_id, t.bank_id, t.company_id, t.agency_id, t.car_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
+             t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
              r.name AS rep_name, r.code AS rep_code,
-             b.name AS bank_name, b.code AS bank_code,
+             b.name AS bank_name, b.code AS bank_code, b.account_number AS bank_account_number,
              c.name AS company_name, c.code AS company_code,
              a.name AS agency_name, a.code AS agency_code,
              s.name AS supervisor_name, s.code AS supervisor_code,
+             car.plate_number AS car_plate_number, car.driver_name AS car_driver_name, car.odometer_km AS car_odometer_km,
              u.username AS creator_name, u2.username AS approver_name
       FROM transactions t
       LEFT JOIN representatives r ON t.rep_id = r.id
@@ -3007,6 +3009,7 @@ app.get('/api/transactions/pending', async (req, res) => {
       LEFT JOIN companies c ON t.company_id = c.id
       LEFT JOIN agencies a ON (r.agency_id = a.id OR t.agency_id = a.id)
       LEFT JOIN supervisors s ON r.supervisor_id = s.id
+      LEFT JOIN cars car ON t.car_id = car.id
       LEFT JOIN users u ON t.created_by = u.id
       LEFT JOIN users u2 ON t.approved_by = u2.id
       WHERE t.status = 'pending'
@@ -3025,11 +3028,13 @@ app.get('/api/transactions/rejected', async (req, res) => {
     const pool = getPool();
     const result = await pool.request().query(`
       SELECT t.id, t.rep_id, t.bank_id, t.company_id, t.agency_id, t.car_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
+             t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
              r.name AS rep_name, r.code AS rep_code,
-             b.name AS bank_name, b.code AS bank_code,
+             b.name AS bank_name, b.code AS bank_code, b.account_number AS bank_account_number,
              c.name AS company_name, c.code AS company_code,
              a.name AS agency_name, a.code AS agency_code,
              s.name AS supervisor_name, s.code AS supervisor_code,
+             car.plate_number AS car_plate_number, car.driver_name AS car_driver_name, car.odometer_km AS car_odometer_km,
              u.username AS creator_name, u2.username AS approver_name
       FROM transactions t
       LEFT JOIN representatives r ON t.rep_id = r.id
@@ -3037,6 +3042,7 @@ app.get('/api/transactions/rejected', async (req, res) => {
       LEFT JOIN companies c ON t.company_id = c.id
       LEFT JOIN agencies a ON (r.agency_id = a.id OR t.agency_id = a.id)
       LEFT JOIN supervisors s ON r.supervisor_id = s.id
+      LEFT JOIN cars car ON t.car_id = car.id
       LEFT JOIN users u ON t.created_by = u.id
       LEFT JOIN users u2 ON t.approved_by = u2.id
       WHERE t.status = 'rejected'

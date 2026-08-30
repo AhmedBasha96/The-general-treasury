@@ -180,6 +180,12 @@ async function createTables() {
           ALTER TABLE representatives ADD supervisor_id INT;
           ALTER TABLE representatives ADD CONSTRAINT FK_reps_supervisors FOREIGN KEY (supervisor_id) REFERENCES supervisors(id) ON DELETE SET NULL;
         END
+
+        -- Add zk_user_id column if missing
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('representatives') AND name = 'zk_user_id')
+        BEGIN
+          ALTER TABLE representatives ADD zk_user_id VARCHAR(50) NULL;
+        END
       END
     `);
     
