@@ -7183,6 +7183,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               >
                 ✕ إغلاق
               </button>
+            </div>
               {/* Dual Bank Deposit Transfer Banner if Bank Deposit */}
               {(previewingTx.bank_name || previewingTx.bank_id || previewingTx.withdrawal_sub_type === 'bank_deposit') && (
                 <div style={{ background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(14, 165, 233, 0.05))', border: '1px solid #0284c7', borderRadius: '16px', padding: '1.15rem', marginBottom: '1.25rem' }}>
