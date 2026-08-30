@@ -73,6 +73,7 @@ export default function App() {
   const [rejectedTx, setRejectedTx] = useState([]);
   const [approvalSubTab, setApprovalSubTab] = useState('pending');
   const [editingTx, setEditingTx] = useState(null);
+  const [previewingTx, setPreviewingTx] = useState(null);
   const [editError, setEditError] = useState('');
   const [editSuccess, setEditSuccess] = useState('');
   const [disbursingTx, setDisbursingTx] = useState(null);
@@ -3180,17 +3181,24 @@ const [showCarModal, setShowCarModal] = useState(false);
                             )}
                           </td>
                           <td>
-                            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                              <button
+                                className="btn"
+                                style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem', background: '#0284c7', color: '#fff', border: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
+                                onClick={() => setPreviewingTx(tx)}
+                              >
+                                🔍 معاينة التفاصيل
+                              </button>
                               <button
                                 className="btn btn-primary"
-                                style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem', background: 'linear-gradient(135deg, var(--success), #059669)', border: 'none', fontWeight: 'bold' }}
+                                style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem', background: 'linear-gradient(135deg, var(--success), #059669)', border: 'none', fontWeight: 'bold' }}
                                 onClick={() => handleApproveTx(tx.id)}
                               >
                                 ✔️ موافقة
                               </button>
                               <button
                                 className="btn btn-secondary"
-                                style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem' }}
+                                style={{ padding: '0.4rem 0.65rem', fontSize: '0.8rem' }}
                                 onClick={() => {
                                   setEditingTx({
                                     ...tx,
@@ -3212,7 +3220,7 @@ const [showCarModal, setShowCarModal] = useState(false);
                               </button>
                               <button
                                 className="btn btn-secondary"
-                                style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
+                                style={{ padding: '0.4rem 0.65rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
                                 onClick={() => handleRejectTx(tx.id)}
                               >
                                 ❌ رفض
@@ -7147,6 +7155,224 @@ const [showCarModal, setShowCarModal] = useState(false);
       )}
 
 
+
+      {/* DETAILED PREVIEW & INSPECTION OVERLAY MODAL FOR MANAGER */}
+      {previewingTx && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(15, 23, 42, 0.88)', backdropFilter: 'blur(10px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100,
+          direction: 'rtl', padding: '1.5rem'
+        }}>
+          <div className="panel" style={{ width: '100%', maxWidth: '720px', maxHeight: '92vh', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.15)', boxShadow: '0 25px 60px rgba(0,0,0,0.6)', background: 'linear-gradient(145deg, #1e293b 0%, #0f172a 100%)', borderRadius: '24px', padding: '1.75rem' }}>
+            
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #334155', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
+              <div>
+                <span className="badge badge-withdrawal" style={{ fontSize: '0.8rem', marginBottom: '0.3rem', display: 'inline-block' }}>
+                  💳 إذن طلب صرف معلق
+                </span>
+                <h2 style={{ margin: 0, color: '#f8fafc', fontWeight: 900, fontSize: '1.4rem' }}>
+                  طلب رقم: TX-{String(previewingTx.id).padStart(6, '0')}
+                </h2>
+              </div>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => setPreviewingTx(null)} 
+                style={{ padding: '0.4rem 0.8rem', borderRadius: '10px', fontSize: '0.9rem', cursor: 'pointer' }}
+              >
+                ✕ إغلاق
+              </button>
+            </div>
+
+            {/* Financial Liquidity & Cover Gauge */}
+            {previewingTx.payment_method !== 'bank_transfer' ? (
+              <div style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid #334155', borderRadius: '16px', padding: '1.15rem', marginBottom: '1.25rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                  <span style={{ fontWeight: 'bold', fontSize: '0.9rem', color: '#cbd5e1' }}>🏦 تحليل غطاء رصيد الخزينة الحالي:</span>
+                  <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>صرف نقدي من الخزينة الرئيسية</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', textAlign: 'center' }}>
+                  <div style={{ background: '#1e293b', padding: '0.75rem', borderRadius: '12px', border: '1px solid #334155' }}>
+                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>رصيد الخزينة الحالي</div>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#38bdf8', marginTop: '0.2rem' }}>
+                      {(dashboardData.summary.safeBalance || 0).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                    </div>
+                  </div>
+                  <div style={{ background: '#1e293b', padding: '0.75rem', borderRadius: '12px', border: '1px solid #334155' }}>
+                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>المبلغ المطلوب صرفه</div>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#f43f5e', marginTop: '0.2rem' }}>
+                      -{Number(previewingTx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                    </div>
+                  </div>
+                  <div style={{ background: '#1e293b', padding: '0.75rem', borderRadius: '12px', border: '1px solid #334155' }}>
+                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>الرصيد المتبقي المتوقع</div>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 900, color: (dashboardData.summary.safeBalance - Number(previewingTx.amount)) >= 0 ? '#4ade80' : '#f87171', marginTop: '0.2rem' }}>
+                      {(dashboardData.summary.safeBalance - Number(previewingTx.amount)).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{
+                  marginTop: '0.85rem',
+                  padding: '0.65rem 1rem',
+                  borderRadius: '12px',
+                  fontSize: '0.85rem',
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  background: (dashboardData.summary.safeBalance - Number(previewingTx.amount)) >= 0 ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                  color: (dashboardData.summary.safeBalance - Number(previewingTx.amount)) >= 0 ? '#4ade80' : '#f87171',
+                  border: `1px solid ${(dashboardData.summary.safeBalance - Number(previewingTx.amount)) >= 0 ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`
+                }}>
+                  {(dashboardData.summary.safeBalance - Number(previewingTx.amount)) >= 0
+                    ? '🟢 مؤشر السيولة: رصيد الخزينة كافٍ تماماً لإجازة عملية الصرف.'
+                    : `⚠️ تحذير عجز: رصيد الخزينة غير كافٍ ومحتاج تغذية بمبلغ ${Math.abs(dashboardData.summary.safeBalance - Number(previewingTx.amount)).toLocaleString()} ج.م!`}
+                </div>
+              </div>
+            ) : (
+              <div style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid #334155', borderRadius: '16px', padding: '1.15rem', marginBottom: '1.25rem' }}>
+                <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#38bdf8', marginBottom: '0.5rem' }}>
+                  🏦 مصدر الصرف: تحويل بنكي ({previewingTx.bank_name || 'حساب بنكي'})
+                </div>
+                <div style={{ fontSize: '0.85rem', color: '#cbd5e1' }}>
+                  رقم الحساب الخصم: <strong>{previewingTx.bank_account_number || '—'}</strong>
+                </div>
+              </div>
+            )}
+
+            {/* Context & Details Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+              <div style={{ background: '#1e293b', padding: '0.9rem', borderRadius: '14px', border: '1px solid #334155' }}>
+                <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.2rem' }}>👤 طالب الصرف (المحاسب)</div>
+                <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#f8fafc' }}>{previewingTx.creator_name || 'المحاسب'}</div>
+                <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.15rem' }}>{new Date(previewingTx.date).toLocaleString('ar-EG')}</div>
+              </div>
+
+              <div style={{ background: '#1e293b', padding: '0.9rem', borderRadius: '14px', border: '1px solid #334155' }}>
+                <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.2rem' }}>🏢 الجهة أو الموظف المستفيد</div>
+                <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#f8fafc' }}>{previewingTx.rep_name || previewingTx.company_name || 'مصروفات تشغيلية (خزينة مباشرة)'}</div>
+                {previewingTx.agency_name && <div style={{ fontSize: '0.75rem', color: '#38bdf8', marginTop: '0.15rem' }}>توكيل: {previewingTx.agency_name}</div>}
+              </div>
+
+              <div style={{ background: '#1e293b', padding: '0.9rem', borderRadius: '14px', border: '1px solid #334155' }}>
+                <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.2rem' }}>🏷️ بند الصرف المحدد</div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#fb923c' }}>
+                  {previewingTx.withdrawal_sub_type === 'car' ? '🚗 مصاريف سيارات'
+                    : previewingTx.withdrawal_sub_type === 'car_gas' ? '⛽ سيارة (جاز)'
+                    : previewingTx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)'
+                    : previewingTx.withdrawal_sub_type === 'car_other' ? '🔧 سيارة (مصاريف أخرى)'
+                    : previewingTx.withdrawal_sub_type === 'salary' ? '💼 رواتب وأجور'
+                    : previewingTx.withdrawal_sub_type === 'commission' ? '💰 عمولات'
+                    : previewingTx.withdrawal_sub_type === 'loan' ? '💸 سُلفة موظف'
+                    : previewingTx.withdrawal_sub_type === 'direct_rent' ? '🏢 إيجار'
+                    : previewingTx.withdrawal_sub_type === 'direct_operational' ? '🔧 مصاريف تشغيل'
+                    : previewingTx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى'
+                    : '📤 مصروفات عامة / نقدية مباشرة'}
+                </div>
+              </div>
+            </div>
+
+            {/* Car Details if applicable */}
+            {previewingTx.car_plate_number && (
+              <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '14px', padding: '0.9rem', marginBottom: '1.25rem' }}>
+                <div style={{ fontWeight: 'bold', color: '#fb923c', fontSize: '0.9rem', marginBottom: '0.3rem' }}>🚗 بيانات السيارة المربوطة بالطلب:</div>
+                <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', fontSize: '0.85rem', color: '#f8fafc' }}>
+                  <div>رقم اللوحة: <strong>{previewingTx.car_plate_number}</strong></div>
+                  {previewingTx.car_driver_name && <div>السائق: <strong>{previewingTx.car_driver_name}</strong></div>}
+                  {previewingTx.car_odometer_km && <div>قراءة العداد: <strong>{previewingTx.car_odometer_km} كم</strong></div>}
+                </div>
+              </div>
+            )}
+
+            {/* Denominations breakdown if present */}
+            {(previewingTx.denom_200 > 0 || previewingTx.denom_100 > 0 || previewingTx.denom_50 > 0 || previewingTx.denom_20 > 0 || previewingTx.denom_10 > 0 || previewingTx.denom_5 > 0 || previewingTx.denom_1 > 0) && (
+              <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '14px', padding: '0.9rem', marginBottom: '1.25rem' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#cbd5e1', marginBottom: '0.5rem' }}>🧮 تفكيك الفئات النقدية المطلوبة من الخزينة:</div>
+                <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                  {previewingTx.denom_200 > 0 && <span className="denom-badge">200 × {previewingTx.denom_200}</span>}
+                  {previewingTx.denom_100 > 0 && <span className="denom-badge">100 × {previewingTx.denom_100}</span>}
+                  {previewingTx.denom_50 > 0 && <span className="denom-badge">50 × {previewingTx.denom_50}</span>}
+                  {previewingTx.denom_20 > 0 && <span className="denom-badge">20 × {previewingTx.denom_20}</span>}
+                  {previewingTx.denom_10 > 0 && <span className="denom-badge">10 × {previewingTx.denom_10}</span>}
+                  {previewingTx.denom_5 > 0 && <span className="denom-badge">5 × {previewingTx.denom_5}</span>}
+                  {previewingTx.denom_1 > 0 && <span className="denom-badge">1 × {previewingTx.denom_1}</span>}
+                </div>
+              </div>
+            )}
+
+            {/* Notes & Receipt */}
+            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '14px', padding: '0.9rem', marginBottom: '1.5rem' }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#cbd5e1', marginBottom: '0.3rem' }}>📝 ملاحظات المحاسب والبيانات الإضافية:</div>
+              <div style={{ fontSize: '0.9rem', color: '#f8fafc', lineHeight: '1.5' }}>{previewingTx.notes || 'لا توجد ملاحظات مدونة لهذا الطلب.'}</div>
+              
+              {previewingTx.receipt_image && (
+                <div style={{ marginTop: '0.85rem', borderTop: '1px solid #334155', paddingTop: '0.75rem' }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#a78bfa', marginBottom: '0.4rem' }}>📎 المستند والإيصال المرفق:</div>
+                  <img 
+                    src={previewingTx.receipt_image} 
+                    alt="إيصال الصرف" 
+                    style={{ maxWidth: '100%', maxHeight: '250px', borderRadius: '12px', border: '1px solid #475569', cursor: 'pointer' }}
+                    onClick={() => setActiveImageModal(previewingTx.receipt_image)}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Decision Action Buttons */}
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <button
+                className="btn btn-primary"
+                style={{ flex: 2, padding: '0.75rem 1rem', background: 'linear-gradient(135deg, #10b981, #059669)', fontSize: '0.95rem', fontWeight: 'bold', border: 'none', boxShadow: '0 4px 14px rgba(16,185,129,0.3)', cursor: 'pointer' }}
+                onClick={() => {
+                  const txId = previewingTx.id;
+                  setPreviewingTx(null);
+                  handleApproveTx(txId);
+                }}
+              >
+                ✔️ اعتماد وموافقة على الطلب الآن
+              </button>
+
+              <button
+                className="btn btn-secondary"
+                style={{ flex: 1, padding: '0.75rem 1rem', fontSize: '0.9rem', cursor: 'pointer' }}
+                onClick={() => {
+                  const targetTx = previewingTx;
+                  setPreviewingTx(null);
+                  setEditingTx({
+                    ...targetTx,
+                    denominations: {
+                      denom_200: targetTx.denom_200 || 0,
+                      denom_100: targetTx.denom_100 || 0,
+                      denom_50: targetTx.denom_50 || 0,
+                      denom_20: targetTx.denom_20 || 0,
+                      denom_10: targetTx.denom_10 || 0,
+                      denom_5: targetTx.denom_5 || 0,
+                      denom_1: targetTx.denom_1 || 0
+                    }
+                  });
+                }}
+              >
+                ✏️ تعديل الطلب
+              </button>
+
+              <button
+                className="btn btn-secondary"
+                style={{ flex: 1, padding: '0.75rem 1rem', background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)', fontSize: '0.9rem', fontWeight: 'bold', cursor: 'pointer' }}
+                onClick={() => {
+                  const txId = previewingTx.id;
+                  setPreviewingTx(null);
+                  handleRejectTx(txId);
+                }}
+              >
+                ❌ رفض الطلب
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* EDIT TRANSACTION OVERLAY MODAL */}
       {editingTx && (
