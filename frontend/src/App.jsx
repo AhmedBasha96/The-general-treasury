@@ -1906,6 +1906,19 @@ const [showCarModal, setShowCarModal] = useState(false);
       if (newTx.type === 'withdrawal') {
         if (txSourceType === 'bank') {
           if (!newTx.bankId) {
+            const msg = 'يرجى اختيار الحساب البنكي المودَع فيه أولاً';
+            setTxError(msg);
+            alert(msg);
+            return;
+          }
+          if (amountNum > dashboardData.summary.safeBalance) {
+            const msg = `رصيد الخزينة الحالي (${dashboardData.summary.safeBalance.toLocaleString()} ج.م) غير كافٍ لإتمام عملية الإيداع بالبنك!`;
+            setTxError(msg);
+            alert(msg);
+            return;
+          }
+        } else if (newTx.payment_method === 'bank_transfer') {
+          if (!newTx.bankId) {
             const msg = 'يرجى اختيار الحساب البنكي المصدر للصرف أولاً';
             setTxError(msg);
             alert(msg);
@@ -5038,6 +5051,14 @@ const [showCarModal, setShowCarModal] = useState(false);
                       <>
                         <button 
                           type="button" 
+                          className={`btn ${txSourceType === 'bank' ? 'btn-primary' : 'btn-secondary'}`}
+                          style={{ flex: 1 }}
+                          onClick={() => { setTxSourceType('bank'); setNewTx(prev => ({ ...prev, repId: '', bankId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
+                        >
+                          🏦 إيداع في بنك
+                        </button>
+                        <button 
+                          type="button" 
                           className={`btn ${txSourceType === 'direct' ? 'btn-primary' : 'btn-secondary'}`}
                           style={{ flex: 1 }}
                           onClick={() => { setTxSourceType('direct'); setNewTx(prev => ({ ...prev, repId: '', agencyId: '', withdrawal_sub_type: '' })); setSearchRepQuery(''); }}
@@ -5363,6 +5384,22 @@ const [showCarModal, setShowCarModal] = useState(false);
                   </div>
 
                   {/* Withdrawal Form Layout - Side by Side Grid */}
+                  {txSourceType === 'bank' && newTx.payment_method !== 'bank_transfer' && (
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                      <label>الحساب البنكي المودَع فيه (إيداع نقدية الخزينة) <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <select 
+                        value={newTx.bankId || ''}
+                        onChange={(e) => setNewTx(prev => ({ ...prev, bankId: e.target.value }))}
+                        required
+                      >
+                        <option value="">اختر الحساب البنكي...</option>
+                        {banks.map(b => (
+                          <option key={b.id} value={b.id}>{b.name} ({b.code}) — {b.account_number}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   <div style={{ display: 'grid', gridTemplateColumns: newTx.payment_method === 'bank_transfer' ? '1fr 1fr' : '1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                     {newTx.payment_method === 'bank_transfer' && (
                       <div className="form-group">
@@ -5380,26 +5417,28 @@ const [showCarModal, setShowCarModal] = useState(false);
                       </div>
                     )}
 
-                    <div className="form-group">
-                      <label>نوع الصرف <span style={{ color: 'var(--danger)' }}>*</span></label>
-                      <select 
-                        value={newTx.withdrawal_sub_type && newTx.withdrawal_sub_type.startsWith('car') ? 'car' : (newTx.withdrawal_sub_type || '')}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val === 'car') {
-                            setNewTx(prev => ({ ...prev, withdrawal_sub_type: 'car_gas' }));
-                          } else {
-                            setNewTx(prev => ({ ...prev, withdrawal_sub_type: val }));
-                          }
-                        }}
-                        required
-                      >
-                        <option value="">اختر نوع الصرف...</option>
-                        {getWithdrawalSubTypes().map(opt => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
-                    </div>
+                    {txSourceType !== 'bank' && (
+                      <div className="form-group">
+                        <label>نوع الصرف <span style={{ color: 'var(--danger)' }}>*</span></label>
+                        <select 
+                          value={newTx.withdrawal_sub_type && newTx.withdrawal_sub_type.startsWith('car') ? 'car' : (newTx.withdrawal_sub_type || '')}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === 'car') {
+                              setNewTx(prev => ({ ...prev, withdrawal_sub_type: 'car_gas' }));
+                            } else {
+                              setNewTx(prev => ({ ...prev, withdrawal_sub_type: val }));
+                            }
+                          }}
+                          required
+                        >
+                          <option value="">اختر نوع الصرف...</option>
+                          {getWithdrawalSubTypes().map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
 
                   {newTx.withdrawal_sub_type && newTx.withdrawal_sub_type.startsWith('car') && (
