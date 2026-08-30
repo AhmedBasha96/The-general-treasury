@@ -1973,6 +1973,7 @@ const [showCarModal, setShowCarModal] = useState(false);
         }
       }
 
+      try {
         let calculatedPaymentMethod = 'cash';
         if (newTx.type === 'deposit') {
           calculatedPaymentMethod = txSourceType === 'bank' ? 'bank_transfer' : 'cash';
