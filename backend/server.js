@@ -1789,18 +1789,20 @@ const handleGetReps = async (req, res) => {
 
     const result = await request.query(`
       SELECT 
-        r.id, r.code, r.name, r.phone, r.type, r.classification, r.agency_id, r.supervisor_id, r.created_at,
+        r.id, r.code, r.name, r.phone, r.type, r.classification, r.agency_id, r.supervisor_id, r.assigned_work_zone_id, r.allow_multi_location, r.created_at,
         a.name AS agency_name, a.code AS agency_code,
         s.name AS supervisor_name, s.code AS supervisor_code,
+        wz.name AS assigned_work_zone_name,
         ISNULL(SUM(CASE WHEN t.type = 'deposit' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS total_deposits,
         ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND (t.status = 'disbursed' OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS total_disbursed,
         ISNULL(SUM(CASE WHEN t.type = 'deposit' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS balance
       FROM representatives r
       LEFT JOIN agencies a ON r.agency_id = a.id
       LEFT JOIN supervisors s ON r.supervisor_id = s.id
+      LEFT JOIN work_zones wz ON r.assigned_work_zone_id = wz.id
       LEFT JOIN transactions t ON r.id = t.rep_id
       ${agencyFilter}
-      GROUP BY r.id, r.code, r.name, r.phone, r.type, r.classification, r.agency_id, r.supervisor_id, r.created_at, a.name, a.code, s.name, s.code
+      GROUP BY r.id, r.code, r.name, r.phone, r.type, r.classification, r.agency_id, r.supervisor_id, r.assigned_work_zone_id, r.allow_multi_location, r.created_at, a.name, a.code, s.name, s.code, wz.name
       ORDER BY r.name
     `);
     res.json(result.recordset);
@@ -1813,9 +1815,9 @@ const handleGetReps = async (req, res) => {
 app.get('/api/reps', handleGetReps);
 app.get('/api/representatives', handleGetReps);
 
-// 3. POST /api/reps (Add new representative mapped to agency)
+// 3. POST /api/reps (Add new representative mapped to agency & work zone)
 app.post('/api/reps', async (req, res) => {
-  const { code, name, phone, type, classification, agency_id, supervisor_id, password } = req.body;
+  const { code, name, phone, type, classification, agency_id, supervisor_id, assigned_work_zone_id, allow_multi_location, password } = req.body;
   
   const repClassification = classification || 'retail_rep';
   const isRep = (repClassification === 'retail_rep' || repClassification === 'wholesale_rep');
@@ -1871,6 +1873,9 @@ app.post('/api/reps', async (req, res) => {
       hashedPassword = bcrypt.hashSync(password, 10);
     }
     
+    const zoneId = assigned_work_zone_id ? parseInt(assigned_work_zone_id) : null;
+    const isMultiLoc = (allow_multi_location || repClassification === 'driver' || repClassification === 'retail_rep' || repClassification === 'wholesale_rep') ? 1 : 0;
+
     // Insert rep
     await pool.request()
       .input('code', sql.VarChar, code)
@@ -1880,16 +1885,61 @@ app.post('/api/reps', async (req, res) => {
       .input('classification', sql.VarChar, repClassification)
       .input('agency_id', sql.Int, isRep ? agency_id : null)
       .input('supervisor_id', sql.Int, isRep ? supervisor_id || null : null)
+      .input('assigned_work_zone_id', sql.Int, zoneId)
+      .input('allow_multi_location', sql.Bit, isMultiLoc)
       .input('password', sql.VarChar, hashedPassword)
       .query(`
-        INSERT INTO representatives (code, name, phone, type, classification, agency_id, supervisor_id, password)
-        VALUES (@code, @name, @phone, @type, @classification, @agency_id, @supervisor_id, @password)
+        INSERT INTO representatives (code, name, phone, type, classification, agency_id, supervisor_id, assigned_work_zone_id, allow_multi_location, password)
+        VALUES (@code, @name, @phone, @type, @classification, @agency_id, @supervisor_id, @assigned_work_zone_id, @allow_multi_location, @password)
       `);
       
     res.status(201).json({ message: 'تم إضافة الموظف/المندوب بنجاح' });
   } catch (error) {
     console.error('Error creating representative:', error);
     res.status(500).json({ error: 'حدث خطأ أثناء حفظ الموظف/المندوب' });
+  }
+});
+
+// 3.1 PUT /api/reps/:id (Update representative details)
+app.put('/api/reps/:id', async (req, res) => {
+  const repId = req.params.id;
+  const { name, phone, agency_id, supervisor_id, assigned_work_zone_id, allow_multi_location, classification, type } = req.body;
+  
+  try {
+    const pool = getPool();
+    const zoneId = assigned_work_zone_id ? parseInt(assigned_work_zone_id) : null;
+    const repCls = classification || 'retail_rep';
+    const isMultiLoc = (allow_multi_location !== undefined)
+      ? (allow_multi_location ? 1 : 0)
+      : (repCls === 'driver' || repCls === 'retail_rep' || repCls === 'wholesale_rep' ? 1 : 0);
+
+    await pool.request()
+      .input('repId', sql.Int, repId)
+      .input('name', sql.NVarChar, name)
+      .input('phone', sql.VarChar, phone || null)
+      .input('type', sql.VarChar, type || 'retail')
+      .input('classification', sql.VarChar, repCls)
+      .input('agency_id', sql.Int, agency_id || null)
+      .input('supervisor_id', sql.Int, supervisor_id || null)
+      .input('assigned_work_zone_id', sql.Int, zoneId)
+      .input('allow_multi_location', sql.Bit, isMultiLoc)
+      .query(`
+        UPDATE representatives
+        SET name = @name,
+            phone = @phone,
+            type = @type,
+            classification = @classification,
+            agency_id = @agency_id,
+            supervisor_id = @supervisor_id,
+            assigned_work_zone_id = @assigned_work_zone_id,
+            allow_multi_location = @allow_multi_location
+        WHERE id = @repId
+      `);
+
+    res.json({ message: 'تم تحديث بيانات الموظف/المندوب بنجاح' });
+  } catch (error) {
+    console.error('Error updating representative:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء تحديث بيانات الموظف/المندوب' });
   }
 });
 

@@ -186,6 +186,19 @@ async function createTables() {
         BEGIN
           ALTER TABLE representatives ADD zk_user_id VARCHAR(50) NULL;
         END
+
+        -- Add assigned_work_zone_id column if missing
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('representatives') AND name = 'assigned_work_zone_id')
+        BEGIN
+          ALTER TABLE representatives ADD assigned_work_zone_id INT NULL;
+          ALTER TABLE representatives ADD CONSTRAINT FK_reps_work_zones FOREIGN KEY (assigned_work_zone_id) REFERENCES work_zones(id) ON DELETE SET NULL;
+        END
+
+        -- Add allow_multi_location column if missing
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('representatives') AND name = 'allow_multi_location')
+        BEGIN
+          ALTER TABLE representatives ADD allow_multi_location BIT DEFAULT 0;
+        END
       END
     `);
     

@@ -882,9 +882,11 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   const [supervisorSuccess, setSupervisorSuccess] = useState('');
 
   // New Representative Form State
-  const [newRep, setNewRep] = useState({ code: '', name: '', phone: '', type: 'retail', classification: 'retail_rep', agency_id: '', supervisor_id: '', password: '' });
+  const [newRep, setNewRep] = useState({ code: '', name: '', phone: '', type: 'retail', classification: 'retail_rep', agency_id: '', supervisor_id: '', assigned_work_zone_id: '', password: '' });
   const [repError, setRepError] = useState('');
   const [repSuccess, setRepSuccess] = useState('');
+  const [workZonesList, setWorkZonesList] = useState([]);
+  const [editingRepZone, setEditingRepZone] = useState(null);
 
   // Helper to compute next sequential numeric code
   const getNextCode = (list, defaultCode = '1001', checkUniqueList = null) => {
@@ -1005,6 +1007,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
         loadCompanies();
         loadSupervisors();
         loadCarsList();
+        loadWorkZones();
         loadTransactions();
         loadCarExpenses();
         if (currentUser.role === 'manager' || currentUser.role === 'accountant') {
@@ -1263,6 +1266,48 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
       }
     } catch (err) {
       console.error('Failed to load representatives:', err);
+    }
+  };
+
+  const loadWorkZones = async () => {
+    try {
+      const res = await fetch('/api/attendance/work-zones');
+      if (res.ok) {
+        const data = await res.json();
+        setWorkZonesList(data);
+      }
+    } catch (err) {
+      console.error('Failed to load work zones:', err);
+    }
+  };
+
+  const handleSaveRepZone = async (e) => {
+    e.preventDefault();
+    if (!editingRepZone) return;
+    try {
+      const res = await fetch(`/api/reps/${editingRepZone.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editingRepZone.name,
+          phone: editingRepZone.phone,
+          type: editingRepZone.type,
+          classification: editingRepZone.classification,
+          agency_id: editingRepZone.agency_id,
+          supervisor_id: editingRepZone.supervisor_id,
+          assigned_work_zone_id: editingRepZone.assigned_work_zone_id || null
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert('✅ تم تحديث نطاق البصمة المخصص للموظف بنجاح!');
+        setEditingRepZone(null);
+        loadReps();
+      } else {
+        alert(data.error || 'فشل تحديث نطاق البصمة');
+      }
+    } catch (err) {
+      alert('تعذر الاتصال بالسيرفر');
     }
   };
 
@@ -2282,6 +2327,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               <th>الكود</th>
               <th>الاسم</th>
               <th>الهاتف</th>
+              <th>موقع العمل والبصمة</th>
               <th>الرصيد الحالي</th>
               <th>الإجراءات</th>
             </tr>
@@ -2292,6 +2338,15 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                 <td><strong>{rep.code}</strong></td>
                 <td>{rep.name}</td>
                 <td>{rep.phone || '—'}</td>
+                <td>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    {rep.allow_multi_location || rep.classification === 'driver' || rep.classification === 'retail_rep' || rep.classification === 'wholesale_rep' 
+                      ? '🗺️ كافة الفروع والمواقع' 
+                      : rep.assigned_work_zone_name 
+                      ? `📍 ${rep.assigned_work_zone_name}` 
+                      : '⚠️ غير محدد'}
+                  </span>
+                </td>
                 <td>
                   <span style={{ fontWeight: 800, color: Number(rep.balance) >= 0 ? 'var(--success)' : 'var(--danger)' }}>
                     {Number(rep.balance).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
@@ -2308,6 +2363,13 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                     </button>
                     {currentUser.role === 'manager' && (
                       <>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', borderColor: 'rgba(59, 130, 246, 0.2)' }}
+                          onClick={() => setEditingRepZone(rep)}
+                        >
+                          📍 الموقع
+                        </button>
                         <button
                           className="btn btn-secondary"
                           style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'rgba(234, 179, 8, 0.1)', color: '#eab308', borderColor: 'rgba(234, 179, 8, 0.2)' }}
@@ -4338,6 +4400,28 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                         </div>
                       </>
                     )}
+                    <div className="form-group" style={{ marginBottom: '1rem' }}>
+                      <label>📍 موقع / فرع العمل المخصص للموظف</label>
+                      <select
+                        value={newRep.assigned_work_zone_id || ''}
+                        onChange={(e) => setNewRep({ ...newRep, assigned_work_zone_id: e.target.value })}
+                      >
+                        <option value="">كل المواقع / غير محدد موقع ثابت...</option>
+                        {workZonesList.map(wz => (
+                          <option key={wz.id} value={wz.id}>📍 {wz.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '1.5rem', background: 'rgba(255,255,255,0.03)', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', margin: 0, fontWeight: 'bold', fontSize: '0.9rem' }}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(newRep.allow_multi_location || newRep.classification === 'driver' || newRep.classification === 'retail_rep' || newRep.classification === 'wholesale_rep')}
+                          onChange={(e) => setNewRep({ ...newRep, allow_multi_location: e.target.checked })}
+                        />
+                        <span>🗺️ إتاحة إثبات الحضور والبصمة في كافة المواقع والمتعددة خلال اليوم (للمندوبين والسائقين)</span>
+                      </label>
+                    </div>
                     <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                       <label>رقم الهاتف</label>
                       <input type="text" placeholder="مثال: 010xxxxxxxx" value={newRep.phone} onChange={(e) => setNewRep({ ...newRep, phone: e.target.value })} />
@@ -4346,6 +4430,48 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                   </form>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* EDIT WORK ZONE MODAL */}
+          {editingRepZone && (
+            <div className="modal-overlay" onClick={() => setEditingRepZone(null)}>
+              <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', direction: 'rtl' }}>
+                <div className="modal-header">
+                  <h3>📍 تخصيص موقع العمل وبصمة الحضور: {editingRepZone.name} ({editingRepZone.code})</h3>
+                  <button className="modal-close" onClick={() => setEditingRepZone(null)}>✕</button>
+                </div>
+                <form onSubmit={handleSaveRepZone}>
+                  <div className="modal-body">
+                    <div className="form-group" style={{ marginBottom: '1rem' }}>
+                      <label>موقع العمل المعتمد (Work Zone):</label>
+                      <select
+                        value={editingRepZone.assigned_work_zone_id || ''}
+                        onChange={(e) => setEditingRepZone({ ...editingRepZone, assigned_work_zone_id: e.target.value })}
+                      >
+                        <option value="">كل المواقع / غير محدد موقع ثابت...</option>
+                        {workZonesList.map(wz => (
+                          <option key={wz.id} value={wz.id}>📍 {wz.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ background: 'rgba(255,255,255,0.03)', padding: '0.85rem 1rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', margin: 0, fontWeight: 'bold', fontSize: '0.9rem' }}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(editingRepZone.allow_multi_location || editingRepZone.classification === 'driver' || editingRepZone.classification === 'retail_rep' || editingRepZone.classification === 'wholesale_rep')}
+                          onChange={(e) => setEditingRepZone({ ...editingRepZone, allow_multi_location: e.target.checked })}
+                        />
+                        <span>🗺️ إتاحة إثبات الحضور والتوقيع في مواقع فروع متعددة خلال اليوم (للمندوبين والسائقين)</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div className="modal-footer" style={{ marginTop: '1.5rem', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                    <button type="button" className="btn btn-secondary" onClick={() => setEditingRepZone(null)}>إلغاء</button>
+                    <button type="submit" className="btn btn-primary">حفظ الإعدادات 💾</button>
+                  </div>
+                </form>
+              </div>
             </div>
           )}
         </div>

@@ -627,14 +627,14 @@ export default function AttendanceManagement() {
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '0.9rem' }}>
               <thead>
                 <tr style={{ background: '#1e293b', color: '#f8fafc', borderBottom: '2px solid #334155' }}>
-                  <th style={{ padding: '0.85rem', textAlign: 'center' }}>كود ZK</th>
+                  <th style={{ padding: '0.85rem', textAlign: 'center' }}>كود الحساب</th>
                   <th style={{ padding: '0.85rem', textAlign: 'right' }}>اسم الموظف / السائق</th>
                   <th style={{ padding: '0.85rem', textAlign: 'center' }}>الفئة</th>
-                  <th style={{ padding: '0.85rem', textAlign: 'center' }}>التاريخ</th>
-                  <th style={{ padding: '0.85rem', textAlign: 'center' }}>وقت الحضور</th>
-                  <th style={{ padding: '0.85rem', textAlign: 'center' }}>التأخير (بالدقيقة)</th>
+                  <th style={{ padding: '0.85rem', textAlign: 'center' }}>موقع البصمة / الفرع</th>
+                  <th style={{ padding: '0.85rem', textAlign: 'center' }}>التاريخ والوقت</th>
+                  <th style={{ padding: '0.85rem', textAlign: 'center' }}>التأخير</th>
                   <th style={{ padding: '0.85rem', textAlign: 'center' }}>حالة الحضور</th>
-                  <th style={{ padding: '0.85rem', textAlign: 'center' }}>المصدر</th>
+                  <th style={{ padding: '0.85rem', textAlign: 'center' }}>البيان والملاحظات</th>
                 </tr>
               </thead>
               <tbody>
@@ -646,12 +646,14 @@ export default function AttendanceManagement() {
                     </td>
                     <td style={{ padding: '0.8rem', textAlign: 'center' }}>
                       <span style={{ padding: '0.2rem 0.6rem', borderRadius: '8px', fontSize: '0.78rem', fontWeight: 'bold', background: a.rep_classification === 'driver' ? 'rgba(245,158,11,0.15)' : 'rgba(59,130,246,0.15)', color: a.rep_classification === 'driver' ? '#fb923c' : '#60a5fa' }}>
-                        {a.rep_classification === 'driver' ? '🚚 سائق' : '👤 مندوب'}
+                        {a.rep_classification === 'driver' ? '🚚 سائق' : '👤 مندوب/موظف'}
                       </span>
                     </td>
-                    <td style={{ padding: '0.8rem', textAlign: 'center', color: '#cbd5e1' }}>{a.date}</td>
-                    <td style={{ padding: '0.8rem', textAlign: 'center', fontWeight: '900', color: '#f8fafc', fontSize: '1rem' }}>
-                      {new Date(a.check_in).toLocaleTimeString('ar-EG')}
+                    <td style={{ padding: '0.8rem', textAlign: 'center', color: '#38bdf8', fontWeight: 'bold' }}>
+                      📍 {a.device_name || 'موقع معتمد'}
+                    </td>
+                    <td style={{ padding: '0.8rem', textAlign: 'center', fontWeight: '900', color: '#f8fafc', fontSize: '0.9rem' }}>
+                      {a.date} ({new Date(a.check_in).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })})
                     </td>
                     <td style={{ padding: '0.8rem', textAlign: 'center', fontWeight: 'bold', color: a.late_minutes > 0 ? '#f87171' : '#4ade80' }}>
                       {a.late_minutes > 0 ? `${a.late_minutes} دقيقة` : 'في الموعد'}
@@ -666,10 +668,12 @@ export default function AttendanceManagement() {
                         color: a.status === 'present' ? '#4ade80' : '#fb923c',
                         border: `1px solid ${a.status === 'present' ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.3)'}`
                       }}>
-                        {a.status === 'present' ? '🟢 حاضر في الموعد' : '🟠 متأخر'}
+                        {a.status === 'present' ? '🟢 حاضر' : '🟠 متأخر'}
                       </span>
                     </td>
-                    <td style={{ padding: '0.8rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>{a.device_name || '—'}</td>
+                    <td style={{ padding: '0.8rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>
+                      {a.notes || '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>

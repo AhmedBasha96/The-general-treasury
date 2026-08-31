@@ -495,9 +495,36 @@ router.delete('/work-zones/:id', async (req, res) => {
   }
 });
 
-// 11. POST /api/attendance/mobile-checkin - Geofenced Live Mobile Attendance Check-In
+// 11. GET /api/attendance/my-daily-checkins/:rep_id - Get daily location check-ins for a representative/driver
+router.get('/my-daily-checkins/:rep_id', async (req, res) => {
+  const { rep_id } = req.params;
+  const dateStr = req.query.date || new Date().toISOString().slice(0, 10);
+
+  try {
+    const pool = getPool();
+    const result = await pool.request()
+      .input('repId', sql.Int, parseInt(rep_id))
+      .input('dateStr', sql.VarChar, dateStr)
+      .query(`
+        SELECT 
+          a.id, a.rep_id, a.check_in, a.status, a.device_name, a.notes, a.latitude, a.longitude, a.work_zone_id, a.checkin_method, a.created_at,
+          wz.name AS work_zone_name, wz.address_description AS work_zone_address
+        FROM attendance_logs a
+        LEFT JOIN work_zones wz ON a.work_zone_id = wz.id
+        WHERE a.rep_id = @repId AND a.date = @dateStr
+        ORDER BY a.check_in DESC
+      `);
+
+    res.json(result.recordset);
+  } catch (error) {
+    console.error('Error fetching rep daily check-ins:', error);
+    res.status(500).json({ error: 'فشل جلب بصمات المواقع اليومية' });
+  }
+});
+
+// 12. POST /api/attendance/mobile-checkin - Geofenced Live Mobile Attendance Check-In (Supports Multi-location field reps & drivers)
 router.post('/mobile-checkin', async (req, res) => {
-  const { rep_id, latitude, longitude, notes } = req.body;
+  const { rep_id, latitude, longitude, work_zone_id, notes } = req.body;
   if (latitude === undefined || longitude === undefined) {
     return res.status(400).json({ error: 'إحداثيات الموقع الحالي (GPS) مطلوبة لإثبات الحضور الحي' });
   }
@@ -507,15 +534,57 @@ router.post('/mobile-checkin', async (req, res) => {
     const userLat = parseFloat(latitude);
     const userLng = parseFloat(longitude);
 
-    // Fetch active work zones
-    const zonesRes = await pool.request().query('SELECT * FROM work_zones WHERE is_active = 1');
+    // Get Representative Details & Assigned Work Zone if any
+    let targetRepId = rep_id ? parseInt(rep_id) : null;
+    let zkCode = 'GPS_MOBILE';
+    let matchedRep = null;
+
+    if (targetRepId) {
+      const repRes = await pool.request()
+        .input('id', sql.Int, targetRepId)
+        .query('SELECT id, code, name, zk_user_id, classification, type, assigned_work_zone_id, allow_multi_location FROM representatives WHERE id = @id');
+      if (repRes.recordset.length > 0) {
+        matchedRep = repRes.recordset[0];
+        zkCode = matchedRep.zk_user_id || matchedRep.code;
+      }
+    }
+
+    // Determine if employee is allowed multi-location check-in
+    // Drivers, retail_reps, wholesale_reps or reps with allow_multi_location flag are treated as multi-location field agents
+    const isMultiLocationAgent = Boolean(
+      matchedRep && (
+        matchedRep.allow_multi_location ||
+        matchedRep.classification === 'driver' ||
+        matchedRep.classification === 'retail_rep' ||
+        matchedRep.classification === 'wholesale_rep'
+      )
+    );
+
+    // Fetch allowed work zones
+    let zonesQuery = 'SELECT * FROM work_zones WHERE is_active = 1';
+    let reqObj = pool.request();
+
+    // If specific target work_zone_id was selected by user
+    if (work_zone_id) {
+      zonesQuery += ' AND id = @explicitZoneId';
+      reqObj.input('explicitZoneId', sql.Int, parseInt(work_zone_id));
+    } else if (matchedRep && matchedRep.assigned_work_zone_id && !isMultiLocationAgent) {
+      // Single-location fixed employee restricted ONLY to assigned zone
+      zonesQuery += ' AND id = @assignedZoneId';
+      reqObj.input('assignedZoneId', sql.Int, matchedRep.assigned_work_zone_id);
+    }
+
+    const zonesRes = await reqObj.query(zonesQuery);
     const zones = zonesRes.recordset;
 
     if (zones.length === 0) {
+      if (matchedRep && matchedRep.assigned_work_zone_id && !isMultiLocationAgent) {
+        return res.status(400).json({ error: 'نطاق العمل المخصص لحسابك غير متاح أو متوقف حالياً. يرجى التواصل مع الإدارة.' });
+      }
       return res.status(400).json({ error: 'لم يتم إعداد نطاقات عمل (Zones) مسموحة في النظام بعد. يرجى التواصل مع المدير لإضافة مواقع العمل.' });
     }
 
-    // Check distance to each zone
+    // Check distance to each zone to find nearest match within radius
     let matchedZone = null;
     let closestDistance = Infinity;
     let closestZoneName = '';
@@ -533,31 +602,24 @@ router.post('/mobile-checkin', async (req, res) => {
     }
 
     if (!matchedZone) {
+      const isSpecificAssigned = Boolean(matchedRep && matchedRep.assigned_work_zone_id && !isMultiLocationAgent);
+      const errorMsg = isSpecificAssigned
+        ? `❌ أنت خارج نطاق العمل المخصص لك! نطاق عملك المعتمد هو (${closestZoneName})، وموقعك الحالي يبعد ${closestDistance} متر عنه.`
+        : `❌ أنت خارج نطاق العمل المسموح به! أقرب موقع لك هو (${closestZoneName}) وموقعك الحالي يبعد ${closestDistance} متر عنه.`;
+
       return res.status(403).json({
         success: false,
-        error: `❌ أنت خارج نطاق العمل المسموح به! موقعك الحالي يبعد ${closestDistance} متر عن أقرب نطاق عمل معتمد (${closestZoneName}).`,
+        error: errorMsg,
         closestDistance,
         closestZoneName
       });
     }
 
-    // Get Representative Details
-    let targetRepId = rep_id ? parseInt(rep_id) : null;
-    let zkCode = 'GPS_MOBILE';
-    let matchedRep = null;
-
-    if (targetRepId) {
-      const repRes = await pool.request().input('id', sql.Int, targetRepId).query('SELECT id, code, name, zk_user_id FROM representatives WHERE id = @id');
-      if (repRes.recordset.length > 0) {
-        matchedRep = repRes.recordset[0];
-        zkCode = matchedRep.zk_user_id || matchedRep.code;
-      }
-    }
-
     const checkInDate = new Date();
     const dateStr = checkInDate.toISOString().slice(0, 10);
     const { status, lateMinutes } = calculateAttendanceStatus(checkInDate);
-    const deviceName = `📍 بصمة جغرافية حية (${matchedZone.name})`;
+    const deviceName = `📍 بصمة موقع (${matchedZone.name})`;
+    const finalNotes = notes ? notes.trim() : `بصمة موثقة على مسافة ${matchedZone.distance} متر من ${matchedZone.name}`;
 
     await pool.request()
       .input('rep_id', sql.Int, targetRepId)
@@ -567,7 +629,7 @@ router.post('/mobile-checkin', async (req, res) => {
       .input('status', sql.VarChar, status)
       .input('late_minutes', sql.Int, lateMinutes)
       .input('device_name', sql.NVarChar, deviceName)
-      .input('notes', sql.NVarChar, notes ? notes.trim() : `مسافة النطاق: ${matchedZone.distance} متر من ${matchedZone.name}`)
+      .input('notes', sql.NVarChar, finalNotes)
       .input('latitude', sql.Float, userLat)
       .input('longitude', sql.Float, userLng)
       .input('work_zone_id', sql.Int, matchedZone.id)
@@ -579,7 +641,7 @@ router.post('/mobile-checkin', async (req, res) => {
 
     res.json({
       success: true,
-      message: `🟢 تم إثبات الحضور بنجاح داخل نطاق (${matchedZone.name}) على مسافة ${matchedZone.distance} متر.`,
+      message: `🟢 تم إثبات البصمة والتوقيع الجغرافي بنجاح في موقع (${matchedZone.name}) على مسافة ${matchedZone.distance} متر.`,
       zoneName: matchedZone.name,
       distanceMeters: matchedZone.distance,
       checkInTime: checkInDate

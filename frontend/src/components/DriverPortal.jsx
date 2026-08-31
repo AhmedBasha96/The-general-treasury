@@ -152,47 +152,6 @@ export default function DriverPortal({ user, onLogout }) {
   const [activeImageModal, setActiveImageModal] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formMessage, setFormMessage] = useState('');
-  const [gpsCheckinStatus, setGpsCheckinStatus] = useState('');
-
-  // 1-Click Mobile GPS Attendance Checkin for Drivers & Reps
-  const handleGPSCheckin = async () => {
-    if (!navigator.geolocation) {
-      return alert('خاصية تحديد الموقع الجغرافي (GPS) غير مدعومة في متصفحك/هاتفك');
-    }
-    setGpsCheckinStatus('⏳ جاري تحديد موقعك وقراءة الـ GPS...');
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const res = await fetch('/api/attendance/mobile-checkin', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              rep_id: user?.id,
-              latitude: pos.coords.latitude,
-              longitude: pos.coords.longitude
-            })
-          });
-          const data = await res.json();
-          if (res.ok) {
-            setGpsCheckinStatus(`🟢 ${data.message}`);
-            alert(data.message || '🟢 تم إثبات الحضور بنجاح عبر الـ GPS!');
-          } else {
-            setGpsCheckinStatus(`⚠️ ${data.error}`);
-            alert(`⚠️ ${data.error}`);
-          }
-        } catch (e) {
-          setGpsCheckinStatus('❌ تعذر الاتصال بالسيرفر لإثبات الحضور');
-          alert('تعذر الاتصال بالسيرفر لإثبات الحضور');
-        }
-      },
-      (err) => {
-        setGpsCheckinStatus('⚠️ يرجى التكرم بتفعيل السماح بالموقع الجغرافي (GPS)');
-        alert('⚠️ يرجى التكرم بتفعيل السماح بالموقع الجغرافي (GPS) من إعدادات المتصفح');
-      },
-      { enableHighAccuracy: true, timeout: 12000 }
-    );
-  };
-
   // Fuel Form state
   const [fuelType, setFuelType] = useState('سولار');
   const [officialPrice, setOfficialPrice] = useState(20.50);
@@ -203,6 +162,93 @@ export default function DriverPortal({ user, onLogout }) {
   const [fuelNotes, setFuelNotes] = useState('');
   const [fuelImage, setFuelImage] = useState(null);
   const [compressingImage, setCompressingImage] = useState(false);
+
+  // Multi-location GPS Checkin state
+  const [dailyCheckins, setDailyCheckins] = useState([]);
+  const [portalWorkZones, setPortalWorkZones] = useState([]);
+  const [selectedZoneId, setSelectedZoneId] = useState('');
+  const [checkinNote, setCheckinNote] = useState('');
+  const [showCheckinModal, setShowCheckinModal] = useState(false);
+  const [checkingInGps, setCheckingInGps] = useState(false);
+  const [gpsCheckinStatus, setGpsCheckinStatus] = useState('');
+
+  const loadDailyCheckins = async () => {
+    if (!user?.id) return;
+    try {
+      const res = await fetch(`/api/attendance/my-daily-checkins/${user.id}`);
+      if (res.ok) {
+        const list = await res.json();
+        setDailyCheckins(list);
+      }
+    } catch (e) {
+      console.error('Failed to load daily check-ins:', e);
+    }
+  };
+
+  const loadPortalWorkZones = async () => {
+    try {
+      const res = await fetch('/api/attendance/work-zones');
+      if (res.ok) {
+        const list = await res.json();
+        setPortalWorkZones(list);
+      }
+    } catch (e) {
+      console.error('Failed to load portal work zones:', e);
+    }
+  };
+
+  // 1-Click Mobile GPS Attendance Checkin for Drivers & Reps
+  const handleGPSCheckin = async (customZoneId = null, customNote = null) => {
+    if (!navigator.geolocation) {
+      return alert('خاصية تحديد الموقع الجغرافي (GPS) غير مدعومة في متصفحك/هاتفك');
+    }
+    setGpsCheckinStatus('⏳ جاري تحديد موقعك وقراءة الـ GPS...');
+    setCheckingInGps(true);
+
+    const targetZoneId = customZoneId !== null ? customZoneId : selectedZoneId;
+    const targetNote = customNote !== null ? customNote : checkinNote;
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const res = await fetch('/api/attendance/mobile-checkin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              rep_id: user?.id,
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+              work_zone_id: targetZoneId || undefined,
+              notes: targetNote || undefined
+            })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            setGpsCheckinStatus(`🟢 ${data.message}`);
+            alert(data.message || '🟢 تم إثبات البصمة والتوقيع الجغرافي بنجاح!');
+            setCheckinNote('');
+            setSelectedZoneId('');
+            setShowCheckinModal(false);
+            loadDailyCheckins();
+          } else {
+            setGpsCheckinStatus(`⚠️ ${data.error}`);
+            alert(`⚠️ ${data.error}`);
+          }
+        } catch (e) {
+          setGpsCheckinStatus('❌ تعذر الاتصال بالسيرفر لإثبات الحضور');
+          alert('تعذر الاتصال بالسيرفر لإثبات الحضور');
+        } finally {
+          setCheckingInGps(false);
+        }
+      },
+      (err) => {
+        setGpsCheckinStatus('⚠️ يرجى التكرم بتفعيل السماح بالموقع الجغرافي (GPS)');
+        alert('⚠️ يرجى التكرم بتفعيل السماح بالموقع الجغرافي (GPS) من إعدادات المتصفح');
+        setCheckingInGps(false);
+      },
+      { enableHighAccuracy: true, timeout: 12000 }
+    );
+  };
 
   // Oil/Maintenance Form state
   const [maintenanceType, setMaintenanceType] = useState('تغيير زيت موتور وفلاتر (10,000 كم)');
@@ -253,6 +299,8 @@ export default function DriverPortal({ user, onLogout }) {
 
   useEffect(() => {
     loadDriverCar();
+    loadDailyCheckins();
+    loadPortalWorkZones();
   }, [user]);
 
   // Open refuel modal prefilled with car's assigned fuel type
@@ -469,15 +517,129 @@ export default function DriverPortal({ user, onLogout }) {
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <button 
-            onClick={handleGPSCheckin} 
+            onClick={() => handleGPSCheckin(null, null)} 
             className="btn btn-primary" 
+            disabled={checkingInGps}
             style={{ padding: '0.55rem 1.15rem', fontSize: '0.9rem', background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none', borderRadius: '12px', fontWeight: 'bold', boxShadow: '0 4px 12px rgba(16,185,129,0.3)', cursor: 'pointer' }}
           >
-            📍 اثبات حضور بالـ GPS
+            {checkingInGps ? '⏳ جاري تحديد موقعك...' : '📍 اثبات حضور سريعة بالـ GPS'}
           </button>
           <button onClick={onLogout} className="btn btn-secondary" style={{ padding: '0.55rem 1rem', fontSize: '0.85rem', borderRadius: '12px' }}>
             🔒 خروج
           </button>
+        </div>
+      </div>
+
+      {/* MULTI-LOCATION GPS SIGNATURE & TIMELINE CARD */}
+      <div style={{ background: '#ffffff', borderRadius: '24px', border: '2px solid #10b981', padding: '1.5rem', boxShadow: '0 10px 30px rgba(16, 185, 129, 0.08)', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+          <div>
+            <h3 style={{ margin: 0, color: '#0f172a', fontWeight: '900', fontSize: '1.25rem' }}>
+              📍 إثبات بصمة وتوقيع الموقع (Multi-Location Signatures)
+            </h3>
+            <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
+              تتيح لك إثبات الحضور والتوقيع الجغرافي في عدة مواقع وفروع على مدار اليوم
+            </span>
+          </div>
+          <span style={{ background: '#dcfce7', color: '#15803d', padding: '0.3rem 0.8rem', borderRadius: '12px', fontWeight: 'bold', fontSize: '0.85rem' }}>
+            حركات اليوم: {dailyCheckins.length} توقيع موقع
+          </span>
+        </div>
+
+        {/* Quick Check-in Inputs */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '0.75rem', alignItems: 'end', background: '#f8fafc', padding: '1rem', borderRadius: '16px', border: '1px solid #cbd5e1' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: '#475569', marginBottom: '0.35rem' }}>
+              اسم الفرع / الموقع المراد البصمة فيه:
+            </label>
+            <select
+              value={selectedZoneId}
+              onChange={(e) => setSelectedZoneId(e.target.value)}
+              style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '0.9rem', background: '#ffffff' }}
+            >
+              <option value="">🎯 اكتشاف الموقع تلقائياً من الـ GPS...</option>
+              {portalWorkZones.map(z => (
+                <option key={z.id} value={z.id}>📍 {z.name} ({z.radius_meters}m)</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: '#475569', marginBottom: '0.35rem' }}>
+              بيان / سبب التواجد الميداني:
+            </label>
+            <input
+              type="text"
+              placeholder="مثلاً: حضور بداية اليوم / زيارة فرع المعادي / تسليم عمال..."
+              value={checkinNote}
+              onChange={(e) => setCheckinNote(e.target.value)}
+              style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '0.9rem', background: '#ffffff' }}
+            />
+          </div>
+
+          <button
+            onClick={() => handleGPSCheckin(selectedZoneId, checkinNote)}
+            disabled={checkingInGps}
+            style={{
+              padding: '0.65rem 1.25rem',
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '12px',
+              fontWeight: 900,
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(16,185,129,0.3)',
+              fontSize: '0.9rem',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {checkingInGps ? '⏳ جاري البصمة...' : '📍 تسجيل توقيع الموقع الآن'}
+          </button>
+        </div>
+
+        {gpsCheckinStatus && (
+          <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', fontWeight: 'bold', color: gpsCheckinStatus.startsWith('🟢') ? '#16a34a' : '#dc2626', textAlign: 'center', background: gpsCheckinStatus.startsWith('🟢') ? '#f0fdf4' : '#fef2f2', padding: '0.5rem', borderRadius: '10px' }}>
+            {gpsCheckinStatus}
+          </div>
+        )}
+
+        {/* TODAY'S LOCATION TIMELINE */}
+        <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px dashed #e2e8f0' }}>
+          <h4 style={{ margin: '0 0 0.75rem 0', color: '#0f172a', fontSize: '0.95rem', fontWeight: '800' }}>
+            🗺️ سجل بصمات موقعك وتوقيعاتك اليوم ({dailyCheckins.length})
+          </h4>
+
+          {dailyCheckins.length === 0 ? (
+            <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>
+              لم تقم بتسجيل أي بصمات موقع اليوم بعد. اضغط الزر الأخضر أعلاه للبصمة والتوقيع في موقعك الحالي.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              {dailyCheckins.map((item, idx) => (
+                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f0fdf4', padding: '0.75rem 1rem', borderRadius: '12px', borderRight: '4px solid #10b981', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ background: '#10b981', color: '#ffffff', width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                      {dailyCheckins.length - idx}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: '900', color: '#0f172a', fontSize: '0.95rem' }}>
+                        📍 {item.work_zone_name || item.device_name || 'موقع معتمد'}
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.15rem' }}>
+                        {item.notes || 'بصمة حية معتمدة عبر الـ GPS'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: 'left' }}>
+                    <span style={{ padding: '0.2rem 0.6rem', borderRadius: '8px', background: '#dcfce7', color: '#16a34a', fontWeight: 'bold', fontSize: '0.8rem' }}>
+                      ⏱️ {new Date(item.check_in).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
