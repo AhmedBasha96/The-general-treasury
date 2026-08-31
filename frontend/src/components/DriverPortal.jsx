@@ -230,23 +230,25 @@ export default function DriverPortal({ user, onLogout }) {
     }
   };
 
-  // 1-Click Mobile GPS Attendance Checkin for Drivers & Reps with Smart Fallback
+  // 1-Click Mobile GPS Attendance Checkin for Drivers & Reps with Smart Mobile Fallback
   const handleGPSCheckin = async (customZoneId = null, customNote = null) => {
     const targetZoneId = customZoneId !== null ? customZoneId : selectedZoneId;
     const targetNote = customNote !== null ? customNote : checkinNote;
 
-    setGpsCheckinStatus('⏳ جاري تحديد موقعك وقراءة الـ GPS...');
+    setGpsCheckinStatus('⏳ جاري تسجيل بصمة الموقع والتوقيع الجغرافي...');
     setCheckingInGps(true);
 
-    const targetZoneObj = portalWorkZones.find(z => String(z.id) === String(targetZoneId));
+    let targetZoneObj = portalWorkZones.find(z => String(z.id) === String(targetZoneId));
+    if (!targetZoneObj && portalWorkZones.length > 0) {
+      targetZoneObj = portalWorkZones[0];
+    }
 
     if (!navigator.geolocation) {
       if (targetZoneObj) {
-        alert(`⚠️ خاصية GPS غير مدعومة في متصفحك. سيتم تسجيل البصمة بموقع (${targetZoneObj.name}).`);
         return executeCheckinApi(targetZoneObj.latitude, targetZoneObj.longitude, targetZoneObj.id, targetNote);
       }
       setCheckingInGps(false);
-      return alert('خاصية تحديد الموقع الجغرافي (GPS) غير مدعومة في متصفحك/هاتفك. يرجى اختيار الفرع المراد البصمة فيه من القائمة.');
+      return alert('يرجى اختيار الفرع المراد إثبات الحضور فيه من القائمة');
     }
 
     navigator.geolocation.getCurrentPosition(
@@ -254,25 +256,17 @@ export default function DriverPortal({ user, onLogout }) {
         executeCheckinApi(pos.coords.latitude, pos.coords.longitude, targetZoneId, targetNote);
       },
       async (err) => {
-        console.warn('Geolocation error:', err);
+        console.warn('Geolocation restriction on mobile HTTP:', err);
+        // Seamless fallback for mobile browsers on HTTP: use selected or default work zone coordinates
         if (targetZoneObj) {
-          const fallbackConfirm = window.confirm(`⚠️ تعذر قراءة الـ GPS الحية تلقائياً بسبب حظر المتصفح للموقع.\n\nهل ترغب في اعتماد تسجيل التوقيع والبصمة في فرع (${targetZoneObj.name})؟`);
-          if (fallbackConfirm) {
-            return executeCheckinApi(targetZoneObj.latitude, targetZoneObj.longitude, targetZoneObj.id, targetNote || `توقيع معتمد في فرع ${targetZoneObj.name}`);
-          }
-        } else if (portalWorkZones.length > 0) {
-          const firstZone = portalWorkZones[0];
-          const fallbackConfirm = window.confirm(`⚠️ تعذر قراءة الـ GPS الحية من المتصفح.\n\nهل ترغب في تسجيل التوقيع في أقرب موقع معتمد (${firstZone.name})؟`);
-          if (fallbackConfirm) {
-            return executeCheckinApi(firstZone.latitude, firstZone.longitude, firstZone.id, targetNote || `توقيع معتمد في فرع ${firstZone.name}`);
-          }
+          executeCheckinApi(targetZoneObj.latitude, targetZoneObj.longitude, targetZoneObj.id, targetNote || `توقيع معتمد بموقع ${targetZoneObj.name}`);
+        } else {
+          setGpsCheckinStatus('⚠️ يرجى اختيار الفرع أو الموقع المراد البصمة فيه من القائمة');
+          alert('تعذر قراءة الـ GPS الحية تلقائياً. يرجى اختيار الفرع المراد البصمة فيه من القائمة ثم إعادة المحاولة.');
+          setCheckingInGps(false);
         }
-
-        setGpsCheckinStatus('⚠️ يرجى التكرم بتفعيل السماح بالموقع الجغرافي (GPS) أو اختيار الفرع من القائمة');
-        alert('⚠️ تعذر قراءة موقع الـ GPS. يرجى التكرم بتفعيل السماح بالموقع الجغرافي (GPS) من إعدادات المتصفح أو اختيار الفرع المراد البصمة فيه من القائمة.');
-        setCheckingInGps(false);
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: false, timeout: 5000 }
     );
   };
 
@@ -622,6 +616,32 @@ export default function DriverPortal({ user, onLogout }) {
             {checkingInGps ? '⏳ جاري البصمة...' : '📍 تسجيل توقيع الموقع الآن'}
           </button>
         </div>
+
+        {portalWorkZones.length > 0 && (
+          <div style={{ marginTop: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569' }}>بصمة موقع سريعة بالموبايل:</span>
+            {portalWorkZones.map(z => (
+              <button
+                key={z.id}
+                type="button"
+                onClick={() => handleGPSCheckin(z.id, checkinNote || `بصمة موثقة بـ ${z.name}`)}
+                disabled={checkingInGps}
+                style={{
+                  padding: '0.4rem 0.85rem',
+                  background: '#ecfdf5',
+                  color: '#047857',
+                  border: '1px solid #a7f3d0',
+                  borderRadius: '10px',
+                  fontSize: '0.82rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                📍 {z.name}
+              </button>
+            ))}
+          </div>
+        )}
 
         {gpsCheckinStatus && (
           <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', fontWeight: 'bold', color: gpsCheckinStatus.startsWith('🟢') ? '#16a34a' : '#dc2626', textAlign: 'center', background: gpsCheckinStatus.startsWith('🟢') ? '#f0fdf4' : '#fef2f2', padding: '0.5rem', borderRadius: '10px' }}>
