@@ -151,7 +151,7 @@ export default function AttendanceManagement() {
     }
   };
 
-  const executeMobileCheckinApi = async (lat, lng) => {
+  const executeMobileCheckinApi = async (lat, lng, targetZoneId = null) => {
     try {
       const res = await fetch('/api/attendance/mobile-checkin', {
         method: 'POST',
@@ -159,7 +159,8 @@ export default function AttendanceManagement() {
         body: JSON.stringify({
           rep_id: gpsRepId || null,
           latitude: lat,
-          longitude: lng
+          longitude: lng,
+          work_zone_id: targetZoneId || undefined
         })
       });
       const data = await res.json();
@@ -176,27 +177,33 @@ export default function AttendanceManagement() {
     }
   };
 
+  const [gpsZoneId, setGpsZoneId] = useState('');
+
   // Execute Live Mobile GPS Check-In with seamless mobile fallback
   const handleExecuteGpsCheckin = () => {
     setGpsLoading(true);
     setGpsResult(null);
 
-    const defaultZoneObj = workZones.length > 0 ? workZones[0] : { latitude: 30.0444, longitude: 31.2357 };
+    let targetZoneObj = workZones.find(z => String(z.id) === String(gpsZoneId));
+    if (!targetZoneObj && workZones.length > 0) {
+      targetZoneObj = workZones[0];
+    }
+    const fallbackLat = targetZoneObj ? targetZoneObj.latitude : 30.0444;
+    const fallbackLng = targetZoneObj ? targetZoneObj.longitude : 31.2357;
 
     if (!navigator.geolocation) {
-      return executeMobileCheckinApi(defaultZoneObj.latitude, defaultZoneObj.longitude);
+      return executeMobileCheckinApi(fallbackLat, fallbackLng, targetZoneObj?.id);
     }
 
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        executeMobileCheckinApi(pos.coords.latitude, pos.coords.longitude);
+        executeMobileCheckinApi(pos.coords.latitude, pos.coords.longitude, targetZoneObj?.id);
       },
       (err) => {
         console.warn('GPS position error on mobile:', err);
-        // Fallback using target work zone coordinates
-        executeMobileCheckinApi(defaultZoneObj.latitude, defaultZoneObj.longitude);
+        executeMobileCheckinApi(fallbackLat, fallbackLng, targetZoneObj?.id);
       },
-      { enableHighAccuracy: false, timeout: 5000 }
+      { enableHighAccuracy: false, timeout: 4000 }
     );
   };
 
