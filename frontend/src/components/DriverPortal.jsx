@@ -230,7 +230,7 @@ export default function DriverPortal({ user, onLogout }) {
     }
   };
 
-  // 1-Click Mobile GPS Attendance Checkin for Drivers & Reps with Precise Branch Coordinates Fallback
+  // 1-Click Mobile GPS Attendance Checkin for Drivers & Reps (100% Silent Fail-Proof for All Mobile Devices)
   const handleGPSCheckin = async (customZoneId = null, customNote = null) => {
     const targetZoneId = customZoneId !== null ? customZoneId : selectedZoneId;
     const targetNote = customNote !== null ? customNote : checkinNote;
@@ -243,31 +243,26 @@ export default function DriverPortal({ user, onLogout }) {
       targetZoneObj = portalWorkZones[0];
     }
 
-    if (!navigator.geolocation) {
-      if (targetZoneObj) {
-        return executeCheckinApi(targetZoneObj.latitude, targetZoneObj.longitude, targetZoneObj.id, targetNote);
-      }
+    if (!targetZoneObj) {
       setCheckingInGps(false);
-      return alert('يرجى اختيار الفرع أو الموقع المراد البصمة فيه من القائمة');
+      return alert('لم يتم إعداد نطاقات عمل (Zones) في النظام بعد. يرجى التواصل مع المدير.');
     }
 
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        executeCheckinApi(pos.coords.latitude, pos.coords.longitude, targetZoneId, targetNote);
-      },
-      async (err) => {
-        console.warn('Geolocation restricted by mobile browser on HTTP:', err);
-        if (targetZoneObj) {
-          // Use exact target branch coordinates when browser restricts HTTP GPS read
-          executeCheckinApi(targetZoneObj.latitude, targetZoneObj.longitude, targetZoneObj.id, targetNote || `توقيع معتمد بفرع ${targetZoneObj.name}`);
-        } else {
-          setGpsCheckinStatus('⚠️ يرجى اختيار الفرع المراد البصمة فيه من القائمة');
-          alert('يرجى تحديد الفرع أو الموقع المراد البصمة فيه من القائمة أعلاه.');
-          setCheckingInGps(false);
-        }
-      },
-      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
-    );
+    // Attempt geolocation silently with short timeout; fallback immediately to target zone coordinates on mobile HTTP
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          executeCheckinApi(pos.coords.latitude, pos.coords.longitude, targetZoneObj.id, targetNote);
+        },
+        async (err) => {
+          console.warn('Geolocation restricted on mobile HTTP, using target zone coordinates:', err);
+          executeCheckinApi(targetZoneObj.latitude, targetZoneObj.longitude, targetZoneObj.id, targetNote || `توقيع بفرع ${targetZoneObj.name}`);
+        },
+        { enableHighAccuracy: false, timeout: 2500 }
+      );
+    } else {
+      executeCheckinApi(targetZoneObj.latitude, targetZoneObj.longitude, targetZoneObj.id, targetNote);
+    }
   };
 
   // Oil/Maintenance Form state
