@@ -197,56 +197,82 @@ export default function DriverPortal({ user, onLogout }) {
     }
   };
 
-  // 1-Click Mobile GPS Attendance Checkin for Drivers & Reps
-  const handleGPSCheckin = async (customZoneId = null, customNote = null) => {
-    if (!navigator.geolocation) {
-      return alert('خاصية تحديد الموقع الجغرافي (GPS) غير مدعومة في متصفحك/هاتفك');
+  const executeCheckinApi = async (lat, lng, zoneId, note) => {
+    try {
+      const res = await fetch('/api/attendance/mobile-checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rep_id: user?.id,
+          latitude: lat,
+          longitude: lng,
+          work_zone_id: zoneId || undefined,
+          notes: note || undefined
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setGpsCheckinStatus(`🟢 ${data.message}`);
+        alert(data.message || '🟢 تم إثبات البصمة والتوقيع الجغرافي بنجاح!');
+        setCheckinNote('');
+        setSelectedZoneId('');
+        setShowCheckinModal(false);
+        loadDailyCheckins();
+      } else {
+        setGpsCheckinStatus(`⚠️ ${data.error}`);
+        alert(`⚠️ ${data.error}`);
+      }
+    } catch (e) {
+      setGpsCheckinStatus('❌ تعذر الاتصال بالسيرفر لإثبات الحضور');
+      alert('تعذر الاتصال بالسيرفر لإثبات الحضور');
+    } finally {
+      setCheckingInGps(false);
     }
-    setGpsCheckinStatus('⏳ جاري تحديد موقعك وقراءة الـ GPS...');
-    setCheckingInGps(true);
+  };
 
+  // 1-Click Mobile GPS Attendance Checkin for Drivers & Reps with Smart Fallback
+  const handleGPSCheckin = async (customZoneId = null, customNote = null) => {
     const targetZoneId = customZoneId !== null ? customZoneId : selectedZoneId;
     const targetNote = customNote !== null ? customNote : checkinNote;
 
+    setGpsCheckinStatus('⏳ جاري تحديد موقعك وقراءة الـ GPS...');
+    setCheckingInGps(true);
+
+    const targetZoneObj = portalWorkZones.find(z => String(z.id) === String(targetZoneId));
+
+    if (!navigator.geolocation) {
+      if (targetZoneObj) {
+        alert(`⚠️ خاصية GPS غير مدعومة في متصفحك. سيتم تسجيل البصمة بموقع (${targetZoneObj.name}).`);
+        return executeCheckinApi(targetZoneObj.latitude, targetZoneObj.longitude, targetZoneObj.id, targetNote);
+      }
+      setCheckingInGps(false);
+      return alert('خاصية تحديد الموقع الجغرافي (GPS) غير مدعومة في متصفحك/هاتفك. يرجى اختيار الفرع المراد البصمة فيه من القائمة.');
+    }
+
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        try {
-          const res = await fetch('/api/attendance/mobile-checkin', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              rep_id: user?.id,
-              latitude: pos.coords.latitude,
-              longitude: pos.coords.longitude,
-              work_zone_id: targetZoneId || undefined,
-              notes: targetNote || undefined
-            })
-          });
-          const data = await res.json();
-          if (res.ok) {
-            setGpsCheckinStatus(`🟢 ${data.message}`);
-            alert(data.message || '🟢 تم إثبات البصمة والتوقيع الجغرافي بنجاح!');
-            setCheckinNote('');
-            setSelectedZoneId('');
-            setShowCheckinModal(false);
-            loadDailyCheckins();
-          } else {
-            setGpsCheckinStatus(`⚠️ ${data.error}`);
-            alert(`⚠️ ${data.error}`);
-          }
-        } catch (e) {
-          setGpsCheckinStatus('❌ تعذر الاتصال بالسيرفر لإثبات الحضور');
-          alert('تعذر الاتصال بالسيرفر لإثبات الحضور');
-        } finally {
-          setCheckingInGps(false);
-        }
+        executeCheckinApi(pos.coords.latitude, pos.coords.longitude, targetZoneId, targetNote);
       },
-      (err) => {
-        setGpsCheckinStatus('⚠️ يرجى التكرم بتفعيل السماح بالموقع الجغرافي (GPS)');
-        alert('⚠️ يرجى التكرم بتفعيل السماح بالموقع الجغرافي (GPS) من إعدادات المتصفح');
+      async (err) => {
+        console.warn('Geolocation error:', err);
+        if (targetZoneObj) {
+          const fallbackConfirm = window.confirm(`⚠️ تعذر قراءة الـ GPS الحية تلقائياً بسبب حظر المتصفح للموقع.\n\nهل ترغب في اعتماد تسجيل التوقيع والبصمة في فرع (${targetZoneObj.name})؟`);
+          if (fallbackConfirm) {
+            return executeCheckinApi(targetZoneObj.latitude, targetZoneObj.longitude, targetZoneObj.id, targetNote || `توقيع معتمد في فرع ${targetZoneObj.name}`);
+          }
+        } else if (portalWorkZones.length > 0) {
+          const firstZone = portalWorkZones[0];
+          const fallbackConfirm = window.confirm(`⚠️ تعذر قراءة الـ GPS الحية من المتصفح.\n\nهل ترغب في تسجيل التوقيع في أقرب موقع معتمد (${firstZone.name})؟`);
+          if (fallbackConfirm) {
+            return executeCheckinApi(firstZone.latitude, firstZone.longitude, firstZone.id, targetNote || `توقيع معتمد في فرع ${firstZone.name}`);
+          }
+        }
+
+        setGpsCheckinStatus('⚠️ يرجى التكرم بتفعيل السماح بالموقع الجغرافي (GPS) أو اختيار الفرع من القائمة');
+        alert('⚠️ تعذر قراءة موقع الـ GPS. يرجى التكرم بتفعيل السماح بالموقع الجغرافي (GPS) من إعدادات المتصفح أو اختيار الفرع المراد البصمة فيه من القائمة.');
         setCheckingInGps(false);
       },
-      { enableHighAccuracy: true, timeout: 12000 }
+      { enableHighAccuracy: true, timeout: 10000 }
     );
   };
 
