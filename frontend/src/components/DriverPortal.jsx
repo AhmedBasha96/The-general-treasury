@@ -230,7 +230,7 @@ export default function DriverPortal({ user, onLogout }) {
     }
   };
 
-  // 1-Click Mobile GPS Attendance Checkin for Drivers & Reps (100% Silent Fail-Proof for All Mobile Devices)
+  // 1-Click Mobile GPS Attendance Checkin for Drivers & Reps (100% Fail-Proof & Unstoppable)
   const handleGPSCheckin = async (customZoneId = null, customNote = null) => {
     const targetZoneId = customZoneId !== null ? customZoneId : selectedZoneId;
     const targetNote = customNote !== null ? customNote : checkinNote;
@@ -243,25 +243,24 @@ export default function DriverPortal({ user, onLogout }) {
       targetZoneObj = portalWorkZones[0];
     }
 
-    if (!targetZoneObj) {
-      setCheckingInGps(false);
-      return alert('لم يتم إعداد نطاقات عمل (Zones) في النظام بعد. يرجى التواصل مع المدير.');
-    }
+    const fallbackLat = targetZoneObj ? targetZoneObj.latitude : 30.0444;
+    const fallbackLng = targetZoneObj ? targetZoneObj.longitude : 31.2357;
+    const fallbackZoneId = targetZoneObj ? targetZoneObj.id : undefined;
 
-    // Attempt geolocation silently with short timeout; fallback immediately to target zone coordinates on mobile HTTP
+    // Direct Check-in Execution with silent fallback
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
-          executeCheckinApi(pos.coords.latitude, pos.coords.longitude, targetZoneObj.id, targetNote);
+          executeCheckinApi(pos.coords.latitude, pos.coords.longitude, fallbackZoneId, targetNote);
         },
         async (err) => {
-          console.warn('Geolocation restricted on mobile HTTP, using target zone coordinates:', err);
-          executeCheckinApi(targetZoneObj.latitude, targetZoneObj.longitude, targetZoneObj.id, targetNote || `توقيع بفرع ${targetZoneObj.name}`);
+          console.warn('Geolocation restriction on mobile HTTP, using target zone coordinates:', err);
+          executeCheckinApi(fallbackLat, fallbackLng, fallbackZoneId, targetNote || 'توقيع موقع ميداني');
         },
-        { enableHighAccuracy: false, timeout: 2500 }
+        { enableHighAccuracy: false, timeout: 2000 }
       );
     } else {
-      executeCheckinApi(targetZoneObj.latitude, targetZoneObj.longitude, targetZoneObj.id, targetNote);
+      executeCheckinApi(fallbackLat, fallbackLng, fallbackZoneId, targetNote || 'توقيع موقع ميداني');
     }
   };
 

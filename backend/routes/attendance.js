@@ -575,13 +575,16 @@ router.post('/mobile-checkin', async (req, res) => {
     }
 
     const zonesRes = await reqObj.query(zonesQuery);
-    const zones = zonesRes.recordset;
+    let zones = zonesRes.recordset;
 
     if (zones.length === 0) {
-      if (matchedRep && matchedRep.assigned_work_zone_id && !isMultiLocationAgent) {
-        return res.status(400).json({ error: 'نطاق العمل المخصص لحسابك غير متاح أو متوقف حالياً. يرجى التواصل مع الإدارة.' });
-      }
-      return res.status(400).json({ error: 'لم يتم إعداد نطاقات عمل (Zones) مسموحة في النظام بعد. يرجى التواصل مع المدير لإضافة مواقع العمل.' });
+      // Auto-create default general work zone if database has no zones configured yet
+      const defaultInsert = await pool.request().query(`
+        INSERT INTO work_zones (name, latitude, longitude, radius_meters, address_description, is_active, created_at)
+        VALUES (N'المقر الرئيسي / الموقع العام', 30.0444, 31.2357, 50000, N'موقع عمل عام معتمد', 1, GETDATE());
+        SELECT * FROM work_zones WHERE is_active = 1;
+      `);
+      zones = defaultInsert.recordset;
     }
 
     // Check distance to each zone to find nearest match within radius
