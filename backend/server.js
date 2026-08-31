@@ -4606,25 +4606,12 @@ app.delete('/api/payroll/runs/:id', async (req, res) => {
   }
 });
 
-const https = require('https');
-const selfsigned = require('selfsigned');
-
 // Start Database connection and then Express server
 connectDB()
   .then(async (pool) => {
     app.listen(PORT, () => {
-      console.log(`Server is running on HTTP port ${PORT}`);
+      console.log(`Server is running on port ${PORT}`);
     });
-
-    try {
-      const pems = selfsigned.generate([{ name: 'commonName', value: 'localhost' }], { days: 365 });
-      const httpsPort = process.env.HTTPS_PORT || 5001;
-      https.createServer({ key: pems.private, cert: pems.cert }, app).listen(httpsPort, () => {
-        console.log(`🔒 Secure HTTPS Server is running on port ${httpsPort}`);
-      });
-    } catch (e) {
-      console.error('Could not start HTTPS server:', e.message);
-    }
   })
   .catch((err) => {
     console.error('Database connection failed. Exiting server...');
