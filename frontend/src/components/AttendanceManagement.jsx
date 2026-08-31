@@ -80,25 +80,30 @@ export default function AttendanceManagement() {
     loadWorkZones();
   }, [dateFilter, statusFilter]);
 
-  // Fetch current GPS position to prefill Zone form
+  // Fetch current LIVE GPS position from user's device
   const handleFetchCurrentGpsForZone = () => {
     if (!navigator.geolocation) {
-      setNewZoneLat('30.044400');
-      setNewZoneLng('31.235700');
-      return setSuccessMsg('📍 تم ضبط الإحداثيات افتراضياً. يمكنك كتابتها وتعديلها يدوياً.');
+      return alert('خاصية تحديد الموقع الجغرافي (GPS) غير مدعومة في متصفحك.');
     }
+    setSuccessMsg('⏳ جاري قراءة موقعك الجغرافي الحقيقي المباشر من الموبايل (GPS)...');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setNewZoneLat(pos.coords.latitude.toFixed(6));
-        setNewZoneLng(pos.coords.longitude.toFixed(6));
-        setSuccessMsg(`📍 تم جلب إحداثيات موقعك الحالي بنجاح (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)})`);
+        const lat = pos.coords.latitude.toFixed(6);
+        const lng = pos.coords.longitude.toFixed(6);
+        setNewZoneLat(lat);
+        setNewZoneLng(lng);
+        setSuccessMsg(`📍 تم سحب موقعك الحالي الحقيقي بنجاح! (${lat}, ${lng})`);
+        alert(`📍 تم سحب إحداثيات موقعك الحالي الحقيقي من الموبايل بنجاح:\nLat: ${lat}\nLng: ${lng}`);
       },
       (err) => {
-        setNewZoneLat('30.044400');
-        setNewZoneLng('31.235700');
-        setSuccessMsg('📍 تعذر قراءة الـ GPS تلقائياً. تم ضبط الإحداثيات وتتيح لك كتابة أو تعديل الموقع يدوياً.');
+        console.error('Geolocation error:', err);
+        let errMsg = 'تعذر قراءة موقعك الحالي.';
+        if (err.code === 1) errMsg = '⚠️ يرجى السماح للمتصفح بالوصول لموقعك الجغرافي (Location Permission).';
+        else if (err.code === 2) errMsg = '⚠️ إشارة الـ GPS غير ممتدة أو تعذر تحديد الموقع المباشر.';
+        else if (err.code === 3) errMsg = '⚠️ استغرقت قراءة الموقع وقتاً طويلاً. يرجى المحاولة مجدداً.';
+        alert(errMsg);
       },
-      { enableHighAccuracy: false, timeout: 5000 }
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
     );
   };
 
@@ -188,20 +193,22 @@ export default function AttendanceManagement() {
     if (!targetZoneObj && workZones.length > 0) {
       targetZoneObj = workZones[0];
     }
-    const fallbackLat = targetZoneObj ? targetZoneObj.latitude : 30.0444;
-    const fallbackLng = targetZoneObj ? targetZoneObj.longitude : 31.2357;
+    if (!targetZoneObj) {
+      setGpsLoading(false);
+      return alert('لم يتم إضافة نطاقات عمل (Zones) بالنظام بعد. يرجى إضافة نطاق العمل أولاً.');
+    }
 
     if (!navigator.geolocation) {
-      return executeMobileCheckinApi(fallbackLat, fallbackLng, targetZoneObj?.id);
+      return executeMobileCheckinApi(targetZoneObj.latitude, targetZoneObj.longitude, targetZoneObj.id);
     }
 
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        executeMobileCheckinApi(pos.coords.latitude, pos.coords.longitude, targetZoneObj?.id);
+        executeMobileCheckinApi(pos.coords.latitude, pos.coords.longitude, targetZoneObj.id);
       },
       (err) => {
         console.warn('GPS position error on mobile:', err);
-        executeMobileCheckinApi(fallbackLat, fallbackLng, targetZoneObj?.id);
+        executeMobileCheckinApi(targetZoneObj.latitude, targetZoneObj.longitude, targetZoneObj.id);
       },
       { enableHighAccuracy: false, timeout: 4000 }
     );

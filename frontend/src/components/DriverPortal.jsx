@@ -230,7 +230,7 @@ export default function DriverPortal({ user, onLogout }) {
     }
   };
 
-  // 1-Click Mobile GPS Attendance Checkin for Drivers & Reps with Smart Mobile Fallback
+  // 1-Click Mobile GPS Attendance Checkin for Drivers & Reps with Precise Branch Coordinates Fallback
   const handleGPSCheckin = async (customZoneId = null, customNote = null) => {
     const targetZoneId = customZoneId !== null ? customZoneId : selectedZoneId;
     const targetNote = customNote !== null ? customNote : checkinNote;
@@ -248,7 +248,7 @@ export default function DriverPortal({ user, onLogout }) {
         return executeCheckinApi(targetZoneObj.latitude, targetZoneObj.longitude, targetZoneObj.id, targetNote);
       }
       setCheckingInGps(false);
-      return alert('يرجى اختيار الفرع المراد إثبات الحضور فيه من القائمة');
+      return alert('يرجى اختيار الفرع أو الموقع المراد البصمة فيه من القائمة');
     }
 
     navigator.geolocation.getCurrentPosition(
@@ -256,17 +256,17 @@ export default function DriverPortal({ user, onLogout }) {
         executeCheckinApi(pos.coords.latitude, pos.coords.longitude, targetZoneId, targetNote);
       },
       async (err) => {
-        console.warn('Geolocation restriction on mobile HTTP:', err);
-        // Seamless fallback for mobile browsers on HTTP: use selected or default work zone coordinates
+        console.warn('Geolocation restricted by mobile browser on HTTP:', err);
         if (targetZoneObj) {
-          executeCheckinApi(targetZoneObj.latitude, targetZoneObj.longitude, targetZoneObj.id, targetNote || `توقيع معتمد بموقع ${targetZoneObj.name}`);
+          // Use exact target branch coordinates when browser restricts HTTP GPS read
+          executeCheckinApi(targetZoneObj.latitude, targetZoneObj.longitude, targetZoneObj.id, targetNote || `توقيع معتمد بفرع ${targetZoneObj.name}`);
         } else {
-          setGpsCheckinStatus('⚠️ يرجى اختيار الفرع أو الموقع المراد البصمة فيه من القائمة');
-          alert('تعذر قراءة الـ GPS الحية تلقائياً. يرجى اختيار الفرع المراد البصمة فيه من القائمة ثم إعادة المحاولة.');
+          setGpsCheckinStatus('⚠️ يرجى اختيار الفرع المراد البصمة فيه من القائمة');
+          alert('يرجى تحديد الفرع أو الموقع المراد البصمة فيه من القائمة أعلاه.');
           setCheckingInGps(false);
         }
       },
-      { enableHighAccuracy: false, timeout: 5000 }
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
     );
   };
 
