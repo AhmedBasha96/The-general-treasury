@@ -2247,7 +2247,7 @@ app.get('/api/reports/daily', async (req, res) => {
       .reduce((sum, t) => sum + Number(t.amount), 0);
     const dayCashWithdrawals = dayTransactions.recordset
       .filter(t => 
-        (t.type === 'withdrawal' && (!t.bank_id || t.payment_method === 'cash' || t.payment_method === null || t.withdrawal_sub_type === 'bank_deposit') && (t.status === 'disbursed' || t.status === null))
+        (t.type === 'withdrawal' && (!t.bank_id || t.payment_method === 'cash' || t.payment_method === null || t.withdrawal_sub_type === 'bank_deposit') && (t.status === 'approved' || t.status === 'disbursed' || t.status === null))
         || (t.type === 'company_transfer' && (!t.bank_id || t.payment_method === 'cash' || t.payment_method === null) && (t.status === 'approved' || t.status === 'disbursed' || t.status === null))
       )
       .reduce((sum, t) => sum + Number(t.amount), 0);
