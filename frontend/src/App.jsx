@@ -99,6 +99,16 @@ export default function App() {
   // Representative States
   const [repLedgerData, setRepLedgerData] = useState(null);
   const [repLedgerLoading, setRepLedgerLoading] = useState(false);
+  const [repFilterPeriod, setRepFilterPeriod] = useState('current_month');
+  const [repFilterMonth, setRepFilterMonth] = useState(() => new Date().getMonth() + 1);
+  const [repFilterYear, setRepFilterYear] = useState(() => new Date().getFullYear());
+
+  const getArabicMonthName = (m, y) => {
+    const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+    const idx = (parseInt(m) || 1) - 1;
+    const name = months[idx] || '';
+    return y ? `${name} ${y}` : name;
+  };
 
   // Company States
   const [companies, setCompanies] = useState([]);
@@ -292,13 +302,17 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  const loadRepLedger = async () => {
+  const loadRepLedger = async (period = repFilterPeriod, month = repFilterMonth, year = repFilterYear) => {
     const saved = localStorage.getItem('currentUser');
     const user = saved ? JSON.parse(saved) : null;
     if (!user || user.role !== 'representative') return;
     setRepLedgerLoading(true);
     try {
-      const res = await fetch(`/api/reps/${user.id}/transactions`);
+      let url = `/api/reps/${user.id}/transactions?period=${period}`;
+      if (period === 'custom' && month && year) {
+        url += `&month=${month}&year=${year}`;
+      }
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         setRepLedgerData(data);
@@ -2219,9 +2233,13 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
     }
   };
 
-  const handleViewLedger = async (repId) => {
+  const handleViewLedger = async (repId, period = repFilterPeriod, month = repFilterMonth, year = repFilterYear) => {
     try {
-      const res = await fetch(`/api/reps/${repId}/transactions`);
+      let url = `/api/reps/${repId}/transactions?period=${period}`;
+      if (period === 'custom' && month && year) {
+        url += `&month=${month}&year=${year}`;
+      }
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         setSelectedRepLedger(data);
@@ -4011,14 +4029,36 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
             {selectedRepLedger ? (
               /* INDIVIDUAL REP LEDGER */
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border-color)', flexWrap: 'wrap', gap: '1rem' }}>
                   <div>
                     <h3 style={{ color: 'var(--primary)', fontWeight: 800 }}>{selectedRepLedger.representative.name}</h3>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
                       كود الحساب: {selectedRepLedger.representative.code} | هاتف: {selectedRepLedger.representative.phone || 'غير مسجل'} | التوكيل: {selectedRepLedger.representative.agency_name ? `${selectedRepLedger.representative.agency_name} (${selectedRepLedger.representative.agency_code})` : 'بدون توكيل'}
                     </p>
                   </div>
-                  <button className="btn btn-secondary" onClick={() => { setSelectedRepLedger(null); localStorage.removeItem('selectedRepLedgerId'); }}>العودة للقائمة ⬅</button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <button
+                      className={`btn ${repFilterPeriod === 'current_month' ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
+                      onClick={() => {
+                        setRepFilterPeriod('current_month');
+                        handleViewLedger(selectedRepLedger.representative.id, 'current_month');
+                      }}
+                    >
+                      📅 الشهر الحالي
+                    </button>
+                    <button
+                      className={`btn ${repFilterPeriod === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
+                      onClick={() => {
+                        setRepFilterPeriod('all');
+                        handleViewLedger(selectedRepLedger.representative.id, 'all');
+                      }}
+                    >
+                      🌐 كل الفترات
+                    </button>
+                    <button className="btn btn-secondary" onClick={() => { setSelectedRepLedger(null); localStorage.removeItem('selectedRepLedgerId'); }} style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}>العودة للقائمة ⬅</button>
+                  </div>
                 </div>
 
                 <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
@@ -6026,6 +6066,84 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
       {/* REPRESENTATIVE DASHBOARD TAB */}
       {activeTab === 'rep-dashboard' && (
         <div className="rep-dashboard-container" style={{ direction: 'rtl' }}>
+          {/* Period Filter Header Bar */}
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            background: 'var(--panel-bg)', border: '1px solid var(--border-color)',
+            padding: '0.85rem 1.25rem', borderRadius: '16px', marginBottom: '1.25rem',
+            flexWrap: 'wrap', gap: '1rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <span style={{ fontSize: '1.3rem' }}>📅</span>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
+                  عرض التوريد: {repFilterPeriod === 'current_month'
+                    ? `الشهر الحالي (${getArabicMonthName(new Date().getMonth() + 1, new Date().getFullYear())})`
+                    : repFilterPeriod === 'all'
+                    ? 'سجل التوريدات الكلي (جميع الفترات)'
+                    : `شهر ${getArabicMonthName(repFilterMonth, repFilterYear)}`}
+                </div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                  {repFilterPeriod === 'current_month' ? 'يتم عرض توريدات ومعاملات الشهر الحالي فقط' : 'عرض التوريدات والمعاملات حسب الفلتر المختار'}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button
+                className={`btn ${repFilterPeriod === 'current_month' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ padding: '0.4rem 0.8rem', fontSize: '0.82rem' }}
+                onClick={() => {
+                  setRepFilterPeriod('current_month');
+                  loadRepLedger('current_month');
+                }}
+              >
+                📅 الشهر الحالي
+              </button>
+              <button
+                className={`btn ${repFilterPeriod === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ padding: '0.4rem 0.8rem', fontSize: '0.82rem' }}
+                onClick={() => {
+                  setRepFilterPeriod('all');
+                  loadRepLedger('all');
+                }}
+              >
+                🌐 كل الفترات
+              </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginRight: '0.3rem' }}>
+                <select
+                  value={repFilterMonth}
+                  onChange={(e) => {
+                    const m = parseInt(e.target.value);
+                    setRepFilterMonth(m);
+                    setRepFilterPeriod('custom');
+                    loadRepLedger('custom', m, repFilterYear);
+                  }}
+                  style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-primary)' }}
+                >
+                  {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
+                    <option key={m} value={m}>{getArabicMonthName(m, '').trim()}</option>
+                  ))}
+                </select>
+                <select
+                  value={repFilterYear}
+                  onChange={(e) => {
+                    const y = parseInt(e.target.value);
+                    setRepFilterYear(y);
+                    setRepFilterPeriod('custom');
+                    loadRepLedger('custom', repFilterMonth, y);
+                  }}
+                  style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-card)', color: 'var(--text-primary)' }}
+                >
+                  {[2024, 2025, 2026, 2027].map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
           {repLedgerLoading && !repLedgerData ? (
             <div className="no-data-msg">جاري تحميل البيانات... ⏳</div>
           ) : !repLedgerData ? (
@@ -6042,16 +6160,27 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               }}>
                 <div style={{ position: 'absolute', top: '-20px', left: '-20px', width: '120px', height: '120px', background: 'rgba(14,165,233,0.08)', borderRadius: '50%' }} />
                 <div style={{ position: 'relative' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.75rem' }}>
-                    <span style={{ fontSize: '1.8rem' }}>👤</span>
-                    <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#38bdf8', textTransform: 'uppercase' }}>
-                      المندوب: {repLedgerData.representative.name} ({repLedgerData.representative.code})
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <span style={{ fontSize: '1.8rem' }}>👤</span>
+                      <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#38bdf8', textTransform: 'uppercase' }}>
+                        المندوب: {repLedgerData.representative.name} ({repLedgerData.representative.code})
+                      </span>
+                    </div>
+                    <span style={{
+                      background: 'rgba(14,165,233,0.2)', color: '#38bdf8',
+                      padding: '0.3rem 0.8rem', borderRadius: '20px',
+                      fontSize: '0.8rem', fontWeight: 800, border: '1px solid rgba(14,165,233,0.3)'
+                    }}>
+                      📆 {repLedgerData.period === 'all' ? 'السجل الكلي (جميع الفترات)' : `توريدات شهر ${getArabicMonthName(repLedgerData.selectedMonth, repLedgerData.selectedYear)}`}
                     </span>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
                     <div>
-                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.2rem' }}>الرصيد الإجمالي الحالي</div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.2rem' }}>
+                        {repLedgerData.period === 'all' ? 'إجمالي رصيد التوريد الكلي' : `إجمالي توريد شهر ${getArabicMonthName(repLedgerData.selectedMonth, repLedgerData.selectedYear)}`}
+                      </div>
                       <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#0ea5e9', letterSpacing: '-1px', lineHeight: 1 }}>
                         {(repLedgerData.summary.balance ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         <span style={{ fontSize: '1rem', fontWeight: 400, color: '#7dd3fc', marginRight: '0.4rem' }}>ج.م</span>
@@ -6067,11 +6196,11 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1.5rem' }}>
                     <div style={{ background: 'rgba(16,185,129,0.05)', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid rgba(16,185,129,0.15)' }}>
-                      <div style={{ fontSize: '0.75rem', color: '#34d399', marginBottom: '0.1rem' }}>إجمالي التوريدات النقدية</div>
+                      <div style={{ fontSize: '0.75rem', color: '#34d399', marginBottom: '0.1rem' }}>التوريدات النقدية (نقداً)</div>
                       <strong style={{ color: '#10b981', fontSize: '1.1rem' }}>{(repLedgerData.summary.cashDeposits ?? 0).toLocaleString('en-US')} ج.م</strong>
                     </div>
                     <div style={{ background: 'rgba(124,58,237,0.05)', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid rgba(124,58,237,0.15)' }}>
-                      <div style={{ fontSize: '0.75rem', color: '#c4b5fd', marginBottom: '0.1rem' }}>إجمالي تحويلات البنك</div>
+                      <div style={{ fontSize: '0.75rem', color: '#c4b5fd', marginBottom: '0.1rem' }}>تحويلات البنك</div>
                       <strong style={{ color: '#a78bfa', fontSize: '1.1rem' }}>{(repLedgerData.summary.bankTransferDeposits ?? 0).toLocaleString('en-US')} ج.م</strong>
                     </div>
                     <div style={{ background: 'rgba(239,68,68,0.05)', padding: '0.75rem 1rem', borderRadius: '12px', border: '1px solid rgba(239,68,68,0.15)' }}>

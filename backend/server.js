@@ -2016,6 +2016,11 @@ app.get('/api/reps/:id/transactions', async (req, res) => {
   const userRole = req.headers['x-user-role'];
   const userAgencyId = parseInt(req.headers['x-user-agency-id']);
   
+  // Period filtering parameters
+  const period = req.query.period; // 'current_month' (default for rep), 'all', 'custom'
+  const monthParam = req.query.month;
+  const yearParam = req.query.year;
+
   try {
     const pool = getPool();
     
@@ -2048,20 +2053,49 @@ app.get('/api/reps/:id/transactions', async (req, res) => {
     }
     
     const rep = repResult.recordset[0];
+
+    // Determine if filtering by date period
+    // Default for representative role is current month unless period === 'all'
+    const isAllTime = (period === 'all');
+    let startDate = null;
+    let endDate = null;
+    let targetMonth = null;
+    let targetYear = null;
+
+    if (!isAllTime) {
+      const now = new Date();
+      targetYear = yearParam ? parseInt(yearParam) : now.getFullYear();
+      targetMonth = monthParam ? parseInt(monthParam) : (now.getMonth() + 1);
+
+      const startMonthStr = String(targetMonth).padStart(2, '0');
+      startDate = `${targetYear}-${startMonthStr}-01 00:00:00`;
+
+      const nextMonthDate = new Date(targetYear, targetMonth, 1);
+      const nextYear = nextMonthDate.getFullYear();
+      const nextMonthStr = String(nextMonthDate.getMonth() + 1).padStart(2, '0');
+      endDate = `${nextYear}-${nextMonthStr}-01 00:00:00`;
+    }
+
+    const txRequest = pool.request().input('repId', sql.Int, repId);
+
+    let dateFilter = '';
+    if (!isAllTime && startDate && endDate) {
+      dateFilter = ' AND t.date >= @startDate AND t.date < @endDate ';
+      txRequest.input('startDate', sql.VarChar, startDate);
+      txRequest.input('endDate', sql.VarChar, endDate);
+    }
     
-    const txResult = await pool.request()
-      .input('repId', sql.Int, repId)
-      .query(`
-        SELECT t.id, t.type, t.amount, t.date, t.notes, t.receipt_image, t.payment_method, t.withdrawal_sub_type, t.status,
-               b.name AS bank_name,
-               u.username AS creator_name, u2.username AS approver_name
-        FROM transactions t
-        LEFT JOIN banks b ON t.bank_id = b.id
-        LEFT JOIN users u ON t.created_by = u.id
-        LEFT JOIN users u2 ON t.approved_by = u2.id
-        WHERE t.rep_id = @repId AND (t.status IS NULL OR t.status != 'rejected')
-        ORDER BY t.date DESC
-      `);
+    const txResult = await txRequest.query(`
+      SELECT t.id, t.type, t.amount, t.date, t.notes, t.receipt_image, t.payment_method, t.withdrawal_sub_type, t.status,
+             b.name AS bank_name,
+             u.username AS creator_name, u2.username AS approver_name
+      FROM transactions t
+      LEFT JOIN banks b ON t.bank_id = b.id
+      LEFT JOIN users u ON t.created_by = u.id
+      LEFT JOIN users u2 ON t.approved_by = u2.id
+      WHERE t.rep_id = @repId AND (t.status IS NULL OR t.status != 'rejected') ${dateFilter}
+      ORDER BY t.date DESC
+    `);
 
     // Revenue = deposits made BY the rep (توريد نقدية)
     // Disbursements = payments made TO the rep (راتب / سلفة / عمولة) — separate account, NOT deducted from revenue
@@ -2090,6 +2124,9 @@ app.get('/api/reps/:id/transactions', async (req, res) => {
 
     res.json({
       representative: rep,
+      period: isAllTime ? 'all' : 'current_month',
+      selectedMonth: targetMonth,
+      selectedYear: targetYear,
       summary: {
         cashDeposits,
         bankTransferDeposits,
