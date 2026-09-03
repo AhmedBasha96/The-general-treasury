@@ -743,6 +743,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   };
 
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('activeTab') || 'dashboard');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [repsSubTab, setRepsSubTab] = useState('delegates');
   const [showCarModal, setShowCarModal] = useState(false);
 
@@ -2533,243 +2534,265 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   }
 
   return (
-    <div className="app-container">
-      {/* LIVE TOAST ALERT BANNER */}
-      {showToastAlert && (
+    <div className="app-layout">
+      {/* MOBILE BACKDROP OVERLAY */}
+      {mobileMenuOpen && (
         <div
-          className="live-toast-alert"
-          onClick={() => { setShowToastAlert(false); setActiveTab('pending-approvals'); }}
-        >
-          <div className="toast-icon">🔔</div>
-          <div className="toast-body">
-            <h4>إشعار عاجل من النظام!</h4>
-            <p>{toastMessage}</p>
-          </div>
-          <button
-            style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer', marginRight: 'auto' }}
-            onClick={(e) => { e.stopPropagation(); setShowToastAlert(false); }}
-          >
-            ✕
-          </button>
-        </div>
+          className="sidebar-overlay"
+          onClick={() => setMobileMenuOpen(false)}
+        />
       )}
 
-      {/* HEADER */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div className="brand">
-          <span className="brand-logo">💰</span>
-          <div className="brand-text">
+      {/* RIGHT SIDEBAR NAVIGATION */}
+      <aside className={`sidebar-nav ${mobileMenuOpen ? 'open' : ''}`}>
+        {/* BRAND HEADER */}
+        <div className="sidebar-brand">
+          <span className="sidebar-brand-logo">💰</span>
+          <div className="sidebar-brand-text">
             <h1>خزينة التوريد والصرف</h1>
-            <p>نظام ذكي متكامل للمناديب والمعاملات النقدية</p>
+            <p>نظام ذكي للمناديب والنقدية</p>
           </div>
         </div>
 
-        {/* User Info & Logout */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', direction: 'rtl' }}>
-          <div style={{ textAlign: 'left', marginLeft: '1rem' }}>
-            <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>
-              {currentUser.role === 'manager'
-                ? '👑 مدير النظام'
-                : currentUser.role === 'representative'
-                  ? `👤 مندوب: ${currentUser.name || currentUser.username}`
-                  : `👤 محاسب: ${currentUser.username}`}
-            </div>
-            {currentUser.assigned_agency_id && (
-              <div style={{ fontSize: '0.78rem', color: 'var(--primary)' }}>
-                {agencies.find(a => a.id === currentUser.assigned_agency_id)?.name || 'توكيل محدد'}
+        {/* SIDEBAR NAVIGATION MENU */}
+        <div className="sidebar-menu">
+          {currentUser.role === 'representative' ? (
+            <>
+              <button
+                className={`sidebar-tab-btn ${activeTab === 'driver-portal' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('driver-portal'); setMobileMenuOpen(false); }}
+              >
+                <span>🚗 سيارتي والوقود (بوابة السائق)</span>
+              </button>
+              <button
+                className={`sidebar-tab-btn ${activeTab === 'rep-dashboard' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('rep-dashboard'); loadRepLedger(); setMobileMenuOpen(false); }}
+              >
+                <span>📊 كشف حسابي ورصيدي</span>
+              </button>
+              <button
+                className={`sidebar-tab-btn ${activeTab === 'rep-new-tx' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('rep-new-tx'); setTxSuccess(null); setTxError(''); setMobileMenuOpen(false); }}
+              >
+                <span>💸 طلب توريد أو صرف جديد</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                className={`sidebar-tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('dashboard'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); setMobileMenuOpen(false); }}
+              >
+                <span>📊 الرئيسية</span>
+              </button>
+
+              {currentUser.role === 'manager' && (
+                <button
+                  className={`sidebar-tab-btn ${activeTab === 'pending-approvals' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('pending-approvals'); loadPendingTx(); loadRejectedTx(); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); setMobileMenuOpen(false); }}
+                >
+                  <span>📥 طلبات الصرف المعلقة</span>
+                  {pendingTx.length > 0 && (
+                    <span style={{
+                      background: 'var(--danger)', color: '#fff',
+                      fontSize: '0.75rem', fontWeight: 'bold',
+                      padding: '0.15rem 0.45rem', borderRadius: '50px',
+                      boxShadow: '0 0 10px rgba(239,68,68,0.5)',
+                      animation: 'pulse 1.5s infinite'
+                    }}>
+                      {pendingTx.length}
+                    </span>
+                  )}
+                </button>
+              )}
+
+              <button
+                className={`sidebar-tab-btn ${activeTab === 'transactions' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('transactions'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); setMobileMenuOpen(false); }}
+              >
+                <span>📃 المعاملات</span>
+              </button>
+
+              {currentUser.role === 'manager' ? (
+                <button
+                  className={`sidebar-tab-btn ${activeTab === 'agencies' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('agencies'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); setMobileMenuOpen(false); }}
+                >
+                  <span>🏢 التوكيلات</span>
+                </button>
+              ) : (
+                <button
+                  className={`sidebar-tab-btn ${activeTab === 'agencies' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('agencies'); setSelectedRepLedger(null); handleViewAgencyLedger(currentUser.assigned_agency_id); setSelectedBankLedger(null); setSelectedSupervisorReps(null); setMobileMenuOpen(false); }}
+                >
+                  <span>🏢 التوكيل الخاص بي</span>
+                </button>
+              )}
+
+              {(currentUser.role === 'manager' || currentUser.role === 'accountant') && (
+                <button
+                  className={`sidebar-tab-btn ${activeTab === 'banks' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('banks'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); setMobileMenuOpen(false); }}
+                >
+                  <span>🏦 البنوك</span>
+                </button>
+              )}
+
+              {(currentUser.role === 'manager' || currentUser.role === 'accountant') && (
+                <button
+                  className={`sidebar-tab-btn ${activeTab === 'companies' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('companies'); loadCompanies(); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); setMobileMenuOpen(false); }}
+                >
+                  <span>🏢 الشركات</span>
+                </button>
+              )}
+
+              {(currentUser.role === 'manager' || currentUser.role === 'accountant') && (
+                <button
+                  className={`sidebar-tab-btn ${activeTab === 'loans' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('loans'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); setMobileMenuOpen(false); }}
+                >
+                  <span>💳 الأقساط والقروض</span>
+                </button>
+              )}
+
+              {(currentUser.role === 'manager' || currentUser.role === 'accountant') && (
+                <button
+                  className={`sidebar-tab-btn ${activeTab === 'payroll' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('payroll'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); setMobileMenuOpen(false); }}
+                >
+                  <span>💼 نظام الرواتب والأجور</span>
+                </button>
+              )}
+
+              {currentUser.role === 'manager' && (
+                <button
+                  className={`sidebar-tab-btn ${activeTab === 'users' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('users'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); setMobileMenuOpen(false); }}
+                >
+                  <span>👥 المستخدمين</span>
+                </button>
+              )}
+
+              {currentUser.role === 'manager' && (
+                <button
+                  className={`sidebar-tab-btn ${activeTab === 'daily-report' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('daily-report'); handleFetchDailyReport(); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); setMobileMenuOpen(false); }}
+                >
+                  <span>📋 التقرير اليومي</span>
+                </button>
+              )}
+
+              {currentUser.role === 'manager' && (
+                <button
+                  className={`sidebar-tab-btn ${activeTab === 'audit-logs' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('audit-logs'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); setMobileMenuOpen(false); }}
+                >
+                  <span>📜 سجل الحركة والتعديلات</span>
+                </button>
+              )}
+
+              <button
+                className={`sidebar-tab-btn ${activeTab === 'reps' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('reps'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); setMobileMenuOpen(false); }}
+              >
+                <span>👥 الموظفين والمناديب</span>
+              </button>
+
+              <button
+                className={`sidebar-tab-btn ${activeTab === 'car-expenses' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('car-expenses'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); setMobileMenuOpen(false); }}
+              >
+                <span>🚗 مصاريف السيارات</span>
+              </button>
+
+              <button
+                className={`sidebar-tab-btn ${activeTab === 'attendance' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('attendance'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); setMobileMenuOpen(false); }}
+              >
+                <span>🕒 بصمة الحضور ZKTeco</span>
+              </button>
+
+              <button
+                className={`sidebar-tab-btn ${activeTab === 'new-tx' ? 'active' : ''}`}
+                onClick={() => { setActiveTab('new-tx'); setTxSuccess(null); setTxError(''); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); setMobileMenuOpen(false); }}
+              >
+                <span>💸 حركة جديدة</span>
+              </button>
+            </>
+          )}
+        </div>
+      </aside>
+
+      {/* MAIN CONTENT AREA */}
+      <div className="main-layout">
+        {/* TOP HEADER */}
+        <header className="top-header">
+          <div className="top-header-right">
+            <button
+              className="mobile-menu-btn"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              title="القائمة"
+            >
+              ☰
+            </button>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>
+                {currentUser.role === 'manager'
+                  ? '👑 مدير النظام'
+                  : currentUser.role === 'representative'
+                    ? `👤 مندوب: ${currentUser.name || currentUser.username}`
+                    : `👤 محاسب: ${currentUser.username}`}
               </div>
-            )}
+              {currentUser.assigned_agency_id && (
+                <div style={{ fontSize: '0.78rem', color: 'var(--primary)' }}>
+                  {agencies.find(a => a.id === currentUser.assigned_agency_id)?.name || 'توكيل محدد'}
+                </div>
+              )}
+            </div>
           </div>
-          {/* Theme Toggle Button */}
-          <button
-            onClick={toggleTheme}
-            className="btn btn-secondary"
-            style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
-            title={theme === 'dark' ? 'التحويل للوضع الفاتح (نهاراً)' : 'التحويل للوضع الداكن (ليلاً)'}
-          >
-            {theme === 'dark' ? '☀️ الوضع الفاتح' : '🌙 الوضع الداكن'}
-          </button>
 
-          <button
-            className="btn btn-secondary"
-            onClick={handleLogout}
-            style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', color: 'var(--danger)', borderColor: 'rgba(244,63,94,0.2)' }}
-          >
-            تسجيل الخروج 🚪
-          </button>
-        </div>
-      </header>
-
-      {/* Navigation Tabs */}
-      <nav className="tabs-nav" style={{ marginBottom: '2rem' }}>
-        {currentUser.role === 'representative' ? (
-          <>
+          <div className="top-header-left">
             <button
-              className={`tab-btn ${activeTab === 'driver-portal' ? 'active' : ''}`}
-              onClick={() => setActiveTab('driver-portal')}
+              onClick={toggleTheme}
+              className="btn btn-secondary"
+              style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+              title={theme === 'dark' ? 'التحويل للوضع الفاتح (نهاراً)' : 'التحويل للوضع الداكن (ليلاً)'}
             >
-              🚗 سيارتي وتفاصيل الوقود (بوابة السائق)
-            </button>
-            <button
-              className={`tab-btn ${activeTab === 'rep-dashboard' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('rep-dashboard'); loadRepLedger(); }}
-            >
-              📊 كشف حسابي ورصيدي
-            </button>
-            <button
-              className={`tab-btn ${activeTab === 'rep-new-tx' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('rep-new-tx'); setTxSuccess(null); setTxError(''); }}
-            >
-              💸 طلب توريد أو صرف جديد
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('dashboard'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-            >
-              📊 الرئيسية
-            </button>
-
-            {currentUser.role === 'manager' && (
-              <button
-                className={`tab-btn ${activeTab === 'pending-approvals' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('pending-approvals'); loadPendingTx(); loadRejectedTx(); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-                style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-              >
-                📥 طلبات الصرف المعلقة
-                {pendingTx.length > 0 && (
-                  <span style={{
-                    background: 'var(--danger)', color: '#fff',
-                    fontSize: '0.75rem', fontWeight: 'bold',
-                    padding: '0.15rem 0.45rem', borderRadius: '50px',
-                    boxShadow: '0 0 10px rgba(239,68,68,0.5)',
-                    animation: 'pulse 1.5s infinite'
-                  }}>
-                    {pendingTx.length}
-                  </span>
-                )}
-              </button>
-            )}
-
-            <button
-              className={`tab-btn ${activeTab === 'transactions' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('transactions'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-            >
-              📃 المعاملات
-            </button>
-
-            {currentUser.role === 'manager' ? (
-              <button
-                className={`tab-btn ${activeTab === 'agencies' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('agencies'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-              >
-                🏢 التوكيلات
-              </button>
-            ) : (
-              <button
-                className={`tab-btn ${activeTab === 'agencies' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('agencies'); setSelectedRepLedger(null); handleViewAgencyLedger(currentUser.assigned_agency_id); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-              >
-                🏢 التوكيل الخاص بي
-              </button>
-            )}
-
-            {(currentUser.role === 'manager' || currentUser.role === 'accountant') && (
-              <button
-                className={`tab-btn ${activeTab === 'banks' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('banks'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-              >
-                🏦 البنوك
-              </button>
-            )}
-
-            {(currentUser.role === 'manager' || currentUser.role === 'accountant') && (
-              <button
-                className={`tab-btn ${activeTab === 'companies' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('companies'); loadCompanies(); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-              >
-                🏢 الشركات
-              </button>
-            )}
-
-            {(currentUser.role === 'manager' || currentUser.role === 'accountant') && (
-              <button
-                className={`tab-btn ${activeTab === 'loans' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('loans'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-              >
-                💳 الأقساط والقروض
-              </button>
-            )}
-
-            {(currentUser.role === 'manager' || currentUser.role === 'accountant') && (
-              <button
-                className={`tab-btn ${activeTab === 'payroll' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('payroll'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-              >
-                💼 نظام الرواتب والأجور
-              </button>
-            )}
-
-
-            {currentUser.role === 'manager' && (
-              <button
-                className={`tab-btn ${activeTab === 'users' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('users'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-              >
-                👥 المستخدمين
-              </button>
-            )}
-
-            {currentUser.role === 'manager' && (
-              <button
-                className={`tab-btn ${activeTab === 'daily-report' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('daily-report'); handleFetchDailyReport(); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-              >
-                📋 التقرير اليومي
-              </button>
-            )}
-
-            {currentUser.role === 'manager' && (
-              <button
-                className={`tab-btn ${activeTab === 'audit-logs' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('audit-logs'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-              >
-                📜 سجل الحركة والتعديلات
-              </button>
-            )}
-
-            <button
-              className={`tab-btn ${activeTab === 'reps' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('reps'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-            >
-              👥 الموظفين والمناديب
+              {theme === 'dark' ? '☀️ الوضع الفاتح' : '🌙 الوضع الداكن'}
             </button>
 
             <button
-              className={`tab-btn ${activeTab === 'car-expenses' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('car-expenses'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+              className="btn btn-secondary"
+              onClick={handleLogout}
+              style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', color: 'var(--danger)', borderColor: 'rgba(244,63,94,0.2)' }}
             >
-              🚗 مصاريف السيارات
+              تسجيل الخروج 🚪
             </button>
+          </div>
+        </header>
 
-            <button
-              className={`tab-btn ${activeTab === 'attendance' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('attendance'); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
+        {/* MAIN CONTENT BODY */}
+        <main className="main-content">
+          {/* LIVE TOAST ALERT BANNER */}
+          {showToastAlert && (
+            <div
+              className="live-toast-alert"
+              onClick={() => { setShowToastAlert(false); setActiveTab('pending-approvals'); }}
             >
-              🕒 بصمة الحضور ZKTeco
-            </button>
-
-            <button
-              className={`tab-btn ${activeTab === 'new-tx' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('new-tx'); setTxSuccess(null); setTxError(''); setSelectedRepLedger(null); setSelectedAgencyLedger(null); setSelectedBankLedger(null); setSelectedSupervisorReps(null); }}
-            >
-              💸 حركة جديدة
-            </button>
-          </>
-        )}
-      </nav>
+              <div className="toast-icon">🔔</div>
+              <div className="toast-body">
+                <h4>إشعار عاجل من النظام!</h4>
+                <p>{toastMessage}</p>
+              </div>
+              <button
+                style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer', marginRight: 'auto' }}
+                onClick={(e) => { e.stopPropagation(); setShowToastAlert(false); }}
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
       {/* DASHBOARD TAB */}
       {activeTab === 'dashboard' && (
@@ -9097,6 +9120,8 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               </div>
             </div>
           )}
-        </div>
-      );
+        </main>
+      </div>
+    </div>
+  );
 }
