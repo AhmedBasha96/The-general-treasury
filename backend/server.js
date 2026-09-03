@@ -271,7 +271,7 @@ async function getSafeCashBalance(txOrPool, excludeTxId = null) {
     SELECT ISNULL(SUM(amount), 0) AS total 
     FROM transactions 
     WHERE (
-      (type = 'withdrawal' AND (bank_id IS NULL OR payment_method = 'cash' OR payment_method IS NULL OR withdrawal_sub_type = 'bank_deposit') AND (status IN ('approved', 'disbursed') OR status IS NULL))
+      (type = 'withdrawal' AND (bank_id IS NULL OR payment_method = 'cash' OR payment_method IS NULL OR withdrawal_sub_type = 'bank_deposit') AND (status = 'disbursed' OR status IS NULL))
       OR
       (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status = 'approved' OR status IS NULL))
     ) ${excludeClause}
@@ -698,7 +698,7 @@ app.get('/api/dashboard', async (req, res) => {
       FROM transactions t
       ${agencyJoin}
       WHERE (
-        (t.type = 'withdrawal' AND (t.bank_id IS NULL OR t.payment_method = 'cash' OR t.payment_method IS NULL OR t.withdrawal_sub_type = 'bank_deposit') AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
+        (t.type = 'withdrawal' AND (t.bank_id IS NULL OR t.payment_method = 'cash' OR t.payment_method IS NULL OR t.withdrawal_sub_type = 'bank_deposit') AND (t.status = 'disbursed' OR t.status IS NULL))
         OR
         (t.type = 'company_transfer' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND (t.status = 'approved' OR t.status IS NULL))
       )
