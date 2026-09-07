@@ -1749,6 +1749,52 @@ app.delete('/api/supervisors/:id', async (req, res) => {
   }
 });
 
+// 1.96.5 PUT /api/supervisors/:id (Update supervisor details)
+app.put('/api/supervisors/:id', async (req, res) => {
+  const supervisorId = req.params.id;
+  const { name } = req.body;
+  
+  if (!name || name.trim() === '') {
+    return res.status(400).json({ error: 'اسم المشرف مطلوب' });
+  }
+
+  try {
+    const pool = getPool();
+    const checkSup = await pool.request()
+      .input('supervisorId', sql.Int, supervisorId)
+      .query('SELECT id, code FROM supervisors WHERE id = @supervisorId');
+      
+    if (checkSup.recordset.length === 0) {
+      return res.status(404).json({ error: 'المشرف غير موجود' });
+    }
+
+    const supCode = checkSup.recordset[0].code;
+    const cleanName = name.trim();
+
+    // Update supervisors table
+    await pool.request()
+      .input('supervisorId', sql.Int, supervisorId)
+      .input('name', sql.NVarChar, cleanName)
+      .query('UPDATE supervisors SET name = @name WHERE id = @supervisorId');
+
+    // Also update representatives table if linked by code or supervisor_id with supervisor_staff classification
+    await pool.request()
+      .input('name', sql.NVarChar, cleanName)
+      .input('code', sql.VarChar, supCode)
+      .input('supervisorId', sql.Int, supervisorId)
+      .query(`
+        UPDATE representatives
+        SET name = @name
+        WHERE code = @code OR (supervisor_id = @supervisorId AND classification = 'supervisor_staff')
+      `);
+      
+    res.json({ message: 'تم تحديث بيانات المشرف بنجاح' });
+  } catch (error) {
+    console.error('Error updating supervisor:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء تحديث بيانات المشرف' });
+  }
+});
+
 // 1.97 GET /api/supervisors/:id/reps (List of representatives linked to a supervisor)
 app.get('/api/supervisors/:id/reps', async (req, res) => {
   const supervisorId = req.params.id;
@@ -1948,6 +1994,10 @@ app.put('/api/reps/:id', async (req, res) => {
       ? (allow_multi_location ? 1 : 0)
       : (repCls === 'driver' || repCls === 'retail_rep' || repCls === 'wholesale_rep' ? 1 : 0);
 
+    const currentRepResult = await pool.request()
+      .input('repId', sql.Int, repId)
+      .query('SELECT code, classification FROM representatives WHERE id = @repId');
+
     await pool.request()
       .input('repId', sql.Int, repId)
       .input('name', sql.NVarChar, name)
@@ -1970,6 +2020,15 @@ app.put('/api/reps/:id', async (req, res) => {
             allow_multi_location = @allow_multi_location
         WHERE id = @repId
       `);
+
+    // If rep code matches a supervisor or is supervisor_staff, update supervisors table too
+    if (currentRepResult.recordset.length > 0 && currentRepResult.recordset[0].code) {
+      const repCode = currentRepResult.recordset[0].code;
+      await pool.request()
+        .input('code', sql.VarChar, repCode)
+        .input('name', sql.NVarChar, name)
+        .query('UPDATE supervisors SET name = @name WHERE code = @code');
+    }
 
     res.json({ message: 'تم تحديث بيانات الموظف/المندوب بنجاح' });
   } catch (error) {

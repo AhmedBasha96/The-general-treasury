@@ -902,6 +902,8 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   const [repSuccess, setRepSuccess] = useState('');
   const [workZonesList, setWorkZonesList] = useState([]);
   const [editingRepZone, setEditingRepZone] = useState(null);
+  const [editingRep, setEditingRep] = useState(null);
+  const [editingSupervisor, setEditingSupervisor] = useState(null);
 
   // Helper to compute next sequential numeric code
   const getNextCode = (list, defaultCode = '1001', checkUniqueList = null) => {
@@ -1320,6 +1322,65 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
         loadReps();
       } else {
         alert(data.error || 'فشل تحديث نطاق البصمة');
+      }
+    } catch (err) {
+      alert('تعذر الاتصال بالسيرفر');
+    }
+  };
+
+  const handleSaveRepEdit = async (e) => {
+    e.preventDefault();
+    if (!editingRep) return;
+    try {
+      const isRep = (editingRep.classification === 'retail_rep' || editingRep.classification === 'wholesale_rep');
+      const res = await fetch(`/api/reps/${editingRep.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editingRep.name,
+          phone: editingRep.phone || null,
+          type: editingRep.classification === 'wholesale_rep' ? 'wholesale' : 'retail',
+          classification: editingRep.classification || 'retail_rep',
+          agency_id: isRep ? (editingRep.agency_id || null) : null,
+          supervisor_id: isRep ? (editingRep.supervisor_id || null) : null,
+          assigned_work_zone_id: editingRep.assigned_work_zone_id || null,
+          allow_multi_location: editingRep.allow_multi_location ? true : false
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert('✅ تم تحديث بيانات الموظف/المندوب بنجاح!');
+        setEditingRep(null);
+        loadReps();
+        loadSupervisors();
+        loadDashboard();
+      } else {
+        alert(data.error || 'فشل تحديث بيانات الموظف');
+      }
+    } catch (err) {
+      alert('تعذر الاتصال بالسيرفر');
+    }
+  };
+
+  const handleSaveSupervisorEdit = async (e) => {
+    e.preventDefault();
+    if (!editingSupervisor) return;
+    try {
+      const res = await fetch(`/api/supervisors/${editingSupervisor.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editingSupervisor.name
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert('✅ تم تحديث بيانات المشرف بنجاح!');
+        setEditingSupervisor(null);
+        loadSupervisors();
+        loadReps();
+      } else {
+        alert(data.error || 'فشل تحديث بيانات المشرف');
       }
     } catch (err) {
       alert('تعذر الاتصال بالسيرفر');
@@ -2382,6 +2443,13 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                     </button>
                     {currentUser.role === 'manager' && (
                       <>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', borderColor: 'rgba(59, 130, 246, 0.2)' }}
+                          onClick={() => setEditingRep(rep)}
+                        >
+                          ✏️ تعديل
+                        </button>
                         <button
                           className="btn btn-secondary"
                           style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', backgroundColor: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', borderColor: 'rgba(59, 130, 246, 0.2)' }}
@@ -4532,6 +4600,155 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                   <div className="modal-footer" style={{ marginTop: '1.5rem', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                     <button type="button" className="btn btn-secondary" onClick={() => setEditingRepZone(null)}>إلغاء</button>
                     <button type="submit" className="btn btn-primary">حفظ الإعدادات 💾</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* EDIT EMPLOYEE MODAL */}
+          {editingRep && (
+            <div className="modal-overlay" onClick={() => setEditingRep(null)}>
+              <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '550px', direction: 'rtl' }}>
+                <div className="modal-header">
+                  <h3>✏️ تعديل بيانات الموظف: {editingRep.name} ({editingRep.code})</h3>
+                  <button className="modal-close" onClick={() => setEditingRep(null)}>✕</button>
+                </div>
+                <form onSubmit={handleSaveRepEdit}>
+                  <div className="modal-body">
+                    <div className="form-group" style={{ marginBottom: '1rem' }}>
+                      <label>كود الحساب الوظيفي</label>
+                      <input type="text" value={editingRep.code} readOnly disabled style={{ background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed' }} />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '1rem' }}>
+                      <label>تصنيف الحساب الوظيفي <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <select
+                        value={editingRep.classification || 'retail_rep'}
+                        onChange={(e) => {
+                          const cls = e.target.value;
+                          const isRep = (cls === 'retail_rep' || cls === 'wholesale_rep');
+                          setEditingRep({
+                            ...editingRep,
+                            classification: cls,
+                            type: cls === 'wholesale_rep' ? 'wholesale' : 'retail',
+                            agency_id: isRep ? editingRep.agency_id : '',
+                            supervisor_id: isRep ? editingRep.supervisor_id : ''
+                          });
+                        }}
+                        required
+                      >
+                        <option value="retail_rep">🛍️ مندوب تجزئة</option>
+                        <option value="wholesale_rep">💼 مندوب جملة</option>
+                        <option value="supervisor_staff">👔 مشرف</option>
+                        <option value="accountant_staff">💼 محاسب</option>
+                        <option value="admin_staff">👑 موظف إداري</option>
+                        <option value="warehouse_staff">📦 أمين/عامل مخزن</option>
+                        <option value="driver">🚚 سائق</option>
+                        <option value="worker">🔧 عامل</option>
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '1rem' }}>
+                      <label>الاسم بالكامل <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <input
+                        type="text"
+                        value={editingRep.name || ''}
+                        onChange={(e) => setEditingRep({ ...editingRep, name: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '1rem' }}>
+                      <label>رقم الهاتف</label>
+                      <input
+                        type="text"
+                        value={editingRep.phone || ''}
+                        onChange={(e) => setEditingRep({ ...editingRep, phone: e.target.value })}
+                        placeholder="مثال: 010xxxxxxxx"
+                      />
+                    </div>
+                    {(editingRep.classification === 'retail_rep' || editingRep.classification === 'wholesale_rep') && (
+                      <>
+                        <div className="form-group" style={{ marginBottom: '1rem' }}>
+                          <label>التوكيل التابع له المندوب <span style={{ color: 'var(--danger)' }}>*</span></label>
+                          <select
+                            value={editingRep.agency_id || ''}
+                            onChange={(e) => setEditingRep({ ...editingRep, agency_id: e.target.value })}
+                            required
+                          >
+                            <option value="">اختر التوكيل...</option>
+                            {agencies.map(a => <option key={a.id} value={a.id}>{a.name} ({a.code})</option>)}
+                          </select>
+                        </div>
+                        <div className="form-group" style={{ marginBottom: '1rem' }}>
+                          <label>المشرف المسؤول</label>
+                          <select
+                            value={editingRep.supervisor_id || ''}
+                            onChange={(e) => setEditingRep({ ...editingRep, supervisor_id: e.target.value })}
+                          >
+                            <option value="">اختر المشرف (اختياري)...</option>
+                            {supervisors.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
+                          </select>
+                        </div>
+                      </>
+                    )}
+                    <div className="form-group" style={{ marginBottom: '1rem' }}>
+                      <label>📍 موقع / فرع العمل المخصص</label>
+                      <select
+                        value={editingRep.assigned_work_zone_id || ''}
+                        onChange={(e) => setEditingRep({ ...editingRep, assigned_work_zone_id: e.target.value })}
+                      >
+                        <option value="">كل المواقع / غير محدد موقع ثابت...</option>
+                        {workZonesList.map(wz => (
+                          <option key={wz.id} value={wz.id}>📍 {wz.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ background: 'rgba(255,255,255,0.03)', padding: '0.85rem 1rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', cursor: 'pointer', margin: 0, fontWeight: 'bold', fontSize: '0.9rem' }}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(editingRep.allow_multi_location || editingRep.classification === 'driver' || editingRep.classification === 'retail_rep' || editingRep.classification === 'wholesale_rep')}
+                          onChange={(e) => setEditingRep({ ...editingRep, allow_multi_location: e.target.checked })}
+                        />
+                        <span>🗺️ إتاحة إثبات الحضور والتوقيع في مواقع فروع متعددة خلال اليوم</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div className="modal-footer" style={{ marginTop: '1.5rem', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                    <button type="button" className="btn btn-secondary" onClick={() => setEditingRep(null)}>إلغاء</button>
+                    <button type="submit" className="btn btn-primary">حفظ التعديلات 💾</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* EDIT SUPERVISOR MODAL */}
+          {editingSupervisor && (
+            <div className="modal-overlay" onClick={() => setEditingSupervisor(null)}>
+              <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px', direction: 'rtl' }}>
+                <div className="modal-header">
+                  <h3>✏️ تعديل بيانات المشرف: {editingSupervisor.code}</h3>
+                  <button className="modal-close" onClick={() => setEditingSupervisor(null)}>✕</button>
+                </div>
+                <form onSubmit={handleSaveSupervisorEdit}>
+                  <div className="modal-body">
+                    <div className="form-group" style={{ marginBottom: '1rem' }}>
+                      <label>كود المشرف</label>
+                      <input type="text" value={editingSupervisor.code} readOnly disabled style={{ background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed' }} />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '1rem' }}>
+                      <label>اسم المشرف بالكامل <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <input
+                        type="text"
+                        value={editingSupervisor.name || ''}
+                        onChange={(e) => setEditingSupervisor({ ...editingSupervisor, name: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="modal-footer" style={{ marginTop: '1.5rem', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                    <button type="button" className="btn btn-secondary" onClick={() => setEditingSupervisor(null)}>إلغاء</button>
+                    <button type="submit" className="btn btn-primary">حفظ البيانات 💾</button>
                   </div>
                 </form>
               </div>
