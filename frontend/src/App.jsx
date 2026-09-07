@@ -1341,7 +1341,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
           phone: editingRep.phone || null,
           type: editingRep.classification === 'wholesale_rep' ? 'wholesale' : 'retail',
           classification: editingRep.classification || 'retail_rep',
-          agency_id: isRep ? (editingRep.agency_id || null) : null,
+          agency_id: (editingRep.agency_id && editingRep.agency_id !== '') ? parseInt(editingRep.agency_id) : null,
           supervisor_id: isRep ? (editingRep.supervisor_id || null) : null,
           assigned_work_zone_id: editingRep.assigned_work_zone_id || null,
           allow_multi_location: editingRep.allow_multi_location ? true : false
@@ -2406,6 +2406,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
             <tr>
               <th>الكود</th>
               <th>الاسم</th>
+              <th>التوكيل</th>
               <th>الهاتف</th>
               <th>موقع العمل والبصمة</th>
               <th>الرصيد الحالي</th>
@@ -2417,6 +2418,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               <tr key={rep.id}>
                 <td><strong>{rep.code}</strong></td>
                 <td>{rep.name}</td>
+                <td>{rep.agency_name ? `${rep.agency_name} (${rep.agency_code})` : <em style={{ color: 'var(--text-secondary)' }}>—</em>}</td>
                 <td>{rep.phone || '—'}</td>
                 <td>
                   <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
@@ -4491,7 +4493,8 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                         onChange={(e) => {
                           const cls = e.target.value;
                           const isRep = (cls === 'retail_rep' || cls === 'wholesale_rep');
-                          setNewRep({ ...newRep, classification: cls, type: cls === 'wholesale_rep' ? 'wholesale' : 'retail', agency_id: isRep ? newRep.agency_id : '', supervisor_id: isRep ? newRep.supervisor_id : '', password: isRep ? newRep.password : '' });
+                          const canAgency = isRep || cls === 'driver';
+                          setNewRep({ ...newRep, classification: cls, type: cls === 'wholesale_rep' ? 'wholesale' : 'retail', agency_id: canAgency ? newRep.agency_id : '', supervisor_id: isRep ? newRep.supervisor_id : '', password: isRep ? newRep.password : '' });
                         }}
                         required
                       >
@@ -4509,15 +4512,24 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                       <label>الاسم بالكامل <span style={{ color: 'var(--danger)' }}>*</span></label>
                       <input type="text" placeholder="مثال: محمد السيد أحمد" value={newRep.name} onChange={(e) => setNewRep({ ...newRep, name: e.target.value })} required />
                     </div>
+                    {(newRep.classification === 'retail_rep' || newRep.classification === 'wholesale_rep' || newRep.classification === 'driver') && (
+                      <div className="form-group" style={{ marginBottom: '1rem' }}>
+                        <label>
+                          {newRep.classification === 'driver' ? 'التوكيل التابع له السائق' : 'التوكيل التابع له المندوب'}
+                          {(newRep.classification === 'retail_rep' || newRep.classification === 'wholesale_rep') && <span style={{ color: 'var(--danger)' }}> *</span>}
+                        </label>
+                        <select
+                          value={newRep.agency_id}
+                          onChange={(e) => setNewRep({ ...newRep, agency_id: e.target.value })}
+                          required={newRep.classification === 'retail_rep' || newRep.classification === 'wholesale_rep'}
+                        >
+                          <option value="">اختر التوكيل{newRep.classification === 'driver' ? ' (اختياري)...' : '...'}</option>
+                          {agencies.map(a => <option key={a.id} value={a.id}>{a.name} ({a.code})</option>)}
+                        </select>
+                      </div>
+                    )}
                     {(newRep.classification === 'retail_rep' || newRep.classification === 'wholesale_rep') && (
                       <>
-                        <div className="form-group" style={{ marginBottom: '1rem' }}>
-                          <label>التوكيل التابع له المندوب <span style={{ color: 'var(--danger)' }}>*</span></label>
-                          <select value={newRep.agency_id} onChange={(e) => setNewRep({ ...newRep, agency_id: e.target.value })} required>
-                            <option value="">اختر التوكيل...</option>
-                            {agencies.map(a => <option key={a.id} value={a.id}>{a.name} ({a.code})</option>)}
-                          </select>
-                        </div>
                         <div className="form-group" style={{ marginBottom: '1rem' }}>
                           <label>المشرف المسؤول</label>
                           <select value={newRep.supervisor_id} onChange={(e) => setNewRep({ ...newRep, supervisor_id: e.target.value })}>
@@ -4665,30 +4677,33 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                         placeholder="مثال: 010xxxxxxxx"
                       />
                     </div>
+                    {(editingRep.classification === 'retail_rep' || editingRep.classification === 'wholesale_rep' || editingRep.classification === 'driver') && (
+                      <div className="form-group" style={{ marginBottom: '1rem' }}>
+                        <label>
+                          {editingRep.classification === 'driver' ? 'التوكيل التابع له السائق' : 'التوكيل التابع له المندوب'}
+                          {(editingRep.classification === 'retail_rep' || editingRep.classification === 'wholesale_rep') && <span style={{ color: 'var(--danger)' }}> *</span>}
+                        </label>
+                        <select
+                          value={editingRep.agency_id || ''}
+                          onChange={(e) => setEditingRep({ ...editingRep, agency_id: e.target.value })}
+                          required={editingRep.classification === 'retail_rep' || editingRep.classification === 'wholesale_rep'}
+                        >
+                          <option value="">اختر التوكيل{editingRep.classification === 'driver' ? ' (اختياري)...' : '...'}</option>
+                          {agencies.map(a => <option key={a.id} value={a.id}>{a.name} ({a.code})</option>)}
+                        </select>
+                      </div>
+                    )}
                     {(editingRep.classification === 'retail_rep' || editingRep.classification === 'wholesale_rep') && (
-                      <>
-                        <div className="form-group" style={{ marginBottom: '1rem' }}>
-                          <label>التوكيل التابع له المندوب <span style={{ color: 'var(--danger)' }}>*</span></label>
-                          <select
-                            value={editingRep.agency_id || ''}
-                            onChange={(e) => setEditingRep({ ...editingRep, agency_id: e.target.value })}
-                            required
-                          >
-                            <option value="">اختر التوكيل...</option>
-                            {agencies.map(a => <option key={a.id} value={a.id}>{a.name} ({a.code})</option>)}
-                          </select>
-                        </div>
-                        <div className="form-group" style={{ marginBottom: '1rem' }}>
-                          <label>المشرف المسؤول</label>
-                          <select
-                            value={editingRep.supervisor_id || ''}
-                            onChange={(e) => setEditingRep({ ...editingRep, supervisor_id: e.target.value })}
-                          >
-                            <option value="">اختر المشرف (اختياري)...</option>
-                            {supervisors.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
-                          </select>
-                        </div>
-                      </>
+                      <div className="form-group" style={{ marginBottom: '1rem' }}>
+                        <label>المشرف المسؤول</label>
+                        <select
+                          value={editingRep.supervisor_id || ''}
+                          onChange={(e) => setEditingRep({ ...editingRep, supervisor_id: e.target.value })}
+                        >
+                          <option value="">اختر المشرف (اختياري)...</option>
+                          {supervisors.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
+                        </select>
+                      </div>
                     )}
                     <div className="form-group" style={{ marginBottom: '1rem' }}>
                       <label>📍 موقع / فرع العمل المخصص</label>

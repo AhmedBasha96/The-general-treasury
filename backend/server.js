@@ -1920,7 +1920,7 @@ app.post('/api/reps', async (req, res) => {
     const pool = getPool();
     
     // Verify agency exists if provided
-    if (isRep && agency_id) {
+    if (agency_id) {
       const checkAgency = await pool.request()
         .input('agencyId', sql.Int, agency_id)
         .query('SELECT id FROM agencies WHERE id = @agencyId');
@@ -1956,6 +1956,7 @@ app.post('/api/reps', async (req, res) => {
     
     const zoneId = assigned_work_zone_id ? parseInt(assigned_work_zone_id) : null;
     const isMultiLoc = (allow_multi_location || repClassification === 'driver' || repClassification === 'retail_rep' || repClassification === 'wholesale_rep') ? 1 : 0;
+    const repAgencyId = (agency_id && agency_id !== '') ? parseInt(agency_id) : null;
 
     // Insert rep
     await pool.request()
@@ -1964,7 +1965,7 @@ app.post('/api/reps', async (req, res) => {
       .input('phone', sql.VarChar, phone || null)
       .input('type', sql.VarChar, isRep ? repType : 'retail')
       .input('classification', sql.VarChar, repClassification)
-      .input('agency_id', sql.Int, isRep ? agency_id : null)
+      .input('agency_id', sql.Int, repAgencyId)
       .input('supervisor_id', sql.Int, isRep ? supervisor_id || null : null)
       .input('assigned_work_zone_id', sql.Int, zoneId)
       .input('allow_multi_location', sql.Bit, isMultiLoc)
