@@ -967,7 +967,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   }, [supervisors, supervisorsLoaded, newSupervisor.code]);
 
   // New Transaction Form State
-  const [newTx, setNewTx] = useState({ type: 'deposit', repId: '', bankId: '', companyId: '', carId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash' });
+  const [newTx, setNewTx] = useState({ type: 'deposit', repId: '', bankId: '', toBankId: '', companyId: '', carId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash' });
   const [txSourceType, setTxSourceType] = useState('rep'); // 'rep' or 'bank' // 'rep' | 'bank' | 'direct' | 'company'
   const [denominations, setDenominations] = useState({
     denom_200: 0,
@@ -1851,6 +1851,91 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
     setTxError('');
 
     if (!window.confirm('هل أنت متأكد من تسجيل هذه العملية؟')) {
+      return;
+    }
+
+    // Check if we are doing an inter-bank transfer
+    if (newTx.type === 'bank_transfer') {
+      const amountNum = parseFloat(newTx.amount);
+      if (!newTx.amount || isNaN(amountNum) || amountNum <= 0) {
+        const msg = 'يرجى إدخال مبلغ صحيح أكبر من الصفر';
+        setTxError(msg);
+        alert(msg);
+        return;
+      }
+      if (!newTx.bankId) {
+        setTxError('يرجى اختيار الحساب البنكي المصدر للتحويل');
+        return;
+      }
+      if (!newTx.toBankId) {
+        setTxError('يرجى اختيار الحساب البنكي المحول إليه');
+        return;
+      }
+      if (Number(newTx.bankId) === Number(newTx.toBankId)) {
+        setTxError('لا يمكن التحويل من وإلى نفس الحساب البنكي');
+        return;
+      }
+
+      const srcBank = banks.find(b => b.id === Number(newTx.bankId));
+      const srcBal = srcBank ? Number(srcBank.balance || 0) : 0;
+      if (amountNum > srcBal) {
+        const msg = `رصيد البنك المصدر (${srcBal.toLocaleString('en-US')} ج.م) غير كافٍ لإتمام عملية التحويل!`;
+        setTxError(msg);
+        alert(msg);
+        return;
+      }
+
+      try {
+        const requestBody = {
+          type: 'bank_transfer',
+          amount: amountNum,
+          notes: newTx.notes,
+          bank_id: Number(newTx.bankId),
+          to_bank_id: Number(newTx.toBankId)
+        };
+
+        const res = await fetch('/api/transactions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          const srcBankName = srcBank?.name || 'البنك المصدر';
+          const tgtBankName = banks.find(b => b.id === Number(newTx.toBankId))?.name || 'البنك المستلم';
+
+          setTxSuccess({
+            type: 'bank_transfer',
+            amount: amountNum,
+            bankName: srcBankName,
+            toBankName: tgtBankName,
+            notes: newTx.notes || 'تحويل مباشر بين البنوك'
+          });
+
+          if (data.transaction) {
+            handlePrintReceipt(data.transaction);
+          }
+
+          // Reset Form
+          setNewTx({ type: 'deposit', repId: '', bankId: '', toBankId: '', companyId: '', carId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash' });
+          setTxSourceType('rep');
+          setSearchRepQuery('');
+
+          // Refresh Lists
+          loadDashboard();
+          loadReps();
+          loadAgencies();
+          loadBanks();
+          loadCompanies();
+          loadTransactions();
+          loadCarExpenses();
+        } else {
+          setTxError(data.error || 'حدث خطأ أثناء تنفيذ التحويل بين البنوك');
+        }
+      } catch (err) {
+        setTxError('تعذر الاتصال بالسيرفر');
+      }
       return;
     }
 
@@ -3889,6 +3974,10 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                           <div>
                             <div>{tx.payment_method === 'cash' ? '💵 الخزينة المباشرة' : `🏦 ${tx.bank_name || 'البنك'}`} ➔ 🏢 {tx.company_name}</div>
                           </div>
+                        ) : tx.type === 'bank_transfer' ? (
+                          <div>
+                            <div>🏦 {tx.bank_name || 'البنك المصدر'} ➔ 🏦 {tx.to_bank_name || 'البنك المستلم'}</div>
+                          </div>
                         ) : tx.bank_name ? (
                           <span>🏦 {tx.bank_name}</span>
                         ) : (
@@ -3918,7 +4007,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                                             tx.withdrawal_sub_type === 'direct_operational' ? '🔧 تشغيل' :
                                               tx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى' :
                                                 tx.withdrawal_sub_type === 'other' ? '📤 صرف عام' : '📤 صرف'
-                          ) : tx.type === 'company_transfer' ? '🏢 حوالة' : '🔄 تسوية'}
+                          ) : tx.type === 'company_transfer' ? '🏢 حوالة' : tx.type === 'bank_transfer' ? '🏦 تحويل بنكي' : '🔄 تسوية'}
                         </span>
                       </td>
                       <td>
@@ -3930,6 +4019,8 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                           <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', background: 'rgba(139, 92, 246, 0.15)', color: '#c084fc', border: '1px solid rgba(139, 92, 246, 0.25)', fontWeight: 'bold' }}>🔄 تسوية فئات</span>
                         ) : tx.type === 'company_transfer' ? (
                           <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', background: 'rgba(6,182,212,0.15)', color: '#22d3ee', border: '1px solid rgba(6,182,212,0.25)', fontWeight: 'bold' }}>🏢 تم التحويل</span>
+                        ) : tx.type === 'bank_transfer' ? (
+                          <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.25)', fontWeight: 'bold' }}>🏦 تم التحويل بين البنوك</span>
                         ) : tx.type === 'deposit' ? (
                           <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', background: 'var(--success-bg)', color: 'var(--success)', fontWeight: 'bold' }}>✔️ مكتمل - تم التوريد</span>
                         ) : tx.status === 'approved' ? (
@@ -3947,7 +4038,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                         )}
                       </td>
                       <td>
-                        <span className={`amount-${tx.type}`}>
+                        <span className={`amount-${tx.type}`} style={{ color: tx.type === 'bank_transfer' ? '#60a5fa' : '' }}>
                           {(tx.type === 'withdrawal' || tx.type === 'company_transfer') ? '-' : ''}
                           {Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                         </span>
@@ -5445,7 +5536,19 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                     </div>
                   </>
                 )}
-                {txSuccess.type !== 'company_transfer' && txSuccess.type !== 'exchange' && (
+                {txSuccess.type === 'bank_transfer' && (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>البنك المصدر (المرسِل):</span>
+                      <strong>{txSuccess.bankName || '—'}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>البنك المستلم (المحوّل إليه):</span>
+                      <strong style={{ color: 'var(--success)' }}>{txSuccess.toBankName || '—'}</strong>
+                    </div>
+                  </>
+                )}
+                {txSuccess.type !== 'company_transfer' && txSuccess.type !== 'exchange' && txSuccess.type !== 'bank_transfer' && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
                     <span style={{ color: 'var(--text-secondary)' }}>الجهة المعنية:</span>
                     <strong>{txSuccess.repName || 'خزينة مباشرة'}</strong>
@@ -5488,7 +5591,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                     type="button"
                     className={`btn ${newTx.type === 'exchange' ? 'btn-primary' : 'btn-secondary'}`}
                     style={{ flex: 1, minWidth: '120px', background: newTx.type === 'exchange' ? '#7c3aed' : '', boxShadow: newTx.type === 'exchange' ? '0 4px 12px rgba(124, 58, 237, 0.2)' : '' }}
-                    onClick={() => { setNewTx(prev => ({ ...prev, type: 'exchange', repId: '', bankId: '', amount: '', cashAmount: '', bankTransferAmount: '' })); setTxSourceType('rep'); setSearchRepQuery(''); }}
+                    onClick={() => { setNewTx(prev => ({ ...prev, type: 'exchange', repId: '', bankId: '', toBankId: '', amount: '', cashAmount: '', bankTransferAmount: '' })); setTxSourceType('rep'); setSearchRepQuery(''); }}
                   >
                     🔄 فك / تسوية
                   </button>
@@ -5496,15 +5599,86 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                     type="button"
                     className={`btn ${newTx.type === 'company_transfer' ? 'btn-primary' : 'btn-secondary'}`}
                     style={{ flex: 1, minWidth: '120px', background: newTx.type === 'company_transfer' ? '#06b6d4' : '', color: newTx.type === 'company_transfer' ? '#fff' : '', boxShadow: newTx.type === 'company_transfer' ? '0 4px 12px rgba(6, 182, 212, 0.3)' : '' }}
-                    onClick={() => { setNewTx(prev => ({ ...prev, type: 'company_transfer', repId: '', bankId: '', companyId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '' })); setTxSourceType('bank'); setSearchRepQuery(''); }}
+                    onClick={() => { setNewTx(prev => ({ ...prev, type: 'company_transfer', repId: '', bankId: '', toBankId: '', companyId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '' })); setTxSourceType('bank'); setSearchRepQuery(''); }}
                   >
                     🏢 حوالة لشركة
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn ${newTx.type === 'bank_transfer' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ flex: 1, minWidth: '120px', background: newTx.type === 'bank_transfer' ? '#3b82f6' : '', color: '#fff', boxShadow: newTx.type === 'bank_transfer' ? '0 4px 12px rgba(59, 130, 246, 0.3)' : '' }}
+                    onClick={() => { setNewTx(prev => ({ ...prev, type: 'bank_transfer', repId: '', bankId: '', toBankId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '' })); setTxSourceType('bank'); setSearchRepQuery(''); }}
+                  >
+                    🏦 تحويل بين البنوك
                   </button>
                 </div>
               </div>
 
+              {/* Bank-to-Bank Transfer Layout */}
+              {newTx.type === 'bank_transfer' && (
+                <>
+                  <div style={{ marginBottom: '1.5rem', padding: '0.85rem 1rem', background: 'rgba(59, 130, 246, 0.08)', borderRadius: '8px', border: '1px solid rgba(59, 130, 246, 0.3)', color: '#60a5fa', fontSize: '0.9rem' }}>
+                    ℹ️ يتم تخصيص هذه العملية لنقل المبالغ مباشرة من حساب بنكي / محفظة إلى حساب بنكي / محفظة أخرى بدون التأثير على الخزينة العامة.
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                    {/* Source Bank */}
+                    <div className="form-group">
+                      <label>البنك / المحفظة المصدر (المرسِل) <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <select
+                        value={newTx.bankId || ''}
+                        onChange={(e) => setNewTx(prev => ({ ...prev, bankId: e.target.value }))}
+                        required
+                      >
+                        <option value="">اختر الحساب المصدر...</option>
+                        {banks.map(b => (
+                          <option key={b.id} value={b.id}>
+                            {b.name} ({b.code}) — الرصيد: {Number(b.balance || 0).toLocaleString()} ج.م
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Destination Bank */}
+                    <div className="form-group">
+                      <label>البنك / المحفظة المستلمة (المحوّل إليها) <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <select
+                        value={newTx.toBankId || ''}
+                        onChange={(e) => setNewTx(prev => ({ ...prev, toBankId: e.target.value }))}
+                        required
+                      >
+                        <option value="">اختر الحساب المستلم...</option>
+                        {banks.filter(b => String(b.id) !== String(newTx.bankId)).map(b => (
+                          <option key={b.id} value={b.id}>
+                            {b.name} ({b.code}) — {b.account_number}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Transfer Amount */}
+                  <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                    <label>قيمة المبلغ المحول <span style={{ color: 'var(--danger)' }}>*</span></label>
+                    <div style={{ position: 'relative', marginTop: '0.25rem' }}>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        placeholder="0.00"
+                        value={newTx.amount}
+                        onChange={(e) => setNewTx(prev => ({ ...prev, amount: e.target.value }))}
+                        required
+                        style={{ width: '100%', paddingLeft: '3.5rem' }}
+                      />
+                      <span style={{ position: 'absolute', left: '1.2rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontWeight: 'bold' }}>ج.م</span>
+                    </div>
+                  </div>
+                </>
+              )}
+
               {/* Party Type Switcher */}
-              {newTx.type !== 'exchange' && newTx.type !== 'company_transfer' && (
+              {newTx.type !== 'exchange' && newTx.type !== 'company_transfer' && newTx.type !== 'bank_transfer' && (
                 <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                   <label>{newTx.type === 'withdrawal' ? 'جهة الصرف' : 'الجهة المعنية بالعملية'}</label>
                   <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>

@@ -1269,26 +1269,34 @@ app.get('/api/banks', async (req, res) => {
       SELECT 
         b.id, b.code, b.name, b.account_number, b.account_name, b.branch, b.initial_balance, b.created_at,
         ISNULL(SUM(CASE
-          WHEN t.type = 'withdrawal' THEN t.amount
-          WHEN t.type = 'deposit' AND t.payment_method = 'bank_transfer' THEN t.amount
+          WHEN t.type = 'withdrawal' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) THEN t.amount
+          WHEN t.type = 'deposit' AND t.payment_method = 'bank_transfer' AND t.rep_id IS NOT NULL THEN t.amount
+          WHEN t.type = 'bank_transfer' AND t.to_bank_id = b.id THEN t.amount
           ELSE 0 END), 0) AS total_deposits,
         ISNULL(SUM(CASE 
           WHEN t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) THEN t.amount 
+          WHEN t.type = 'deposit' AND t.payment_method = 'bank_transfer' AND t.rep_id IS NULL THEN t.amount
           WHEN t.type = 'company_transfer' THEN t.amount
+          WHEN t.type = 'withdrawal' AND t.payment_method = 'bank_transfer' THEN t.amount
+          WHEN t.type = 'bank_transfer' AND t.bank_id = b.id THEN t.amount
           ELSE 0 END), 0) AS total_withdrawals,
         b.initial_balance + 
         ISNULL(SUM(CASE
           WHEN t.type = 'withdrawal' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) THEN t.amount
-          WHEN t.type = 'deposit' AND t.payment_method = 'bank_transfer' THEN t.amount
+          WHEN t.type = 'deposit' AND t.payment_method = 'bank_transfer' AND t.rep_id IS NOT NULL THEN t.amount
           WHEN t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) THEN -t.amount
+          WHEN t.type = 'deposit' AND t.payment_method = 'bank_transfer' AND t.rep_id IS NULL THEN -t.amount
           WHEN t.type = 'company_transfer' THEN -t.amount
           WHEN t.type = 'withdrawal' AND t.payment_method = 'bank_transfer' THEN -t.amount
+          WHEN t.type = 'bank_transfer' AND t.to_bank_id = b.id THEN t.amount
+          WHEN t.type = 'bank_transfer' AND t.bank_id = b.id THEN -t.amount
           ELSE 0 END), 0) AS balance
       FROM banks b
-      LEFT JOIN transactions t ON b.id = t.bank_id AND (
+      LEFT JOIN transactions t ON (b.id = t.bank_id OR b.id = t.to_bank_id) AND (
          (t.type = 'deposit' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
          OR (t.type = 'withdrawal' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
          OR (t.type = 'company_transfer' AND (t.status = 'approved' OR t.status IS NULL))
+         OR (t.type = 'bank_transfer' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
       )
       GROUP BY b.id, b.code, b.name, b.account_number, b.account_name, b.branch, b.initial_balance, b.created_at
       ORDER BY b.name
@@ -1430,15 +1438,18 @@ app.get('/api/banks/:id/transactions', async (req, res) => {
       .query(`
         SELECT t.id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.status,
                t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
+               t.bank_id, t.to_bank_id,
                r.name AS rep_name, r.code AS rep_code,
                c.name AS company_name, c.code AS company_code,
+               b2.name AS to_bank_name, b2.code AS to_bank_code,
                u.username AS creator_name, u2.username AS approver_name
         FROM transactions t
         LEFT JOIN representatives r ON t.rep_id = r.id
         LEFT JOIN companies c ON t.company_id = c.id
+        LEFT JOIN banks b2 ON t.to_bank_id = b2.id
         LEFT JOIN users u ON t.created_by = u.id
         LEFT JOIN users u2 ON t.approved_by = u2.id
-        WHERE t.bank_id = @bankId AND (t.status IS NULL OR t.status != 'rejected')
+        WHERE (t.bank_id = @bankId OR t.to_bank_id = @bankId) AND (t.status IS NULL OR t.status != 'rejected')
         ORDER BY t.date DESC
       `);
       
@@ -1447,7 +1458,13 @@ app.get('/api/banks/:id/transactions', async (req, res) => {
     let totalWithdrawals = 0; // outflows from bank (cash deposits coming from bank + transfers to companies)
     
     txResult.recordset.forEach(tx => {
-      if (tx.type === 'withdrawal' && (tx.status === 'approved' || tx.status === 'disbursed' || tx.status === null)) {
+      if (tx.type === 'bank_transfer' && (tx.status === 'approved' || tx.status === 'disbursed' || tx.status === null)) {
+        if (Number(tx.to_bank_id) === Number(bankId)) {
+          totalDeposits += Number(tx.amount);
+        } else if (Number(tx.bank_id) === Number(bankId)) {
+          totalWithdrawals += Number(tx.amount);
+        }
+      } else if (tx.type === 'withdrawal' && (tx.status === 'approved' || tx.status === 'disbursed' || tx.status === null)) {
         if (tx.payment_method === 'bank_transfer') {
           totalWithdrawals += Number(tx.amount);
         } else {
@@ -1456,7 +1473,11 @@ app.get('/api/banks/:id/transactions', async (req, res) => {
       } else if (tx.type === 'deposit') {
         if (tx.status === 'approved' || tx.status === 'disbursed' || tx.status === null) {
           if (tx.payment_method === 'bank_transfer') {
-            totalDeposits += Number(tx.amount);
+            if (tx.rep_id) {
+              totalDeposits += Number(tx.amount);
+            } else {
+              totalWithdrawals += Number(tx.amount);
+            }
           } else if (tx.payment_method === 'cash' || !tx.payment_method) {
             totalWithdrawals += Number(tx.amount);
           }
@@ -2310,7 +2331,7 @@ app.get('/api/reports/daily', async (req, res) => {
         .query(`
           SELECT ISNULL(SUM(CASE
             WHEN type = 'withdrawal' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount
-            WHEN type = 'deposit' AND payment_method = 'bank_transfer' THEN amount
+            WHEN type = 'deposit' AND payment_method = 'bank_transfer' AND rep_id IS NOT NULL THEN amount
             ELSE 0 END), 0) AS total
           FROM transactions
           WHERE bank_id = @bankId AND CAST(date AS DATE) < CAST(@startDate AS DATE) AND (
@@ -2324,6 +2345,7 @@ app.get('/api/reports/daily', async (req, res) => {
         .query(`
           SELECT ISNULL(SUM(CASE
             WHEN type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount
+            WHEN type = 'deposit' AND payment_method = 'bank_transfer' AND rep_id IS NULL THEN amount
             WHEN type = 'company_transfer' THEN amount
             WHEN type = 'withdrawal' AND payment_method = 'bank_transfer' THEN amount
             ELSE 0 END), 0) AS total
@@ -2338,7 +2360,7 @@ app.get('/api/reports/daily', async (req, res) => {
 
       // Fetch transfers of this bank during this period
       const dayBankDep = dayTransactions.recordset
-        .filter(t => t.bank_id === bank.id && t.type === 'deposit' && t.payment_method === 'bank_transfer' && (t.status === 'approved' || t.status === 'disbursed' || t.status === null))
+        .filter(t => t.bank_id === bank.id && t.type === 'deposit' && t.payment_method === 'bank_transfer' && t.rep_id && (t.status === 'approved' || t.status === 'disbursed' || t.status === null))
         .reduce((sum, t) => sum + Number(t.amount), 0);
       
       const dayBankWithdrawalFromSafe = dayTransactions.recordset
@@ -2346,7 +2368,7 @@ app.get('/api/reports/daily', async (req, res) => {
         .reduce((sum, t) => sum + Number(t.amount), 0);
 
       const dayBankCashedOut = dayTransactions.recordset
-        .filter(t => t.bank_id === bank.id && t.type === 'deposit' && (t.payment_method === 'cash' || t.payment_method === null) && (t.status === 'approved' || t.status === 'disbursed' || t.status === null))
+        .filter(t => t.bank_id === bank.id && t.type === 'deposit' && ((t.payment_method === 'cash' || t.payment_method === null) || (t.payment_method === 'bank_transfer' && !t.rep_id)) && (t.status === 'approved' || t.status === 'disbursed' || t.status === null))
         .reduce((sum, t) => sum + Number(t.amount), 0);
 
       const dayBankCompanyTransfer = dayTransactions.recordset
@@ -2416,10 +2438,11 @@ app.get('/api/transactions', async (req, res) => {
   try {
     const pool = getPool();
     let query = `
-      SELECT t.id, t.rep_id, t.bank_id, t.company_id, t.car_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
+      SELECT t.id, t.rep_id, t.bank_id, t.to_bank_id, t.company_id, t.car_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
              t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
              r.name AS rep_name, r.code AS rep_code,
              b.name AS bank_name, b.code AS bank_code,
+             b2.name AS to_bank_name, b2.code AS to_bank_code,
              c.name AS company_name, c.code AS company_code,
              car.plate_number AS car_plate_number, car.plate_letters AS car_plate_letters, car.plate_numbers AS car_plate_numbers,
              a.name AS agency_name, a.code AS agency_code,
@@ -2428,6 +2451,7 @@ app.get('/api/transactions', async (req, res) => {
       FROM transactions t
       LEFT JOIN representatives r ON t.rep_id = r.id
       LEFT JOIN banks b ON t.bank_id = b.id
+      LEFT JOIN banks b2 ON t.to_bank_id = b2.id
       LEFT JOIN companies c ON t.company_id = c.id
       LEFT JOIN cars car ON t.car_id = car.id
       LEFT JOIN agencies a ON (r.agency_id = a.id OR t.agency_id = a.id)
@@ -2455,7 +2479,7 @@ app.get('/api/transactions', async (req, res) => {
     }
 
     if (bank_id) {
-      query += ` AND t.bank_id = @bank_id`;
+      query += ` AND (t.bank_id = @bank_id OR t.to_bank_id = @bank_id)`;
       request.input('bank_id', sql.Int, bank_id);
     }
 
@@ -2498,7 +2522,7 @@ app.get('/api/transactions', async (req, res) => {
 });
 // 6. POST /api/transactions (Add deposit with denominations check or withdrawal)
 app.post('/api/transactions', async (req, res) => {
-  const { rep_id, bank_id, agency_id, company_id, type, amount, notes, denominations, payment_method, cash_amount, bank_transfer_amount, receipt_image_bank, withdrawal_sub_type, incomingDenominations, outgoingDenominations, car_id } = req.body;
+  const { rep_id, bank_id, to_bank_id, agency_id, company_id, type, amount, notes, denominations, payment_method, cash_amount, bank_transfer_amount, receipt_image_bank, withdrawal_sub_type, incomingDenominations, outgoingDenominations, car_id } = req.body;
   const userRole = req.headers['x-user-role'];
   const userId = parseInt(req.headers['x-user-id']);
   const userAgencyId = parseInt(req.headers['x-user-agency-id']);
@@ -2507,8 +2531,8 @@ app.post('/api/transactions', async (req, res) => {
     return res.status(400).json({ error: 'نوع العملية مطلوب' });
   }
 
-  if (type !== 'deposit' && type !== 'withdrawal' && type !== 'exchange' && type !== 'company_transfer') {
-    return res.status(400).json({ error: 'نوع العملية غير صالح. يجب أن يكون توريد، صرف، تسوية، أو تحويل لشركة' });
+  if (type !== 'deposit' && type !== 'withdrawal' && type !== 'exchange' && type !== 'company_transfer' && type !== 'bank_transfer') {
+    return res.status(400).json({ error: 'نوع العملية غير صالح. يجب أن يكون توريد، صرف، تسوية، تحويل لشركة، أو تحويل بين البنوك' });
   }
 
   try {
@@ -2545,7 +2569,7 @@ app.post('/api/transactions', async (req, res) => {
       }
     }
 
-    // Determine status (all withdrawals start as 'pending' and require manager approval)
+    // Determine status
     let statusVal = 'approved';
     if (type === 'withdrawal') {
       statusVal = 'pending';
@@ -2555,6 +2579,124 @@ app.post('/api/transactions', async (req, res) => {
       statusVal = (userRole === 'manager' ? 'approved' : 'pending');
     } else if (type === 'company_transfer') {
       statusVal = (userRole === 'manager' ? 'approved' : 'pending');
+    } else if (type === 'bank_transfer') {
+      statusVal = (userRole === 'manager' ? 'approved' : 'pending');
+    }
+
+    // CHECK FOR BANK TRANSFER MODE (Inter-Bank Transfer)
+    if (type === 'bank_transfer') {
+      const amountNum = parseFloat(amount);
+      if (!amount || isNaN(amountNum) || amountNum <= 0) {
+        return res.status(400).json({ error: 'يرجى إدخال مبلغ صحيح أكبر من الصفر' });
+      }
+
+      if (!bank_id || !to_bank_id) {
+        return res.status(400).json({ error: 'يرجى اختيار البنك المصدر والبنك المحول إليه' });
+      }
+
+      if (Number(bank_id) === Number(to_bank_id)) {
+        return res.status(400).json({ error: 'لا يمكن التحويل من وإلى نفس الحساب البنكي' });
+      }
+
+      // Verify source bank exists
+      const srcBankCheck = await pool.request()
+        .input('bankId', sql.Int, bank_id)
+        .query('SELECT id, name FROM banks WHERE id = @bankId');
+
+      if (srcBankCheck.recordset.length === 0) {
+        return res.status(404).json({ error: 'الحساب البنكي المصدر غير موجود' });
+      }
+
+      // Verify target bank exists
+      const tgtBankCheck = await pool.request()
+        .input('toBankId', sql.Int, to_bank_id)
+        .query('SELECT id, name FROM banks WHERE id = @toBankId');
+
+      if (tgtBankCheck.recordset.length === 0) {
+        return res.status(404).json({ error: 'الحساب البنكي المحول إليه غير موجود' });
+      }
+
+      // Check source bank balance
+      const banksRes = await pool.request().query(`
+        SELECT 
+          b.id, b.initial_balance,
+          ISNULL(SUM(CASE
+            WHEN t.type = 'withdrawal' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) THEN t.amount
+            WHEN t.type = 'deposit' AND t.payment_method = 'bank_transfer' AND t.rep_id IS NOT NULL THEN t.amount
+            WHEN t.type = 'bank_transfer' AND t.to_bank_id = b.id THEN t.amount
+            ELSE 0 END), 0) AS total_deposits,
+          ISNULL(SUM(CASE 
+            WHEN t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) THEN t.amount 
+            WHEN t.type = 'deposit' AND t.payment_method = 'bank_transfer' AND t.rep_id IS NULL THEN t.amount
+            WHEN t.type = 'company_transfer' THEN t.amount
+            WHEN t.type = 'withdrawal' AND t.payment_method = 'bank_transfer' THEN t.amount
+            WHEN t.type = 'bank_transfer' AND t.bank_id = b.id THEN t.amount
+            ELSE 0 END), 0) AS total_withdrawals
+        FROM banks b
+        LEFT JOIN transactions t ON (b.id = t.bank_id OR b.id = t.to_bank_id) AND (
+           (t.type = 'deposit' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
+           OR (t.type = 'withdrawal' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
+           OR (t.type = 'company_transfer' AND (t.status = 'approved' OR t.status IS NULL))
+           OR (t.type = 'bank_transfer' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
+        )
+        WHERE b.id = ${Number(bank_id)}
+        GROUP BY b.id, b.initial_balance
+      `);
+
+      if (banksRes.recordset.length > 0) {
+        const bInfo = banksRes.recordset[0];
+        const currentSrcBalance = Number(bInfo.initial_balance) + Number(bInfo.total_deposits) - Number(bInfo.total_withdrawals);
+        if (amountNum > currentSrcBalance) {
+          return res.status(400).json({ error: `رصيد البنك المصدر (${currentSrcBalance.toLocaleString('en-US')} ج.م) غير كافٍ لإتمام التحويل!` });
+        }
+      }
+
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      try {
+        const insertBt = await transaction.request()
+          .input('bank_id', sql.Int, bank_id)
+          .input('to_bank_id', sql.Int, to_bank_id)
+          .input('type', sql.VarChar, 'bank_transfer')
+          .input('payment_method', sql.VarChar, 'bank_transfer')
+          .input('amount', sql.Decimal(18, 2), amountNum)
+          .input('date', sql.DateTime, date)
+          .input('notes', sql.NVarChar, notes || 'تحويل مباشر بين الحسابات البنكية')
+          .input('created_by', sql.Int, isNaN(userId) ? null : userId)
+          .input('status', sql.VarChar, statusVal)
+          .query(`
+            INSERT INTO transactions (bank_id, to_bank_id, type, payment_method, amount, date, notes, status, created_by)
+            OUTPUT INSERTED.id
+            VALUES (@bank_id, @to_bank_id, @type, @payment_method, @amount, @date, @notes, @status, @created_by)
+          `);
+
+        const btId = insertBt.recordset[0].id;
+        await transaction.commit();
+
+        const txDetailsResult = await pool.request()
+          .input('id', sql.Int, btId)
+          .query(`
+            SELECT t.id, t.type, t.payment_method, t.amount, t.date, t.notes, t.status,
+                   t.bank_id, t.to_bank_id,
+                   b.name AS bank_name, b.code AS bank_code,
+                   b2.name AS to_bank_name, b2.code AS to_bank_code,
+                   u.username AS creator_name, u2.username AS approver_name
+            FROM transactions t
+            LEFT JOIN banks b ON t.bank_id = b.id
+            LEFT JOIN banks b2 ON t.to_bank_id = b2.id
+            LEFT JOIN users u ON t.created_by = u.id
+            LEFT JOIN users u2 ON t.approved_by = u2.id
+            WHERE t.id = @id
+          `);
+
+        return res.status(201).json({
+          message: statusVal === 'approved' ? 'تم تسجيل التحويل البنكي بنجاح' : 'تم تقديم طلب التحويل البنكي بنجاح وبانتظار موافقة المدير',
+          transaction: txDetailsResult.recordset[0]
+        });
+      } catch (err) {
+        await transaction.rollback();
+        throw err;
+      }
     }
 
     // CHECK FOR EXCHANGE MODE

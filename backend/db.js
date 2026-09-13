@@ -259,7 +259,8 @@ async function createTables() {
           bank_id INT,
           agency_id INT,
           company_id INT,
-          type VARCHAR(20) NOT NULL CHECK(type IN ('deposit', 'withdrawal', 'exchange', 'company_transfer')),
+          to_bank_id INT,
+          type VARCHAR(20) NOT NULL CHECK(type IN ('deposit', 'withdrawal', 'exchange', 'company_transfer', 'bank_transfer')),
           payment_method VARCHAR(20) DEFAULT 'cash',
           withdrawal_sub_type NVARCHAR(50),
           amount DECIMAL(18, 2) NOT NULL,
@@ -370,7 +371,14 @@ async function createTables() {
           ALTER TABLE transactions ADD CONSTRAINT FK_transactions_companies FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE SET NULL;
         END
 
-        -- Update type constraint to allow 'exchange' and 'company_transfer'
+        -- Add to_bank_id column if missing in existing table (for bank-to-bank transfers)
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'to_bank_id')
+        BEGIN
+          ALTER TABLE transactions ADD to_bank_id INT NULL;
+          ALTER TABLE transactions ADD CONSTRAINT FK_transactions_to_bank FOREIGN KEY (to_bank_id) REFERENCES banks(id) ON DELETE NO ACTION;
+        END
+
+        -- Update type constraint to allow 'exchange', 'company_transfer', and 'bank_transfer'
         DECLARE @ConstraintName NVARCHAR(200)
         SELECT @ConstraintName = dc.name
         FROM sys.check_constraints dc
@@ -382,17 +390,17 @@ async function createTables() {
             DECLARE @Definition NVARCHAR(MAX)
             SELECT @Definition = definition FROM sys.check_constraints WHERE name = @ConstraintName
             
-            IF CHARINDEX('company_transfer', @Definition) = 0
+            IF CHARINDEX('bank_transfer', @Definition) = 0
             BEGIN
                 EXEC('ALTER TABLE transactions DROP CONSTRAINT ' + @ConstraintName)
-                ALTER TABLE transactions ADD CONSTRAINT CK_transactions_type CHECK (type IN ('deposit', 'withdrawal', 'exchange', 'company_transfer'))
+                ALTER TABLE transactions ADD CONSTRAINT CK_transactions_type CHECK (type IN ('deposit', 'withdrawal', 'exchange', 'company_transfer', 'bank_transfer'))
             END
         END
         ELSE
         BEGIN
             IF NOT EXISTS (SELECT * FROM sys.check_constraints WHERE parent_object_id = OBJECT_ID('transactions') AND name = 'CK_transactions_type')
             BEGIN
-                ALTER TABLE transactions ADD CONSTRAINT CK_transactions_type CHECK (type IN ('deposit', 'withdrawal', 'exchange', 'company_transfer'))
+                ALTER TABLE transactions ADD CONSTRAINT CK_transactions_type CHECK (type IN ('deposit', 'withdrawal', 'exchange', 'company_transfer', 'bank_transfer'))
             END
         END
       END
