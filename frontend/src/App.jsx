@@ -2124,11 +2124,22 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
             alert(msg);
             return;
           }
-          if (amountNum > dashboardData.summary.safeBalance) {
-            const msg = `رصيد الخزينة الحالي (${dashboardData.summary.safeBalance.toLocaleString()} ج.م) غير كافٍ لإتمام عملية الإيداع بالبنك!`;
-            setTxError(msg);
-            alert(msg);
-            return;
+          if (newTx.agencyId) {
+            const selectedAgency = agencies.find(a => Number(a.id) === Number(newTx.agencyId));
+            const agencyBal = selectedAgency ? Number(selectedAgency.cash_balance || 0) : 0;
+            if (amountNum > agencyBal) {
+              const msg = `رصيد خزينة توكيل (${selectedAgency?.name || ''}) الحالي (${agencyBal.toLocaleString()} ج.م) غير كافٍ لإتمام عملية الإيداع بالبنك!`;
+              setTxError(msg);
+              alert(msg);
+              return;
+            }
+          } else {
+            if (amountNum > dashboardData.summary.safeBalance) {
+              const msg = `رصيد الخزينة العامة الحالي (${dashboardData.summary.safeBalance.toLocaleString()} ج.م) غير كافٍ لإتمام عملية الإيداع بالبنك!`;
+              setTxError(msg);
+              alert(msg);
+              return;
+            }
           }
         } else if (newTx.payment_method === 'bank_transfer') {
           if (!newTx.bankId) {
@@ -2146,11 +2157,22 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
             return;
           }
         } else {
-          if (amountNum > dashboardData.summary.safeBalance) {
-            const msg = `رصيد الخزينة الحالي (${dashboardData.summary.safeBalance.toLocaleString()} ج.م) غير كافٍ لإتمام عملية الصرف!`;
-            setTxError(msg);
-            alert(msg);
-            return;
+          if (newTx.agencyId) {
+            const selectedAgency = agencies.find(a => Number(a.id) === Number(newTx.agencyId));
+            const agencyBal = selectedAgency ? Number(selectedAgency.cash_balance || 0) : 0;
+            if (amountNum > agencyBal) {
+              const msg = `رصيد خزينة توكيل (${selectedAgency?.name || ''}) الحالي (${agencyBal.toLocaleString()} ج.م) غير كافٍ لإتمام عملية الصرف!`;
+              setTxError(msg);
+              alert(msg);
+              return;
+            }
+          } else {
+            if (amountNum > dashboardData.summary.safeBalance) {
+              const msg = `رصيد الخزينة العامة الحالي (${dashboardData.summary.safeBalance.toLocaleString()} ج.م) غير كافٍ لإتمام عملية الصرف!`;
+              setTxError(msg);
+              alert(msg);
+              return;
+            }
           }
         }
       }
@@ -2212,7 +2234,9 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
           requestBody.rep_id = newTx.repId || null;
         } else if (txSourceType === 'bank') {
           requestBody.bank_id = newTx.bankId || null;
-          requestBody.agency_id = newTx.agencyId || null;
+          requestBody.agency_id = newTx.agencyId ? Number(newTx.agencyId) : null;
+        } else if (txSourceType === 'direct') {
+          requestBody.agency_id = newTx.agencyId ? Number(newTx.agencyId) : null;
         }
 
         // Include denominations for cash deposits
@@ -2246,7 +2270,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
           }
 
           // Reset Form
-          setNewTx({ type: 'deposit', repId: '', bankId: '', companyId: '', carId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash', withdrawal_sub_type: '' });
+          setNewTx({ type: 'deposit', repId: '', bankId: '', toBankId: '', companyId: '', carId: '', agencyId: '', amount: '', cashAmount: '', bankTransferAmount: '', notes: '', payment_method: 'cash', withdrawal_sub_type: '' });
           setTxSourceType('rep');
           setDenominations({
             denom_200: 0,
@@ -6036,14 +6060,48 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                     </div>
                   ) : (
                     <div style={{ marginBottom: '1.5rem', padding: '0.85rem 1rem', background: 'rgba(6, 182, 212, 0.08)', borderRadius: '8px', border: '1px solid rgba(6, 182, 212, 0.3)', color: '#22d3ee', fontSize: '0.9rem' }}>
-                      ℹ️ سيتم خروج المبلغ نقداً من <strong>الخزينة العامة</strong> وإيداعه مباشرة في <strong>الحساب البنكي المختار</strong>.
+                      ℹ️ سيتم خروج المبلغ نقداً من <strong>{newTx.agencyId ? (agencies.find(a => String(a.id) === String(newTx.agencyId))?.name || 'التوكيل المختار') : 'الخزينة العامة'}</strong> وإيداعه مباشرة في <strong>الحساب البنكي المختار</strong>.
+                    </div>
+                  )}
+
+                  {/* Agency Source Selection for Withdrawal / Bank Deposit */}
+                  {(txSourceType === 'bank' || txSourceType === 'direct') && (
+                    <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                      <label>مصدر النقدية (الخزينة العامة أو التوكيل) <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <select
+                        value={newTx.agencyId || ''}
+                        onChange={(e) => setNewTx(prev => ({ ...prev, agencyId: e.target.value }))}
+                      >
+                        <option value="">🏛️ الخزينة العامة (الشركة)</option>
+                        {agencies.map(a => (
+                          <option key={a.id} value={a.id}>
+                            🏢 {a.name} ({a.code}) — رصيد النقدية: {Number(a.cash_balance || 0).toLocaleString()} ج.م
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Display Selected Source Balance Notice */}
+                  {(txSourceType === 'bank' || txSourceType === 'direct') && (
+                    <div style={{ marginBottom: '1.5rem', padding: '0.85rem 1rem', background: 'rgba(14, 165, 233, 0.08)', borderRadius: '8px', border: '1px solid rgba(14, 165, 233, 0.3)', color: '#38bdf8', fontSize: '0.9rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>
+                        ℹ️ مصدر النقدية المحدد: <strong>{newTx.agencyId ? (agencies.find(a => String(a.id) === String(newTx.agencyId))?.name || 'توكيل') : 'الخزينة العامة'}</strong>
+                      </span>
+                      <strong style={{ fontSize: '1rem', color: '#fff' }}>
+                        الرصيد المتاح: {
+                          newTx.agencyId
+                            ? Number(agencies.find(a => String(a.id) === String(newTx.agencyId))?.cash_balance || 0).toLocaleString()
+                            : Number(dashboardData.summary.safeBalance || 0).toLocaleString()
+                        } ج.م
+                      </strong>
                     </div>
                   )}
 
                   {/* Withdrawal Form Layout - Side by Side Grid */}
                   {txSourceType === 'bank' && (
                     <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                      <label>الحساب البنكي المودَع فيه (إيداع نقدية الخزينة) <span style={{ color: 'var(--danger)' }}>*</span></label>
+                      <label>الحساب البنكي المودَع فيه (إيداع نقدية الخزينة/التوكيل) <span style={{ color: 'var(--danger)' }}>*</span></label>
                       <select
                         value={newTx.bankId || ''}
                         onChange={(e) => setNewTx(prev => ({ ...prev, bankId: e.target.value }))}
