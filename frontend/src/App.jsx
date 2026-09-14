@@ -1001,6 +1001,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   const [txError, setTxError] = useState('');
   const [txSuccess, setTxSuccess] = useState(null);
   const [receiptImageBank, setReceiptImageBank] = useState(null); // base64 string for bank transfer receipt
+  const [txSubmitting, setTxSubmitting] = useState(false);
 
   // Transaction Filters State
   const [filters, setFilters] = useState({ type: '', repId: '', bankId: '', startDate: '', endDate: '' });
@@ -1848,11 +1849,15 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
 
   const handleAddTransaction = async (e) => {
     e.preventDefault();
+    if (txSubmitting) return;
     setTxError('');
 
     if (!window.confirm('هل أنت متأكد من تسجيل هذه العملية؟')) {
       return;
     }
+
+    setTxSubmitting(true);
+    try {
 
     // Check if we are doing an inter-bank transfer
     if (newTx.type === 'bank_transfer') {
@@ -2377,6 +2382,9 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
       } catch (err) {
         setTxError('تعذر الاتصال بالسيرفر');
       }
+    }
+    } finally {
+      setTxSubmitting(false);
     }
   };
 
@@ -6465,22 +6473,24 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                   padding: '0.9rem',
                   boxShadow: newTx.type === 'exchange' ? '0 4px 12px rgba(124, 58, 237, 0.2)' : newTx.type === 'company_transfer' ? '0 4px 12px rgba(6, 182, 212, 0.2)' : ''
                 }}
-                disabled={(() => {
+                disabled={txSubmitting || (() => {
                   if (newTx.type !== 'exchange') return false;
                   const incTotal = [200, 100, 50, 20, 10, 5, 1].reduce((sum, d) => sum + (Number(incomingDenominations[`denom_${d}`] || 0) * d), 0);
                   const outTotal = [200, 100, 50, 20, 10, 5, 1].reduce((sum, d) => sum + (Number(outgoingDenominations[`denom_${d}`] || 0) * d), 0);
                   return incTotal === 0 || Math.abs(incTotal - outTotal) > 0.01;
                 })()}
               >
-                {newTx.type === 'deposit'
-                  ? '📥 تأكيد عملية التوريد'
-                  : newTx.type === 'withdrawal'
-                    ? '📤 تأكيد عملية الصرف'
-                    : newTx.type === 'company_transfer'
-                      ? (currentUser.role === 'manager' ? '🏢 تنفيذ الحوالة للشركة' : '🏢 طلب إذن تحويل للشركة')
-                      : currentUser.role === 'manager'
-                        ? '🔄 تنفيذ عملية التسوية والفك'
-                        : '🔄 طلب إذن تسوية وفك فئات'}
+                {txSubmitting
+                  ? '⏳ جاري التسجيل والحفظ...'
+                  : newTx.type === 'deposit'
+                    ? '📥 تأكيد عملية التوريد'
+                    : newTx.type === 'withdrawal'
+                      ? '📤 تأكيد عملية الصرف'
+                      : newTx.type === 'company_transfer'
+                        ? (currentUser.role === 'manager' ? '🏢 تنفيذ الحوالة للشركة' : '🏢 طلب إذن تحويل للشركة')
+                        : currentUser.role === 'manager'
+                          ? '🔄 تنفيذ عملية التسوية والفك'
+                          : '🔄 طلب إذن تسوية وفك فئات'}
               </button>
             </form>
           )}
@@ -6765,50 +6775,52 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
 
           <form onSubmit={async (e) => {
             e.preventDefault();
+            if (txSubmitting) return;
             setTxError('');
             setTxSuccess(null);
-
-            // Build request body
-            let body = {
-              type: newTx.type,
-              notes: newTx.notes
-            };
-
-            if (newTx.type === 'deposit') {
-              const cashAmt = parseFloat(newTx.cashAmount) || 0;
-              const bankAmt = parseFloat(newTx.bankTransferAmount) || 0;
-
-              if (cashAmt <= 0 && bankAmt <= 0) {
-                setTxError('يرجى إدخال مبلغ توريد نقدي أو تحويل بنكي');
-                return;
-              }
-
-              body.cash_amount = cashAmt;
-              body.bank_transfer_amount = bankAmt;
-
-              if (cashAmt > 0) {
-                body.denominations = denominations;
-              }
-
-              if (bankAmt > 0) {
-                if (!newTx.bankId) {
-                  setTxError('يرجى اختيار الحساب البنكي للتوريد بالتحويل');
-                  return;
-                }
-                body.bank_id = newTx.bankId;
-                body.receipt_image_bank = receiptImageBank;
-              }
-            } else {
-              const amountVal = parseFloat(newTx.amount) || 0;
-              if (amountVal <= 0) {
-                setTxError('يرجى إدخال مبلغ الصرف المطلوب');
-                return;
-              }
-              body.amount = amountVal;
-              body.withdrawal_sub_type = newTx.withdrawal_sub_type || 'loan';
-            }
+            setTxSubmitting(true);
 
             try {
+              // Build request body
+              let body = {
+                type: newTx.type,
+                notes: newTx.notes
+              };
+
+              if (newTx.type === 'deposit') {
+                const cashAmt = parseFloat(newTx.cashAmount) || 0;
+                const bankAmt = parseFloat(newTx.bankTransferAmount) || 0;
+
+                if (cashAmt <= 0 && bankAmt <= 0) {
+                  setTxError('يرجى إدخال مبلغ توريد نقدي أو تحويل بنكي');
+                  return;
+                }
+
+                body.cash_amount = cashAmt;
+                body.bank_transfer_amount = bankAmt;
+
+                if (cashAmt > 0) {
+                  body.denominations = denominations;
+                }
+
+                if (bankAmt > 0) {
+                  if (!newTx.bankId) {
+                    setTxError('يرجى اختيار الحساب البنكي للتوريد بالتحويل');
+                    return;
+                  }
+                  body.bank_id = newTx.bankId;
+                  body.receipt_image_bank = receiptImageBank;
+                }
+              } else {
+                const amountVal = parseFloat(newTx.amount) || 0;
+                if (amountVal <= 0) {
+                  setTxError('يرجى إدخال مبلغ الصرف المطلوب');
+                  return;
+                }
+                body.amount = amountVal;
+                body.withdrawal_sub_type = newTx.withdrawal_sub_type || 'loan';
+              }
+
               const res = await fetch('/api/transactions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -6827,6 +6839,8 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               }
             } catch (err) {
               setTxError('تعذر الاتصال بالسيرفر');
+            } finally {
+              setTxSubmitting(false);
             }
           }}>
             {/* Request Type */}
@@ -7060,8 +7074,13 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               type="submit"
               className="btn btn-primary"
               style={{ width: '100%', background: newTx.type === 'deposit' ? 'var(--success)' : 'var(--danger)', fontSize: '1.1rem', padding: '0.9rem' }}
+              disabled={txSubmitting}
             >
-              {newTx.type === 'deposit' ? '📥 تقديم طلب التوريد' : '📤 تقديم طلب إذن الصرف'}
+              {txSubmitting
+                ? '⏳ جاري التقديم...'
+                : newTx.type === 'deposit'
+                  ? '📥 تقديم طلب التوريد'
+                  : '📤 تقديم طلب إذن الصرف'}
             </button>
           </form>
         </div>

@@ -2541,6 +2541,44 @@ app.post('/api/transactions', async (req, res) => {
 
     const targetRepId = (userRole === 'representative') ? userId : (rep_id || null);
 
+    // Debounce / duplicate request protection: check if identical request was processed within last 4 seconds
+    const checkAmount = parseFloat(amount || (cash_amount ? (Number(cash_amount) + Number(bank_transfer_amount || 0)) : 0)) || 0;
+    if (checkAmount > 0) {
+      const dupQuery = await pool.request()
+        .input('dupType', sql.VarChar, type)
+        .input('dupRepId', sql.Int, targetRepId)
+        .input('dupCreatedBy', sql.Int, isNaN(userId) ? null : userId)
+        .input('dupAmount', sql.Decimal(18, 2), checkAmount)
+        .query(`
+          SELECT TOP 1 id FROM transactions WITH (NOLOCK)
+          WHERE type = @dupType
+            AND (rep_id = @dupRepId OR (@dupRepId IS NULL AND rep_id IS NULL))
+            AND (created_by = @dupCreatedBy OR (@dupCreatedBy IS NULL AND created_by IS NULL))
+            AND amount = @dupAmount
+            AND date >= DATEADD(second, -4, GETDATE())
+          ORDER BY id DESC
+        `);
+
+      if (dupQuery.recordset.length > 0) {
+        const existingTxId = dupQuery.recordset[0].id;
+        const txDetailsResult = await pool.request()
+          .input('id', sql.Int, existingTxId)
+          .query(`
+            SELECT t.id, t.type, t.payment_method, t.amount, t.date, t.notes, t.status,
+                   t.rep_id, t.bank_id,
+                   r.name AS rep_name, r.code AS rep_code
+            FROM transactions t
+            LEFT JOIN representatives r ON t.rep_id = r.id
+            WHERE t.id = @id
+          `);
+
+        return res.status(200).json({
+          message: 'تم تسجيل المعاملة بنجاح',
+          transaction: txDetailsResult.recordset[0]
+        });
+      }
+    }
+
     // 1. If targetRepId is provided, verify representative exists
   // Additional validation: if withdrawal is car-related, ensure car_id is provided
   if (type === 'withdrawal' && withdrawal_sub_type && withdrawal_sub_type.startsWith('car')) {
