@@ -2239,6 +2239,10 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
           requestBody.agency_id = newTx.agencyId ? Number(newTx.agencyId) : null;
         }
 
+        if (newTx.bankId) {
+          requestBody.bank_id = Number(newTx.bankId);
+        }
+
         // Include denominations for cash deposits
         requestBody.denominations = newTx.type === 'deposit' ? denominations : null;
 
