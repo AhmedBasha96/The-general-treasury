@@ -1438,7 +1438,7 @@ app.get('/api/banks/:id/transactions', async (req, res) => {
       .query(`
         SELECT t.id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.status, t.withdrawal_sub_type,
                t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
-               t.bank_id, t.to_bank_id,
+               t.rep_id, t.bank_id, t.to_bank_id,
                r.name AS rep_name, r.code AS rep_code,
                c.name AS company_name, c.code AS company_code,
                b1.name AS bank_name, b1.code AS bank_code,
@@ -1475,11 +1475,7 @@ app.get('/api/banks/:id/transactions', async (req, res) => {
       } else if (tx.type === 'deposit') {
         if (tx.status === 'approved' || tx.status === 'disbursed' || tx.status === null) {
           if (tx.payment_method === 'bank_transfer') {
-            if (tx.rep_id) {
-              totalDeposits += Number(tx.amount);
-            } else {
-              totalWithdrawals += Number(tx.amount);
-            }
+            totalDeposits += Number(tx.amount);
           } else if (tx.payment_method === 'cash' || !tx.payment_method) {
             totalWithdrawals += Number(tx.amount);
           }
@@ -2333,7 +2329,7 @@ app.get('/api/reports/daily', async (req, res) => {
         .query(`
           SELECT ISNULL(SUM(CASE
             WHEN type = 'withdrawal' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount
-            WHEN type = 'deposit' AND payment_method = 'bank_transfer' AND rep_id IS NOT NULL THEN amount
+            WHEN type = 'deposit' AND payment_method = 'bank_transfer' THEN amount
             ELSE 0 END), 0) AS total
           FROM transactions
           WHERE bank_id = @bankId AND CAST(date AS DATE) < CAST(@startDate AS DATE) AND (
@@ -2347,7 +2343,6 @@ app.get('/api/reports/daily', async (req, res) => {
         .query(`
           SELECT ISNULL(SUM(CASE
             WHEN type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount
-            WHEN type = 'deposit' AND payment_method = 'bank_transfer' AND rep_id IS NULL THEN amount
             WHEN type = 'company_transfer' THEN amount
             WHEN type = 'withdrawal' AND payment_method = 'bank_transfer' THEN amount
             ELSE 0 END), 0) AS total
@@ -2362,7 +2357,7 @@ app.get('/api/reports/daily', async (req, res) => {
 
       // Fetch transfers of this bank during this period
       const dayBankDep = dayTransactions.recordset
-        .filter(t => t.bank_id === bank.id && t.type === 'deposit' && t.payment_method === 'bank_transfer' && t.rep_id && (t.status === 'approved' || t.status === 'disbursed' || t.status === null))
+        .filter(t => t.bank_id === bank.id && t.type === 'deposit' && t.payment_method === 'bank_transfer' && (t.status === 'approved' || t.status === 'disbursed' || t.status === null))
         .reduce((sum, t) => sum + Number(t.amount), 0);
       
       const dayBankWithdrawalFromSafe = dayTransactions.recordset
@@ -2370,7 +2365,7 @@ app.get('/api/reports/daily', async (req, res) => {
         .reduce((sum, t) => sum + Number(t.amount), 0);
 
       const dayBankCashedOut = dayTransactions.recordset
-        .filter(t => t.bank_id === bank.id && t.type === 'deposit' && ((t.payment_method === 'cash' || t.payment_method === null) || (t.payment_method === 'bank_transfer' && !t.rep_id)) && (t.status === 'approved' || t.status === 'disbursed' || t.status === null))
+        .filter(t => t.bank_id === bank.id && t.type === 'deposit' && (t.payment_method === 'cash' || t.payment_method === null) && (t.status === 'approved' || t.status === 'disbursed' || t.status === null))
         .reduce((sum, t) => sum + Number(t.amount), 0);
 
       const dayBankCompanyTransfer = dayTransactions.recordset

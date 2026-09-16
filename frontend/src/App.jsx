@@ -1659,9 +1659,13 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
         const data = await res.json();
         setSelectedBankLedger(data);
         localStorage.setItem('selectedBankLedgerId', bankId);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'تعذر تحميل كشف حساب هذا البنك');
       }
     } catch (err) {
       console.error('Failed to load bank ledger:', err);
+      alert('حدث خطأ أثناء الاتصال بالسيرفر');
     }
   };
 
@@ -7826,18 +7830,8 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                                   </div>
                                 );
                               } else if (tx.type === 'deposit') {
-                                if (tx.payment_method === 'bank_transfer') {
-                                  if (tx.rep_id) {
-                                    isOutflow = false;
-                                    impactLabel = '📈 إضافة (توريد مندوب)';
-                                  } else {
-                                    isOutflow = true;
-                                    impactLabel = '📉 خصم (سحب من البنك)';
-                                  }
-                                } else {
-                                  isOutflow = true;
-                                  impactLabel = '📉 خصم (تحويل نقدية للخزينة)';
-                                }
+                                isOutflow = false;
+                                impactLabel = (tx.rep_id || tx.rep_name) ? '📈 إضافة (توريد مندوب)' : '📈 إضافة (إيداع بنكي)';
                                 typeBadge = (
                                   <span className="badge badge-deposit">
                                     📥 توريد إيداع
