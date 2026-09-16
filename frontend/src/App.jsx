@@ -7830,8 +7830,13 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                                   </div>
                                 );
                               } else if (tx.type === 'deposit') {
-                                isOutflow = false;
-                                impactLabel = (tx.rep_id || tx.rep_name) ? '📈 إضافة (توريد مندوب)' : '📈 إضافة (إيداع بنكي)';
+                                if (tx.payment_method === 'bank_transfer') {
+                                  isOutflow = false;
+                                  impactLabel = (tx.rep_id || tx.rep_name) ? '📈 إضافة (توريد مندوب)' : '📈 إضافة (إيداع بنكي)';
+                                } else {
+                                  isOutflow = true;
+                                  impactLabel = '📉 خصم (تحويل نقدية للخزينة)';
+                                }
                                 typeBadge = (
                                   <span className="badge badge-deposit">
                                     📥 توريد إيداع
