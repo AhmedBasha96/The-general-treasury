@@ -1294,7 +1294,7 @@ app.get('/api/banks', async (req, res) => {
       FROM banks b
       LEFT JOIN transactions t ON (b.id = t.bank_id OR b.id = t.to_bank_id) AND (
          (t.type = 'deposit' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
-         OR (t.type = 'withdrawal' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
+         OR (t.type = 'withdrawal' AND (t.status = 'disbursed' OR t.status IS NULL))
          OR (t.type = 'company_transfer' AND (t.status = 'approved' OR t.status IS NULL))
          OR (t.type = 'bank_transfer' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
       )
@@ -1464,7 +1464,7 @@ app.get('/api/banks/:id/transactions', async (req, res) => {
         } else if (Number(tx.bank_id) === Number(bankId)) {
           totalWithdrawals += Number(tx.amount);
         }
-      } else if (tx.type === 'withdrawal' && (tx.status === 'approved' || tx.status === 'disbursed' || tx.status === null)) {
+      } else if (tx.type === 'withdrawal' && (tx.status === 'disbursed' || tx.status === null)) {
         if (tx.payment_method === 'bank_transfer') {
           totalWithdrawals += Number(tx.amount);
         } else {
@@ -1849,10 +1849,10 @@ app.get('/api/supervisors/:id/reps', async (req, res) => {
       SELECT r.id, r.code, r.name, r.phone, r.type,
              a.name AS agency_name, a.code AS agency_code,
              ISNULL(SUM(CASE WHEN t.type = 'deposit' THEN t.amount WHEN t.type = 'withdrawal' THEN -t.amount ELSE 0 END), 0) AS balance,
-             ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND t.withdrawal_sub_type LIKE 'car%' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS total_car_expenses,
-             ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND t.withdrawal_sub_type = 'car_gas' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS gas_total,
-             ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND t.withdrawal_sub_type = 'car_oil' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS oil_total,
-             ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND (t.withdrawal_sub_type NOT IN ('car_gas', 'car_oil') AND t.withdrawal_sub_type LIKE 'car%') AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS other_total
+             ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND t.withdrawal_sub_type LIKE 'car%' AND (t.status = 'disbursed' OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS total_car_expenses,
+             ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND t.withdrawal_sub_type = 'car_gas' AND (t.status = 'disbursed' OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS gas_total,
+             ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND t.withdrawal_sub_type = 'car_oil' AND (t.status = 'disbursed' OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS oil_total,
+             ISNULL(SUM(CASE WHEN t.type = 'withdrawal' AND (t.withdrawal_sub_type NOT IN ('car_gas', 'car_oil') AND t.withdrawal_sub_type LIKE 'car%') AND (t.status = 'disbursed' OR t.status IS NULL) THEN t.amount ELSE 0 END), 0) AS other_total
       FROM representatives r
       LEFT JOIN agencies a ON r.agency_id = a.id
       LEFT JOIN transactions t ON r.id = t.rep_id AND (
@@ -2284,13 +2284,13 @@ app.get('/api/reports/daily', async (req, res) => {
         SELECT 
           ISNULL(SUM(CASE WHEN type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount ELSE 0 END), 0) AS total_deposits,
           ISNULL(SUM(CASE 
-            WHEN (type = 'withdrawal' AND (bank_id IS NULL OR payment_method = 'cash' OR payment_method IS NULL OR withdrawal_sub_type = 'bank_deposit') AND (status IN ('approved', 'disbursed') OR status IS NULL))
+            WHEN (type = 'withdrawal' AND (bank_id IS NULL OR payment_method = 'cash' OR payment_method IS NULL OR withdrawal_sub_type = 'bank_deposit') AND (status = 'disbursed' OR status IS NULL))
               OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved', 'disbursed') OR status IS NULL))
             THEN amount ELSE 0 END), 0) AS total_withdrawals
         FROM transactions
         WHERE CAST(date AS DATE) < CAST(@startDate AS DATE) AND (
           (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
-          OR (type = 'withdrawal' AND (bank_id IS NULL OR payment_method = 'cash' OR payment_method IS NULL OR withdrawal_sub_type = 'bank_deposit') AND (status IN ('approved', 'disbursed') OR status IS NULL))
+          OR (type = 'withdrawal' AND (bank_id IS NULL OR payment_method = 'cash' OR payment_method IS NULL OR withdrawal_sub_type = 'bank_deposit') AND (status = 'disbursed' OR status IS NULL))
           OR (type = 'company_transfer' AND (payment_method = 'cash' OR payment_method IS NULL) AND (status IN ('approved', 'disbursed') OR status IS NULL))
         )
       `);
@@ -2336,7 +2336,7 @@ app.get('/api/reports/daily', async (req, res) => {
           FROM transactions
           WHERE bank_id = @bankId AND CAST(date AS DATE) < CAST(@startDate AS DATE) AND (
             (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
-            OR (type = 'withdrawal' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+            OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
           )
         `);
       const bankBeforeWd = await pool.request()
@@ -2353,7 +2353,7 @@ app.get('/api/reports/daily', async (req, res) => {
           WHERE bank_id = @bankId AND CAST(date AS DATE) < CAST(@startDate AS DATE) AND (
             (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
             OR (type = 'company_transfer' AND (status = 'approved' OR status IS NULL))
-            OR (type = 'withdrawal' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+            OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
           )
         `);
       const openingBankBalance = Number(bank.initial_balance) + Number(bankBeforeDep.recordset[0].total) - Number(bankBeforeWd.recordset[0].total);
@@ -2376,7 +2376,7 @@ app.get('/api/reports/daily', async (req, res) => {
         .reduce((sum, t) => sum + Number(t.amount), 0);
 
       const dayBankExpenseWithdrawal = dayTransactions.recordset
-        .filter(t => t.bank_id === bank.id && t.type === 'withdrawal' && t.payment_method === 'bank_transfer' && (t.status === 'approved' || t.status === 'disbursed' || t.status === null))
+        .filter(t => t.bank_id === bank.id && t.type === 'withdrawal' && t.payment_method === 'bank_transfer' && (t.status === 'disbursed' || t.status === null))
         .reduce((sum, t) => sum + Number(t.amount), 0);
 
       const totalDepositsThisDay = dayBankDep + dayBankWithdrawalFromSafe;
@@ -2401,7 +2401,7 @@ app.get('/api/reports/daily', async (req, res) => {
       .reduce((sum, t) => sum + Number(t.amount), 0);
     const dayCashWithdrawals = dayTransactions.recordset
       .filter(t => 
-        (t.type === 'withdrawal' && (!t.bank_id || t.payment_method === 'cash' || t.payment_method === null || t.withdrawal_sub_type === 'bank_deposit') && (t.status === 'approved' || t.status === 'disbursed' || t.status === null))
+        (t.type === 'withdrawal' && (!t.bank_id || t.payment_method === 'cash' || t.payment_method === null || t.withdrawal_sub_type === 'bank_deposit') && (t.status === 'disbursed' || t.status === null))
         || (t.type === 'company_transfer' && (!t.bank_id || t.payment_method === 'cash' || t.payment_method === null) && (t.status === 'approved' || t.status === 'disbursed' || t.status === null))
       )
       .reduce((sum, t) => sum + Number(t.amount), 0);
@@ -2673,7 +2673,7 @@ app.post('/api/transactions', async (req, res) => {
         FROM banks b
         LEFT JOIN transactions t ON (b.id = t.bank_id OR b.id = t.to_bank_id) AND (
            (t.type = 'deposit' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
-           OR (t.type = 'withdrawal' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
+           OR (t.type = 'withdrawal' AND (t.status = 'disbursed' OR t.status IS NULL))
            OR (t.type = 'company_transfer' AND (t.status = 'approved' OR t.status IS NULL))
            OR (t.type = 'bank_transfer' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
         )
@@ -3158,7 +3158,7 @@ app.post('/api/transactions', async (req, res) => {
             WHERE bank_id = @bankId AND (
               (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
               OR (type = 'company_transfer' AND (status = 'approved' OR status IS NULL))
-              OR (type = 'withdrawal' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+              OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
             )
           `);
         const bankRes = await transaction.request()
@@ -3468,7 +3468,7 @@ app.post('/api/transactions/:id/approve', async (req, res) => {
               WHERE bank_id = @bankId AND (
                 (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
                 OR (type = 'company_transfer' AND (status = 'approved' OR status IS NULL))
-                OR (type = 'withdrawal' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+                OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
               )
             `);
           const bankRes = await transaction.request()
@@ -3845,7 +3845,7 @@ app.post('/api/transactions/:id/disburse', async (req, res) => {
             WHERE bank_id = @bankId AND (
               (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
               OR (type = 'company_transfer' AND (status = 'approved' OR status IS NULL))
-              OR (type = 'withdrawal' AND (status IN ('approved', 'disbursed') OR status IS NULL))
+              OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
             )
           `);
         const bankRes = await transaction.request()
