@@ -871,6 +871,7 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
   const [selectedRepLedger, setSelectedRepLedger] = useState(null); // Detailed statement modal/view
   const [selectedAgencyLedger, setSelectedAgencyLedger] = useState(null); // Detailed agency ledger view
   const [selectedBankLedger, setSelectedBankLedger] = useState(null); // Detailed bank ledger view
+  const [bankLedgerFilters, setBankLedgerFilters] = useState({ type: '', startDate: '', endDate: '', search: '' });
   const [selectedSupervisorReps, setSelectedSupervisorReps] = useState(null); // Detailed supervisor reps view
   const [selectedCarLedger, setSelectedCarLedger] = useState(null); // Detailed car ledger view
   const [carLedgerLoading, setCarLedgerLoading] = useState(false);
@@ -7562,156 +7563,364 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
               {selectedBankLedger ? (
                 /* INDIVIDUAL BANK LEDGER */
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                  {/* Bank Header Info Banner */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.03)', padding: '1.2rem', borderRadius: '16px', border: '1px solid var(--border-color)', flexWrap: 'wrap', gap: '1rem' }}>
                     <div>
-                      <h3 style={{ color: 'var(--primary)', fontWeight: 800 }}>{selectedBankLedger.bank.name}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.3rem' }}>
+                        <span style={{ fontSize: '1.6rem' }}>🏦</span>
+                        <h3 style={{ color: 'var(--primary)', fontWeight: 800, margin: 0, fontSize: '1.3rem' }}>
+                          {selectedBankLedger.bank.name}
+                        </h3>
                         {currentUser.role === 'manager' && (
                           <button
                             className="btn btn-secondary btn-xs"
-                            style={{ padding: '0.15rem 0.4rem', fontSize: '0.65rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)', marginRight: '10px' }}
+                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.7rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
                             onClick={() => handleDeleteBank(selectedBankLedger.bank.id, selectedBankLedger.bank.name)}
                           >
-                            🗑️ حذف
+                            🗑️ حذف الحساب
                           </button>
                         )}
-                      </h3>
-                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                        كود الحساب: {selectedBankLedger.bank.code} | رقم الحساب: {selectedBankLedger.bank.account_number}
-                        {selectedBankLedger.bank.account_name && ` | اسم الحساب: ${selectedBankLedger.bank.account_name}`}
-                        {selectedBankLedger.bank.branch && ` | الفرع: ${selectedBankLedger.bank.branch}`}
+                      </div>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: 0 }}>
+                        <strong>كود البنك:</strong> {selectedBankLedger.bank.code} | <strong>رقم الحساب:</strong> <code>{selectedBankLedger.bank.account_number}</code>
+                        {selectedBankLedger.bank.account_name && <span> | <strong>اسم الحساب:</strong> {selectedBankLedger.bank.account_name}</span>}
+                        {selectedBankLedger.bank.branch && <span> | <strong>الفرع:</strong> {selectedBankLedger.bank.branch}</span>}
                       </p>
                     </div>
-                    <button className="btn btn-secondary" onClick={() => { setSelectedBankLedger(null); localStorage.removeItem('selectedBankLedgerId'); }}>العودة للقائمة ⬅</button>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', fontWeight: 'bold' }}
+                      onClick={() => { setSelectedBankLedger(null); localStorage.removeItem('selectedBankLedgerId'); }}
+                    >
+                      ⬅️ العودة للقائمة العامة للبنوك
+                    </button>
                   </div>
 
-                  <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', marginBottom: '1.5rem' }}>
-                    <div className="metric-card balance" style={{ padding: '1rem' }}>
-                      <span className="metric-title" style={{ fontSize: '0.8rem' }}>الرصيد الافتتاحي</span>
-                      <span className="metric-value currency" style={{ fontSize: '1.3rem' }}>{Number(selectedBankLedger.bank.initial_balance).toLocaleString()} ج.م</span>
+                  {/* Summary Metrics Cards */}
+                  <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1.25rem', marginBottom: '1.5rem' }}>
+                    <div className="metric-card balance" style={{ padding: '1rem 1.25rem' }}>
+                      <span className="metric-title" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>الرصيد الافتتاحي</span>
+                      <span className="metric-value currency" style={{ fontSize: '1.35rem', fontWeight: 800 }}>
+                        {Number(selectedBankLedger.bank.initial_balance).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
+                      </span>
                     </div>
-                    <div className="metric-card deposits" style={{ padding: '1rem' }}>
-                      <span className="metric-title" style={{ fontSize: '0.8rem' }}>إجمالي الإيداعات</span>
-                      <span className="metric-value currency" style={{ fontSize: '1.3rem' }}>{selectedBankLedger.summary.totalDeposits.toLocaleString()} ج.م</span>
+                    <div className="metric-card deposits" style={{ padding: '1rem 1.25rem' }}>
+                      <span className="metric-title" style={{ fontSize: '0.8rem', color: 'var(--success)' }}>📥 إجمالي الإيداعات</span>
+                      <span className="metric-value currency" style={{ fontSize: '1.35rem', color: 'var(--success)', fontWeight: 800 }}>
+                        {Number(selectedBankLedger.summary.totalDeposits).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
+                      </span>
                     </div>
-                    <div className="metric-card withdrawals" style={{ padding: '1rem' }}>
-                      <span className="metric-title" style={{ fontSize: '0.8rem' }}>إجمالي السحوبات</span>
-                      <span className="metric-value currency" style={{ fontSize: '1.3rem' }}>{selectedBankLedger.summary.totalWithdrawals.toLocaleString()} ج.م</span>
+                    <div className="metric-card withdrawals" style={{ padding: '1rem 1.25rem' }}>
+                      <span className="metric-title" style={{ fontSize: '0.8rem', color: 'var(--danger)' }}>📤 إجمالي المسحوبات والتحويلات</span>
+                      <span className="metric-value currency" style={{ fontSize: '1.35rem', color: 'var(--danger)', fontWeight: 800 }}>
+                        {Number(selectedBankLedger.summary.totalWithdrawals).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
+                      </span>
                     </div>
-                    <div className="metric-card balance" style={{ padding: '1rem', background: 'var(--success-bg)' }}>
-                      <span className="metric-title" style={{ fontSize: '0.8rem' }}>الرصيد الحالي</span>
-                      <span className="metric-value currency" style={{ fontSize: '1.3rem', color: 'var(--success)' }}>{selectedBankLedger.summary.balance.toLocaleString()} ج.م</span>
+                    <div className="metric-card balance" style={{ padding: '1rem 1.25rem', background: 'rgba(34, 197, 94, 0.08)', border: '1px solid rgba(34, 197, 94, 0.25)' }}>
+                      <span className="metric-title" style={{ fontSize: '0.8rem', color: 'var(--success)', fontWeight: 'bold' }}>💰 الرصيد البنكي الحالي</span>
+                      <span className="metric-value currency" style={{ fontSize: '1.35rem', color: 'var(--success)', fontWeight: 900 }}>
+                        {Number(selectedBankLedger.summary.balance).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
+                      </span>
                     </div>
                   </div>
 
-                  <div className="table-container">
-                    {selectedBankLedger.transactions.length === 0 ? (
-                      <div className="no-data-msg">لم يتم تسجيل أي تحويلات نقدية لهذا الحساب البنكي بعد.</div>
-                    ) : (
-                      <div>
-                        {/* BANK TRANSFER (CASH) transactions - highlighted section */}
-                        {selectedBankLedger.transactions.filter(tx => tx.payment_method === 'bank_transfer').length > 0 && (
-                          <div style={{ marginBottom: '1.5rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', padding: '0.6rem 1rem', background: 'rgba(124,58,237,0.08)', borderRadius: '8px', border: '1px solid rgba(124,58,237,0.2)' }}>
-                              <span style={{ fontSize: '1.1rem' }}>🏦</span>
-                              <strong style={{ color: '#a78bfa' }}>تحويلات الكاش البنكية</strong>
-                              <span style={{ marginRight: 'auto', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                                {selectedBankLedger.transactions.filter(tx => tx.payment_method === 'bank_transfer').length} عملية
-                              </span>
-                            </div>
-                            <div style={{ display: 'grid', gap: '1rem' }}>
-                              {selectedBankLedger.transactions.filter(tx => tx.payment_method === 'bank_transfer').map(tx => (
-                                <div key={tx.id} style={{ background: 'rgba(124,58,237,0.05)', border: '1px solid rgba(124,58,237,0.15)', borderRadius: '12px', padding: '1rem', display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-                                  {/* Receipt image */}
-                                  {tx.receipt_image ? (
-                                    <div style={{ flexShrink: 0 }}>
-                                      <img
-                                        src={tx.receipt_image}
-                                        alt="إيصال التحويل"
-                                        style={{ width: '90px', height: '70px', borderRadius: '8px', objectFit: 'cover', border: '1px solid rgba(124,58,237,0.3)', cursor: 'pointer' }}
-                                        onClick={() => setActiveImageModal(tx.receipt_image)}
-                                        title="اضغط لعرض الصورة بالحجم الكامل"
-                                      />
-                                    </div>
-                                  ) : (
-                                    <div style={{ flexShrink: 0, width: '90px', height: '70px', borderRadius: '8px', border: '1px dashed rgba(124,58,237,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '1.5rem' }}>📄</div>
-                                  )}
-                                  {/* Details */}
-                                  <div style={{ flex: 1 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.4rem' }}>
-                                      <span style={{ color: '#a78bfa', fontWeight: 700, fontSize: '1rem' }}>
-                                        {Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
-                                      </span>
-                                      <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{new Date(tx.date).toLocaleString('en-US')}</span>
-                                    </div>
-                                    {tx.rep_name && (
-                                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.3rem' }}>
-                                        👤 المندوب: <strong>{tx.rep_name}</strong> ({tx.rep_code})
-                                      </div>
-                                    )}
-                                    {tx.notes && (
-                                      <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.03)', padding: '0.3rem 0.5rem', borderRadius: '4px' }}>
-                                        📝 {tx.notes}
-                                      </div>
-                                    )}
-                                    {!tx.receipt_image && (
-                                      <div style={{ marginTop: '0.4rem', fontSize: '0.75rem', color: 'rgba(124,58,237,0.5)', fontStyle: 'italic' }}>لا يوجد إيصال مرفق</div>
+                  {/* Filter Controls Bar */}
+                  <form className="filter-bar" onSubmit={(e) => e.preventDefault()} style={{ marginBottom: '1.25rem' }}>
+                    <div className="form-group" style={{ minWidth: '170px' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>نوع المعاملة</label>
+                      <select
+                        value={bankLedgerFilters.type}
+                        onChange={(e) => setBankLedgerFilters({ ...bankLedgerFilters, type: e.target.value })}
+                        style={{ fontSize: '0.85rem' }}
+                      >
+                        <option value="">كل أنواع الحركات</option>
+                        <option value="company_transfer">🏢 تحويلات الشركات فقط</option>
+                        <option value="deposit">📥 التوريدات والإيداعات البنكية</option>
+                        <option value="withdrawal">📤 المصروفات والسحوبات</option>
+                        <option value="bank_transfer">🏦 التحويلات بين البنوك</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group" style={{ minWidth: '140px' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>من تاريخ</label>
+                      <input
+                        type="date"
+                        value={bankLedgerFilters.startDate}
+                        onChange={(e) => setBankLedgerFilters({ ...bankLedgerFilters, startDate: e.target.value })}
+                        style={{ fontSize: '0.85rem' }}
+                      />
+                    </div>
+
+                    <div className="form-group" style={{ minWidth: '140px' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>إلى تاريخ</label>
+                      <input
+                        type="date"
+                        value={bankLedgerFilters.endDate}
+                        onChange={(e) => setBankLedgerFilters({ ...bankLedgerFilters, endDate: e.target.value })}
+                        style={{ fontSize: '0.85rem' }}
+                      />
+                    </div>
+
+                    <div className="form-group" style={{ flex: 1, minWidth: '200px' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>بحث سريع (الشركة / المندوب / البيان)</label>
+                      <input
+                        type="text"
+                        placeholder="ابحث بالاسم، كود العملية، البيان، الشركة..."
+                        value={bankLedgerFilters.search}
+                        onChange={(e) => setBankLedgerFilters({ ...bankLedgerFilters, search: e.target.value })}
+                        style={{ fontSize: '0.85rem' }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', alignSelf: 'flex-end' }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setBankLedgerFilters({ type: '', startDate: '', endDate: '', search: '' })}
+                        style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem' }}
+                      >
+                        إعادة تعيين 🔄
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* Filtered Transactions List */}
+                  {(() => {
+                    const currentBankId = Number(selectedBankLedger.bank.id);
+
+                    // Filter logic
+                    const filteredTxs = selectedBankLedger.transactions.filter((tx) => {
+                      // Type filter
+                      if (bankLedgerFilters.type && tx.type !== bankLedgerFilters.type) {
+                        return false;
+                      }
+
+                      // Date range filter
+                      if (bankLedgerFilters.startDate) {
+                        const txDateStr = new Date(tx.date).toISOString().split('T')[0];
+                        if (txDateStr < bankLedgerFilters.startDate) return false;
+                      }
+                      if (bankLedgerFilters.endDate) {
+                        const txDateStr = new Date(tx.date).toISOString().split('T')[0];
+                        if (txDateStr > bankLedgerFilters.endDate) return false;
+                      }
+
+                      // Search query
+                      if (bankLedgerFilters.search) {
+                        const q = bankLedgerFilters.search.trim().toLowerCase();
+                        const idMatch = `tx-${String(tx.id).padStart(6, '0')}`.toLowerCase().includes(q) || String(tx.id).includes(q);
+                        const companyMatch = (tx.company_name && tx.company_name.toLowerCase().includes(q)) || (tx.company_code && tx.company_code.toLowerCase().includes(q));
+                        const repMatch = (tx.rep_name && tx.rep_name.toLowerCase().includes(q)) || (tx.rep_code && tx.rep_code.toLowerCase().includes(q));
+                        const bankMatch = (tx.bank_name && tx.bank_name.toLowerCase().includes(q)) || (tx.to_bank_name && tx.to_bank_name.toLowerCase().includes(q));
+                        const notesMatch = tx.notes && tx.notes.toLowerCase().includes(q);
+                        if (!idMatch && !companyMatch && !repMatch && !bankMatch && !notesMatch) {
+                          return false;
+                        }
+                      }
+
+                      return true;
+                    });
+
+                    if (filteredTxs.length === 0) {
+                      return (
+                        <div className="no-data-msg" style={{ padding: '3rem 1rem' }}>
+                          <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🔍</div>
+                          <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>لا توجد أي معاملات مطابقة لفلاتر البحث المحددة.</div>
+                          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>جرب تغيير نوع العملية أو مسح فلاتر البحث.</div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="table-container">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border-color)', fontSize: '0.85rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          <div>
+                            عرض <strong>{filteredTxs.length}</strong> معاملة من أصل {selectedBankLedger.transactions.length}
+                          </div>
+                          {bankLedgerFilters.type === 'company_transfer' && (
+                            <span className="badge" style={{ background: 'rgba(6,182,212,0.15)', color: '#22d3ee', border: '1px solid rgba(6,182,212,0.25)', fontWeight: 'bold' }}>
+                              🏢 إجمالي تحويلات الشركات المفلترة: {filteredTxs.reduce((sum, t) => sum + Number(t.amount || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
+                            </span>
+                          )}
+                        </div>
+
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>رقم الإيصال والتاريخ</th>
+                              <th>نوع العملية</th>
+                              <th>الجهة المعنية (الشركة / المندوب / البنك)</th>
+                              <th>أثر الرصيد البنكي</th>
+                              <th>المبلغ</th>
+                              <th>ملاحظات والإيصال المرفق</th>
+                              <th>بواسطة والحالة</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredTxs.map((tx) => {
+                              // Determine direction & impact
+                              let isOutflow = false; // Outflow = deducted from bank (-), Inflow = added to bank (+)
+                              let impactLabel = '';
+                              let partyNode = null;
+                              let typeBadge = null;
+
+                              if (tx.type === 'company_transfer') {
+                                isOutflow = true;
+                                impactLabel = '📉 خصم (تحويل شركة)';
+                                typeBadge = (
+                                  <span className="badge" style={{ background: 'rgba(6,182,212,0.15)', color: '#22d3ee', border: '1px solid rgba(6,182,212,0.3)', fontWeight: 'bold' }}>
+                                    🏢 تحويل لشركة
+                                  </span>
+                                );
+                                partyNode = (
+                                  <div>
+                                    <strong style={{ color: '#22d3ee', fontSize: '0.95rem' }}>🏢 {tx.company_name || 'شركة'}</strong>
+                                    {tx.company_code && <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginRight: '0.3rem' }}>({tx.company_code})</span>}
+                                  </div>
+                                );
+                              } else if (tx.type === 'bank_transfer') {
+                                if (Number(tx.bank_id) === currentBankId) {
+                                  isOutflow = true;
+                                  impactLabel = '📉 خصم (تحويل لبنك آخر)';
+                                  partyNode = <div>🏦 إلى: <strong>{tx.to_bank_name || 'بنك مستلم'}</strong> ({tx.to_bank_code})</div>;
+                                } else {
+                                  isOutflow = false;
+                                  impactLabel = '📈 إضافة (تحويل من بنك)';
+                                  partyNode = <div>🏦 من: <strong>{tx.bank_name || 'بنك مصدر'}</strong> ({tx.bank_code})</div>;
+                                }
+                                typeBadge = (
+                                  <span className="badge" style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)', fontWeight: 'bold' }}>
+                                    🏦 تحويل بنكي
+                                  </span>
+                                );
+                              } else if (tx.type === 'withdrawal') {
+                                if (tx.payment_method === 'bank_transfer') {
+                                  isOutflow = true;
+                                  impactLabel = '📉 خصم (مصروف بنكي)';
+                                } else {
+                                  isOutflow = false;
+                                  impactLabel = '📈 إضافة (من الخزينة النقدية)';
+                                }
+                                const subTypeLabel = tx.withdrawal_sub_type === 'car' ? '🚗 سيارة'
+                                  : tx.withdrawal_sub_type === 'car_gas' ? '⛽ سيارة (جاز)'
+                                    : tx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)'
+                                      : tx.withdrawal_sub_type === 'salary' ? '💼 راتب'
+                                        : tx.withdrawal_sub_type === 'commission' ? '💰 عمولة'
+                                          : tx.withdrawal_sub_type === 'loan' ? '💸 سلفة'
+                                            : tx.withdrawal_sub_type === 'direct_rent' ? '🏢 إيجار'
+                                              : tx.withdrawal_sub_type === 'direct_operational' ? '🔧 تشغيل'
+                                                : tx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى'
+                                                  : '📤 مصروفات سحب';
+                                typeBadge = (
+                                  <span className="badge badge-withdrawal">
+                                    {subTypeLabel}
+                                  </span>
+                                );
+                                partyNode = (
+                                  <div>
+                                    {tx.rep_name ? (
+                                      <span>👤 {tx.rep_name} ({tx.rep_code})</span>
+                                    ) : (
+                                      <span style={{ color: 'var(--text-secondary)' }}>خزينة مباشرة / البنك</span>
                                     )}
                                   </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                                );
+                              } else if (tx.type === 'deposit') {
+                                if (tx.payment_method === 'bank_transfer') {
+                                  if (tx.rep_id) {
+                                    isOutflow = false;
+                                    impactLabel = '📈 إضافة (توريد مندوب)';
+                                  } else {
+                                    isOutflow = true;
+                                    impactLabel = '📉 خصم (سحب من البنك)';
+                                  }
+                                } else {
+                                  isOutflow = true;
+                                  impactLabel = '📉 خصم (تحويل نقدية للخزينة)';
+                                }
+                                typeBadge = (
+                                  <span className="badge badge-deposit">
+                                    📥 توريد إيداع
+                                  </span>
+                                );
+                                partyNode = (
+                                  <div>
+                                    {tx.rep_name ? (
+                                      <span>👤 {tx.rep_name} ({tx.rep_code})</span>
+                                    ) : (
+                                      <span>خزينة مباشرة</span>
+                                    )}
+                                  </div>
+                                );
+                              }
 
-                        {/* Other transactions table */}
-                        {selectedBankLedger.transactions.filter(tx => tx.payment_method !== 'bank_transfer').length > 0 && (
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', padding: '0.6rem 1rem', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                              <span style={{ fontSize: '1.1rem' }}>💵</span>
-                              <strong style={{ color: 'var(--text-secondary)' }}>حركات التحويل النقدي (صرف/إيداع)</strong>
-                            </div>
-                            <table>
-                              <thead>
-                                <tr>
-                                  <th>التاريخ والوقت</th>
-                                  <th>العملية</th>
-                                  <th>أثر الرصيد البنكي</th>
-                                  <th>المبلغ</th>
-                                  <th>المندوب</th>
-                                  <th>ملاحظات</th>
+                              return (
+                                <tr key={tx.id} style={{ background: tx.type === 'company_transfer' ? 'rgba(6,182,212,0.02)' : 'transparent' }}>
+                                  <td>
+                                    <div style={{ fontWeight: 'bold', color: 'var(--primary)' }}>TX-{String(tx.id).padStart(6, '0')}</div>
+                                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                                      {new Date(tx.date).toLocaleString('en-US')}
+                                    </div>
+                                  </td>
+                                  <td>{typeBadge}</td>
+                                  <td>{partyNode}</td>
+                                  <td>
+                                    <span style={{
+                                      padding: '0.2rem 0.5rem',
+                                      borderRadius: '6px',
+                                      fontSize: '0.78rem',
+                                      fontWeight: 'bold',
+                                      background: isOutflow ? 'rgba(244, 63, 94, 0.12)' : 'rgba(34, 197, 94, 0.12)',
+                                      color: isOutflow ? '#f43f5e' : '#22c55e',
+                                      border: `1px solid ${isOutflow ? 'rgba(244, 63, 94, 0.25)' : 'rgba(34, 197, 94, 0.25)'}`
+                                    }}>
+                                      {impactLabel}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <strong style={{ fontSize: '1.05rem', color: isOutflow ? 'var(--danger)' : 'var(--success)' }}>
+                                      {isOutflow ? '-' : '+'}{Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
+                                    </strong>
+                                  </td>
+                                  <td style={{ maxWidth: '220px', fontSize: '0.85rem' }}>
+                                    <div>{tx.notes || '—'}</div>
+                                    {tx.receipt_image && (
+                                      <div style={{ marginTop: '0.3rem' }}>
+                                        <a
+                                          href="#"
+                                          onClick={(e) => { e.preventDefault(); setActiveImageModal(tx.receipt_image); }}
+                                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.78rem', color: '#a78bfa', textDecoration: 'underline', fontWeight: 600 }}
+                                        >
+                                          📎 عرض الإيصال المرفق
+                                        </a>
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td>
+                                    <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{tx.creator_name || '—'}</div>
+                                    {tx.approver_name && (
+                                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                                        🔑 اعتماد: {tx.approver_name}
+                                      </div>
+                                    )}
+                                    <div style={{ marginTop: '0.25rem' }}>
+                                      {tx.status === 'pending' ? (
+                                        <span style={{ fontSize: '0.72rem', padding: '0.15rem 0.4rem', borderRadius: '4px', background: 'var(--warning-bg)', color: 'var(--warning)', fontWeight: 'bold' }}>⏳ قيد المراجعة</span>
+                                      ) : tx.status === 'approved' ? (
+                                        <span style={{ fontSize: '0.72rem', padding: '0.15rem 0.4rem', borderRadius: '4px', background: 'rgba(124,58,237,0.15)', color: '#c4b5fd', fontWeight: 'bold' }}>✓ معتمد - بانتظار الصرف</span>
+                                      ) : (
+                                        <span style={{ fontSize: '0.72rem', padding: '0.15rem 0.4rem', borderRadius: '4px', background: 'var(--success-bg)', color: 'var(--success)', fontWeight: 'bold' }}>✔️ مكتمل</span>
+                                      )}
+                                    </div>
+                                  </td>
                                 </tr>
-                              </thead>
-                              <tbody>
-                                {selectedBankLedger.transactions.filter(tx => tx.payment_method !== 'bank_transfer').map((tx) => (
-                                  <tr key={tx.id}>
-                                    <td>{new Date(tx.date).toLocaleString('en-US')}</td>
-                                    <td>
-                                      <span className={`badge badge-${tx.type}`}>
-                                        {tx.type === 'deposit' ? '📥 توريد من البنك' : '📤 صرف للبنك'}
-                                      </span>
-                                    </td>
-                                    <td>
-                                      <span className={`badge badge-${tx.type === 'withdrawal' ? 'deposit' : 'withdrawal'}`}>
-                                        {tx.type === 'withdrawal' ? '📈 زيادة رصيد البنك' : '📉 نقص رصيد البنك'}
-                                      </span>
-                                    </td>
-                                    <td>
-                                      <span className={tx.type === 'withdrawal' ? 'amount-deposit' : 'amount-withdrawal'}>
-                                        {tx.type === 'deposit' ? '-' : ''}
-                                        {Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
-                                      </span>
-                                    </td>
-                                    <td>{tx.rep_name ? `${tx.rep_name} (${tx.rep_code})` : '—'}</td>
-                                    <td>{tx.notes || '—'}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
-                    )}
-                  </div>
+                    );
+                  })()}
                 </div>
               ) : (
                 /* ALL BANKS TABLE */

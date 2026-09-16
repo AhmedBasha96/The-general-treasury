@@ -1436,16 +1436,18 @@ app.get('/api/banks/:id/transactions', async (req, res) => {
     const txResult = await pool.request()
       .input('bankId', sql.Int, bankId)
       .query(`
-        SELECT t.id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.status,
+        SELECT t.id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.status, t.withdrawal_sub_type,
                t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
                t.bank_id, t.to_bank_id,
                r.name AS rep_name, r.code AS rep_code,
                c.name AS company_name, c.code AS company_code,
+               b1.name AS bank_name, b1.code AS bank_code,
                b2.name AS to_bank_name, b2.code AS to_bank_code,
                u.username AS creator_name, u2.username AS approver_name
         FROM transactions t
         LEFT JOIN representatives r ON t.rep_id = r.id
         LEFT JOIN companies c ON t.company_id = c.id
+        LEFT JOIN banks b1 ON t.bank_id = b1.id
         LEFT JOIN banks b2 ON t.to_bank_id = b2.id
         LEFT JOIN users u ON t.created_by = u.id
         LEFT JOIN users u2 ON t.approved_by = u2.id
