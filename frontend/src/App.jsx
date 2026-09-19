@@ -8540,161 +8540,179 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
           )}
 
           {/* DISBURSE TRANSACTION OVERLAY MODAL */}
-          {disbursingTx && (
-            <div style={{
-              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-              background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-              direction: 'rtl', padding: '1.5rem'
-            }}>
-              <div className="panel" style={{ width: '100%', maxWidth: '520px', maxHeight: '90vh', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
-                <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                  <h2 className="panel-title">💵 إتمام عملية الصرف الفعلي</h2>
-                  <button className="btn btn-secondary" onClick={() => setDisbursingTx(null)} style={{ padding: '0.3rem 0.6rem' }}>✕ إغلاق</button>
-                </div>
-
-                {disburseError && <div className="alert alert-error">⚠️ {disburseError}</div>}
-
-                <div style={{ background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.9rem' }}>
-                    <div><strong>المستلم:</strong> {disbursingTx.rep_name || 'خزينة مباشرة'} ({disbursingTx.rep_code || '-'})</div>
-                    <div><strong>المبلغ المطلوب:</strong> <span style={{ color: 'var(--danger)', fontWeight: 'bold' }}>{Number(disbursingTx.amount).toLocaleString()} ج.م</span></div>
-                    <div style={{ gridColumn: 'span 2' }}><strong>بند الصرف:</strong> {getWithdrawalSubTypes().find(o => o.value === disbursingTx.withdrawal_sub_type)?.label || disbursingTx.withdrawal_sub_type || 'عام'}</div>
-                    {disbursingTx.notes && <div style={{ gridColumn: 'span 2' }}><strong>الملاحظات:</strong> {disbursingTx.notes}</div>}
+          {disbursingTx && (() => {
+            const isBankTransfer = disbursingTx.payment_method === 'bank_transfer';
+            return (
+              <div style={{
+                position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+                direction: 'rtl', padding: '1.5rem'
+              }}>
+                <div className="panel" style={{ width: '100%', maxWidth: '520px', maxHeight: '90vh', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 20px 50px rgba(0,0,0,0.5)' }}>
+                  <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                    <h2 className="panel-title">{isBankTransfer ? '🏦 إتمام الصرف البنكي الفعلي' : '💵 إتمام عملية الصرف الفعلي'}</h2>
+                    <button className="btn btn-secondary" onClick={() => setDisbursingTx(null)} style={{ padding: '0.3rem 0.6rem' }}>✕ إغلاق</button>
                   </div>
-                </div>
 
-                <form onSubmit={async (e) => {
-                  e.preventDefault();
-                  setDisburseError('');
+                  {disburseError && <div className="alert alert-error">⚠️ {disburseError}</div>}
 
-                  const calc =
-                    (Number(disburseDenominations.denom_200 || 0) * 200) +
-                    (Number(disburseDenominations.denom_100 || 0) * 100) +
-                    (Number(disburseDenominations.denom_50 || 0) * 50) +
-                    (Number(disburseDenominations.denom_20 || 0) * 20) +
-                    (Number(disburseDenominations.denom_10 || 0) * 10) +
-                    (Number(disburseDenominations.denom_5 || 0) * 5) +
-                    (Number(disburseDenominations.denom_1 || 0) * 1);
-                  if (isNaN(calc) || Math.abs(calc - Number(disbursingTx.amount)) > 0.01) {
-                    const msg = `مجموع الفئات (${(calc || 0).toLocaleString()} ج.م) لا يطابق قيمة المبلغ المطلوبة (${Number(disbursingTx.amount).toLocaleString()} ج.م)!`;
-                    setDisburseError(msg);
-                    return;
-                  }
+                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.9rem' }}>
+                      <div><strong>المستلم/الجهة:</strong> {disbursingTx.rep_name || 'خزينة مباشرة / البنك'} {disbursingTx.rep_code ? `(${disbursingTx.rep_code})` : ''}</div>
+                      <div><strong>المبلغ المطلوب:</strong> <span style={{ color: 'var(--danger)', fontWeight: 'bold' }}>{Number(disbursingTx.amount).toLocaleString()} ج.م</span></div>
+                      <div><strong>طريقة الصرف:</strong> <span style={{ color: isBankTransfer ? '#60a5fa' : '#34d399', fontWeight: 'bold' }}>{isBankTransfer ? '🏦 تحويل بنكي' : '💵 نقدي'}</span></div>
+                      {disbursingTx.bank_name && <div><strong>الحساب البنكي:</strong> {disbursingTx.bank_name}</div>}
+                      <div style={{ gridColumn: 'span 2' }}><strong>بند الصرف:</strong> {getWithdrawalSubTypes().find(o => o.value === disbursingTx.withdrawal_sub_type)?.label || disbursingTx.withdrawal_sub_type || 'عام'}</div>
+                      {disbursingTx.notes && <div style={{ gridColumn: 'span 2' }}><strong>الملاحظات:</strong> {disbursingTx.notes}</div>}
+                    </div>
+                  </div>
 
-                  try {
-                    const res = await fetch(`/api/transactions/${disbursingTx.id}/disburse`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ denominations: disburseDenominations })
-                    });
-                    const data = await res.json();
-                    if (res.ok) {
-                      setDisbursingTx(null);
-                      loadDashboard();
-                      loadTransactions();
-                      loadCarExpenses();
-                    } else {
-                      setDisburseError(data.error || 'حدث خطأ أثناء إتمام الصرف');
+                  <form onSubmit={async (e) => {
+                    e.preventDefault();
+                    setDisburseError('');
+
+                    if (!isBankTransfer) {
+                      const calc =
+                        (Number(disburseDenominations.denom_200 || 0) * 200) +
+                        (Number(disburseDenominations.denom_100 || 0) * 100) +
+                        (Number(disburseDenominations.denom_50 || 0) * 50) +
+                        (Number(disburseDenominations.denom_20 || 0) * 20) +
+                        (Number(disburseDenominations.denom_10 || 0) * 10) +
+                        (Number(disburseDenominations.denom_5 || 0) * 5) +
+                        (Number(disburseDenominations.denom_1 || 0) * 1);
+                      if (isNaN(calc) || Math.abs(calc - Number(disbursingTx.amount)) > 0.01) {
+                        const msg = `مجموع الفئات (${(calc || 0).toLocaleString()} ج.م) لا يطابق قيمة المبلغ المطلوبة (${Number(disbursingTx.amount).toLocaleString()} ج.م)!`;
+                        setDisburseError(msg);
+                        return;
+                      }
                     }
-                  } catch (err) {
-                    setDisburseError('تعذر الاتصال بالسيرفر');
-                  }
-                }}>
 
-                  <div className="denom-section" style={{ marginBottom: '1.5rem', background: 'transparent', border: 'none', padding: 0 }}>
-                    <div className="denom-section-title" style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '1rem', fontWeight: 'bold' }}>💵 توزيع الفئات النقدية للتسليم</span>
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
-                        onClick={() => {
-                          let remaining = parseFloat(disbursingTx.amount) || 0;
-                          const breakdown = { denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0 };
-                          breakdown.denom_200 = Math.floor(remaining / 200); remaining %= 200;
-                          breakdown.denom_100 = Math.floor(remaining / 100); remaining %= 100;
-                          breakdown.denom_50 = Math.floor(remaining / 50); remaining %= 50;
-                          breakdown.denom_20 = Math.floor(remaining / 20); remaining %= 20;
-                          breakdown.denom_10 = Math.floor(remaining / 10); remaining %= 10;
-                          breakdown.denom_5 = Math.floor(remaining / 5); remaining %= 5;
-                          breakdown.denom_1 = Math.floor(remaining);
-                          setDisburseDenominations(breakdown);
-                        }}
-                      >
-                        💡 ملء تلقائي للفئات
-                      </button>
-                    </div>
+                    try {
+                      const res = await fetch(`/api/transactions/${disbursingTx.id}/disburse`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ denominations: isBankTransfer ? null : disburseDenominations })
+                      });
+                      const data = await res.json();
+                      if (res.ok) {
+                        setDisbursingTx(null);
+                        loadDashboard();
+                        loadTransactions();
+                        loadCarExpenses();
+                      } else {
+                        setDisburseError(data.error || 'حدث خطأ أثناء إتمام الصرف');
+                      }
+                    } catch (err) {
+                      setDisburseError('تعذر الاتصال بالسيرفر');
+                    }
+                  }}>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '1.5rem' }}>
-                      {[200, 100, 50, 20, 10, 5, 1].map((denom) => (
-                        <div key={denom} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{denom} ج.م</span>
-                          <input
-                            type="number"
-                            min="0"
-                            value={disburseDenominations[`denom_${denom}`] || ''}
-                            onChange={(e) => {
-                              const val = Math.max(0, parseInt(e.target.value) || 0);
-                              setDisburseDenominations(prev => ({
-                                ...prev,
-                                [`denom_${denom}`]: val
-                              }));
-                            }}
-                            style={{ width: '100%', padding: '0.4rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', textAlign: 'center' }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Calculator Summary */}
-                  {(() => {
-                    const totalCalculated =
-                      (Number(disburseDenominations.denom_200 || 0) * 200) +
-                      (Number(disburseDenominations.denom_100 || 0) * 100) +
-                      (Number(disburseDenominations.denom_50 || 0) * 50) +
-                      (Number(disburseDenominations.denom_20 || 0) * 20) +
-                      (Number(disburseDenominations.denom_10 || 0) * 10) +
-                      (Number(disburseDenominations.denom_5 || 0) * 5) +
-                      (Number(disburseDenominations.denom_1 || 0) * 1);
-                    const diff = Number(disbursingTx.amount) - totalCalculated;
-                    const isMatch = Math.abs(diff) < 0.01;
-
-                    return (
-                      <div style={{
-                        padding: '1rem', borderRadius: '8px',
-                        background: isMatch ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
-                        border: '1px solid',
-                        borderColor: isMatch ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)',
-                        fontSize: '0.9rem', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem'
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span>إجمالي الفئات المدخلة:</span>
-                          <strong style={{ color: isMatch ? 'var(--success)' : 'var(--danger)' }}>
-                            {totalCalculated.toLocaleString()} ج.م
-                          </strong>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span>المتبقي:</span>
-                          <strong style={{ color: isMatch ? 'var(--success)' : 'var(--danger)' }}>
-                            {diff.toLocaleString()} ج.م
-                          </strong>
-                        </div>
-                        <div style={{ textAlign: 'center', marginTop: '0.4rem', fontWeight: 'bold', color: isMatch ? '#10b981' : '#ef4444' }}>
-                          {isMatch ? '✅ الفئات مطابقة تماماً للمبلغ المطلوب' : '❌ الفئات لا تطابق المبلغ المطلوب'}
+                    {isBankTransfer ? (
+                      <div className="alert alert-info" style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#60a5fa', marginBottom: '1.5rem', padding: '1rem', borderRadius: '8px' }}>
+                        <div style={{ fontWeight: 'bold', fontSize: '1rem', marginBottom: '0.3rem' }}>🏦 تحويل بنكي مباشر</div>
+                        <div style={{ fontSize: '0.85rem', lineHeight: '1.5' }}>
+                          سيتم خصم مبلغ <strong>{Number(disbursingTx.amount).toLocaleString()} ج.م</strong> إلكترونياً من الحساب البنكي ({disbursingTx.bank_name || 'البنك المصدر'}). لا تتطلب هذه العملية توزيع فئات نقدية.
                         </div>
                       </div>
-                    );
-                  })()}
+                    ) : (
+                      <>
+                        <div className="denom-section" style={{ marginBottom: '1.5rem', background: 'transparent', border: 'none', padding: 0 }}>
+                          <div className="denom-section-title" style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '1rem', fontWeight: 'bold' }}>💵 توزيع الفئات النقدية للتسليم</span>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem' }}
+                              onClick={() => {
+                                let remaining = parseFloat(disbursingTx.amount) || 0;
+                                const breakdown = { denom_200: 0, denom_100: 0, denom_50: 0, denom_20: 0, denom_10: 0, denom_5: 0, denom_1: 0 };
+                                breakdown.denom_200 = Math.floor(remaining / 200); remaining %= 200;
+                                breakdown.denom_100 = Math.floor(remaining / 100); remaining %= 100;
+                                breakdown.denom_50 = Math.floor(remaining / 50); remaining %= 50;
+                                breakdown.denom_20 = Math.floor(remaining / 20); remaining %= 20;
+                                breakdown.denom_10 = Math.floor(remaining / 10); remaining %= 10;
+                                breakdown.denom_5 = Math.floor(remaining / 5); remaining %= 5;
+                                breakdown.denom_1 = Math.floor(remaining);
+                                setDisburseDenominations(breakdown);
+                              }}
+                            >
+                              💡 ملء تلقائي للفئات
+                            </button>
+                          </div>
 
-                  <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '0.8rem', background: 'linear-gradient(135deg, var(--success), var(--success-hover))' }}>
-                    💵 تأكيد صرف المبلغ الفعلي وتسليمه
-                  </button>
-                </form>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                            {[200, 100, 50, 20, 10, 5, 1].map((denom) => (
+                              <div key={denom} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{denom} ج.م</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={disburseDenominations[`denom_${denom}`] || ''}
+                                  onChange={(e) => {
+                                    const val = Math.max(0, parseInt(e.target.value) || 0);
+                                    setDisburseDenominations(prev => ({
+                                      ...prev,
+                                      [`denom_${denom}`]: val
+                                    }));
+                                  }}
+                                  style={{ width: '100%', padding: '0.4rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)', textAlign: 'center' }}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Calculator Summary */}
+                        {(() => {
+                          const totalCalculated =
+                            (Number(disburseDenominations.denom_200 || 0) * 200) +
+                            (Number(disburseDenominations.denom_100 || 0) * 100) +
+                            (Number(disburseDenominations.denom_50 || 0) * 50) +
+                            (Number(disburseDenominations.denom_20 || 0) * 20) +
+                            (Number(disburseDenominations.denom_10 || 0) * 10) +
+                            (Number(disburseDenominations.denom_5 || 0) * 5) +
+                            (Number(disburseDenominations.denom_1 || 0) * 1);
+                          const diff = Number(disbursingTx.amount) - totalCalculated;
+                          const isMatch = Math.abs(diff) < 0.01;
+
+                          return (
+                            <div style={{
+                              padding: '1rem', borderRadius: '8px',
+                              background: isMatch ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
+                              border: '1px solid',
+                              borderColor: isMatch ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)',
+                              fontSize: '0.9rem', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem'
+                            }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span>إجمالي الفئات المدخلة:</span>
+                                <strong style={{ color: isMatch ? 'var(--success)' : 'var(--danger)' }}>
+                                  {totalCalculated.toLocaleString()} ج.م
+                                </strong>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span>المتبقي:</span>
+                                <strong style={{ color: isMatch ? 'var(--success)' : 'var(--danger)' }}>
+                                  {diff.toLocaleString()} ج.م
+                                </strong>
+                              </div>
+                              <div style={{ textAlign: 'center', marginTop: '0.4rem', fontWeight: 'bold', color: isMatch ? '#10b981' : '#ef4444' }}>
+                                {isMatch ? '✅ الفئات مطابقة تماماً للمبلغ المطلوب' : '❌ الفئات لا تطابق المبلغ المطلوب'}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </>
+                    )}
+
+                    <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '0.8rem', background: isBankTransfer ? 'linear-gradient(135deg, #2563eb, #1d4ed8)' : 'linear-gradient(135deg, var(--success), var(--success-hover))', border: 'none' }}>
+                      {isBankTransfer ? '🏦 تأكيد الصرف والخصم البنكي الفعلي' : '💵 تأكيد صرف المبلغ الفعلي وتسليمه'}
+                    </button>
+                  </form>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* USERS MANAGEMENT TAB */}
           {activeTab === 'users' && currentUser.role === 'manager' && (

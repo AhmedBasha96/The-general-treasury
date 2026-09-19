@@ -1415,6 +1415,57 @@ app.post('/api/banks/initial-balances', async (req, res) => {
   }
 });
 
+// Helper function to calculate exact current bank balance matching bank ledger API
+async function getCalculatedBankBalance(txContext, bankId, excludeTxId = null) {
+  const bankRes = await txContext.request()
+    .input('bankId', sql.Int, bankId)
+    .query('SELECT initial_balance FROM banks WHERE id = @bankId');
+  if (bankRes.recordset.length === 0) return 0;
+  
+  const initialBal = Number(bankRes.recordset[0].initial_balance) || 0;
+  
+  const txResult = await txContext.request()
+    .input('bankId', sql.Int, bankId)
+    .query(`
+      SELECT id, type, payment_method, amount, status, bank_id, to_bank_id
+      FROM transactions WITH (UPDLOCK)
+      WHERE (bank_id = @bankId OR to_bank_id = @bankId) AND (status IS NULL OR status != 'rejected')
+    `);
+    
+  let totalDeposits = 0;
+  let totalWithdrawals = 0;
+  
+  txResult.recordset.forEach(tx => {
+    if (excludeTxId && Number(tx.id) === Number(excludeTxId)) return;
+    
+    if (tx.type === 'bank_transfer' && (tx.status === 'approved' || tx.status === 'disbursed' || tx.status === null)) {
+      if (Number(tx.to_bank_id) === Number(bankId)) {
+        totalDeposits += Number(tx.amount);
+      } else if (Number(tx.bank_id) === Number(bankId)) {
+        totalWithdrawals += Number(tx.amount);
+      }
+    } else if (tx.type === 'withdrawal' && (tx.status === 'disbursed' || tx.status === null)) {
+      if (tx.payment_method === 'bank_transfer') {
+        totalWithdrawals += Number(tx.amount);
+      } else {
+        totalDeposits += Number(tx.amount);
+      }
+    } else if (tx.type === 'deposit') {
+      if (tx.status === 'approved' || tx.status === 'disbursed' || tx.status === null) {
+        if (tx.payment_method === 'bank_transfer') {
+          totalDeposits += Number(tx.amount);
+        } else if (tx.payment_method === 'cash' || !tx.payment_method) {
+          totalWithdrawals += Number(tx.amount);
+        }
+      }
+    } else if (tx.type === 'company_transfer' && (tx.status === 'approved' || tx.status === null)) {
+      totalWithdrawals += Number(tx.amount);
+    }
+  });
+  
+  return initialBal + totalDeposits - totalWithdrawals;
+}
+
 // 1.93 GET /api/banks/:id/transactions (Ledger for a specific bank)
 app.get('/api/banks/:id/transactions', async (req, res) => {
   const bankId = req.params.id;
@@ -2317,67 +2368,71 @@ app.get('/api/reports/daily', async (req, res) => {
         ORDER BY t.date ASC
       `);
 
-    // 4. Fetch list of banks and compute their opening and closing balances for this period
+    // 4. Fetch list of banks and compute their opening and closing balances for this period using unified logic
     const banksList = await pool.request().query('SELECT id, name, code, initial_balance, account_number FROM banks ORDER BY name');
     
     const banksSummary = [];
     for (const bank of banksList.recordset) {
-      // Calculate bank balance BEFORE startDate (Opening Bank Balance)
-      const bankBeforeDep = await pool.request()
+      // Fetch all transactions for this bank up to endDate
+      const bankTxsRes = await pool.request()
         .input('bankId', sql.Int, bank.id)
-        .input('startDate', sql.VarChar, startDate)
+        .input('endDate', sql.VarChar, endDate)
         .query(`
-          SELECT ISNULL(SUM(CASE
-            WHEN type = 'withdrawal' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount
-            WHEN type = 'deposit' AND payment_method = 'bank_transfer' THEN amount
-            ELSE 0 END), 0) AS total
-          FROM transactions
-          WHERE bank_id = @bankId AND CAST(date AS DATE) < CAST(@startDate AS DATE) AND (
-            (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
-            OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
-          )
+          SELECT t.id, t.type, t.payment_method, t.amount, t.date, t.status, t.bank_id, t.to_bank_id
+          FROM transactions t
+          WHERE (t.bank_id = @bankId OR t.to_bank_id = @bankId)
+            AND CAST(t.date AS DATE) <= CAST(@endDate AS DATE)
+            AND (t.status IS NULL OR t.status != 'rejected')
+          ORDER BY t.date ASC
         `);
-      const bankBeforeWd = await pool.request()
-        .input('bankId', sql.Int, bank.id)
-        .input('startDate', sql.VarChar, startDate)
-        .query(`
-          SELECT ISNULL(SUM(CASE
-            WHEN type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount
-            WHEN type = 'company_transfer' THEN amount
-            WHEN type = 'withdrawal' AND payment_method = 'bank_transfer' THEN amount
-            ELSE 0 END), 0) AS total
-          FROM transactions
-          WHERE bank_id = @bankId AND CAST(date AS DATE) < CAST(@startDate AS DATE) AND (
-            (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
-            OR (type = 'company_transfer' AND (status = 'approved' OR status IS NULL))
-            OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
-          )
-        `);
-      const openingBankBalance = Number(bank.initial_balance) + Number(bankBeforeDep.recordset[0].total) - Number(bankBeforeWd.recordset[0].total);
 
-      // Fetch transfers of this bank during this period
-      const dayBankDep = dayTransactions.recordset
-        .filter(t => t.bank_id === bank.id && t.type === 'deposit' && t.payment_method === 'bank_transfer' && (t.status === 'approved' || t.status === 'disbursed' || t.status === null))
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-      
-      const dayBankWithdrawalFromSafe = dayTransactions.recordset
-        .filter(t => t.bank_id === bank.id && t.type === 'withdrawal' && (t.payment_method === 'cash' || t.payment_method === null) && (t.status === 'disbursed' || t.status === null))
-        .reduce((sum, t) => sum + Number(t.amount), 0);
+      let openingBankBalance = Number(bank.initial_balance) || 0;
+      let totalDepositsThisDay = 0;
+      let totalWithdrawalsThisDay = 0;
 
-      const dayBankCashedOut = dayTransactions.recordset
-        .filter(t => t.bank_id === bank.id && t.type === 'deposit' && (t.payment_method === 'cash' || t.payment_method === null) && (t.status === 'approved' || t.status === 'disbursed' || t.status === null))
-        .reduce((sum, t) => sum + Number(t.amount), 0);
+      bankTxsRes.recordset.forEach(tx => {
+        const txDateStr = tx.date ? new Date(tx.date).toISOString().split('T')[0] : '';
+        const isBeforeStart = txDateStr < startDate;
+        const isInPeriod = txDateStr >= startDate && txDateStr <= endDate;
 
-      const dayBankCompanyTransfer = dayTransactions.recordset
-        .filter(t => t.bank_id === bank.id && t.type === 'company_transfer' && (t.status === 'approved' || t.status === null))
-        .reduce((sum, t) => sum + Number(t.amount), 0);
+        let isDeposit = false;
+        let isWithdrawal = false;
 
-      const dayBankExpenseWithdrawal = dayTransactions.recordset
-        .filter(t => t.bank_id === bank.id && t.type === 'withdrawal' && t.payment_method === 'bank_transfer' && (t.status === 'disbursed' || t.status === null))
-        .reduce((sum, t) => sum + Number(t.amount), 0);
+        if (tx.type === 'bank_transfer' && (tx.status === 'approved' || tx.status === 'disbursed' || tx.status === null)) {
+          if (Number(tx.to_bank_id) === Number(bank.id)) {
+            isDeposit = true;
+          } else if (Number(tx.bank_id) === Number(bank.id)) {
+            isWithdrawal = true;
+          }
+        } else if (tx.type === 'withdrawal' && (tx.status === 'disbursed' || tx.status === null)) {
+          if (tx.payment_method === 'bank_transfer') {
+            isWithdrawal = true;
+          } else {
+            isDeposit = true;
+          }
+        } else if (tx.type === 'deposit') {
+          if (tx.status === 'approved' || tx.status === 'disbursed' || tx.status === null) {
+            if (tx.payment_method === 'bank_transfer') {
+              isDeposit = true;
+            } else if (tx.payment_method === 'cash' || !tx.payment_method) {
+              isWithdrawal = true;
+            }
+          }
+        } else if (tx.type === 'company_transfer' && (tx.status === 'approved' || tx.status === null)) {
+          isWithdrawal = true;
+        }
 
-      const totalDepositsThisDay = dayBankDep + dayBankWithdrawalFromSafe;
-      const totalWithdrawalsThisDay = dayBankCashedOut + dayBankCompanyTransfer + dayBankExpenseWithdrawal;
+        const amt = Number(tx.amount) || 0;
+
+        if (isBeforeStart) {
+          if (isDeposit) openingBankBalance += amt;
+          if (isWithdrawal) openingBankBalance -= amt;
+        } else if (isInPeriod) {
+          if (isDeposit) totalDepositsThisDay += amt;
+          if (isWithdrawal) totalWithdrawalsThisDay += amt;
+        }
+      });
+
       const closingBankBalance = openingBankBalance + totalDepositsThisDay - totalWithdrawalsThisDay;
 
       banksSummary.push({
@@ -3130,47 +3185,7 @@ app.post('/api/transactions', async (req, res) => {
           return res.status(400).json({ error: 'يجب تحديد الحساب البنكي المصدر للصرف البنكي' });
         }
         
-        const depRes = await transaction.request()
-          .input('bankId', sql.Int, bank_id)
-          .query(`
-            SELECT ISNULL(SUM(CASE
-              WHEN type = 'withdrawal' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount
-              WHEN type = 'deposit' AND payment_method = 'bank_transfer' THEN amount
-              ELSE 0 END), 0) AS total
-            FROM transactions WITH (UPDLOCK, TABLOCKX)
-            WHERE bank_id = @bankId AND (
-              (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
-              OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
-            )
-          `);
-        const wdRes = await transaction.request()
-          .input('bankId', sql.Int, bank_id)
-          .query(`
-            SELECT ISNULL(SUM(CASE 
-              WHEN type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount 
-              WHEN type = 'company_transfer' THEN amount
-              WHEN type = 'withdrawal' AND payment_method = 'bank_transfer' THEN amount
-              ELSE 0 END), 0) AS total
-            FROM transactions
-            WHERE bank_id = @bankId AND (
-              (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
-              OR (type = 'company_transfer' AND (status = 'approved' OR status IS NULL))
-              OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
-            )
-          `);
-        const bankRes = await transaction.request()
-          .input('bankId', sql.Int, bank_id)
-          .query('SELECT initial_balance FROM banks WHERE id = @bankId');
-        
-        if (bankRes.recordset.length === 0) {
-          await transaction.rollback();
-          return res.status(404).json({ error: 'الحساب البنكي المحدد غير موجود' });
-        }
-        
-        const initialBal = Number(bankRes.recordset[0].initial_balance) || 0;
-        const totalDeposits = Number(depRes.recordset[0].total) || 0;
-        const totalWithdrawals = Number(wdRes.recordset[0].total) || 0;
-        const currentBankBalance = initialBal + totalDeposits - totalWithdrawals;
+        const currentBankBalance = await getCalculatedBankBalance(transaction, bank_id);
 
         if (currentBankBalance < transactionAmount) {
           await transaction.rollback();
@@ -3440,42 +3455,7 @@ app.post('/api/transactions/:id/approve', async (req, res) => {
             await transaction.rollback();
             return res.status(400).json({ error: 'الحساب البنكي غير محدد للعملية' });
           }
-          const depRes = await transaction.request()
-            .input('bankId', sql.Int, tx.bank_id)
-            .query(`
-              SELECT ISNULL(SUM(CASE
-                WHEN type = 'withdrawal' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount
-                WHEN type = 'deposit' AND payment_method = 'bank_transfer' THEN amount
-                ELSE 0 END), 0) AS total
-              FROM transactions WITH (UPDLOCK, TABLOCKX)
-              WHERE bank_id = @bankId AND (
-                (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
-                OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
-              )
-            `);
-          const wdRes = await transaction.request()
-            .input('bankId', sql.Int, tx.bank_id)
-            .query(`
-              SELECT ISNULL(SUM(CASE 
-                WHEN type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount 
-                WHEN type = 'company_transfer' THEN amount
-                WHEN type = 'withdrawal' AND payment_method = 'bank_transfer' THEN amount
-                ELSE 0 END), 0) AS total
-              FROM transactions
-              WHERE bank_id = @bankId AND (
-                (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
-                OR (type = 'company_transfer' AND (status = 'approved' OR status IS NULL))
-                OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
-              )
-            `);
-          const bankRes = await transaction.request()
-            .input('bankId', sql.Int, tx.bank_id)
-            .query('SELECT initial_balance FROM banks WHERE id = @bankId');
-          
-          const initialBal = Number(bankRes.recordset[0]?.initial_balance) || 0;
-          const totalDeposits = Number(depRes.recordset[0]?.total) || 0;
-          const totalWithdrawals = Number(wdRes.recordset[0]?.total) || 0;
-          const currentBankBalance = initialBal + totalDeposits - totalWithdrawals;
+          const currentBankBalance = await getCalculatedBankBalance(transaction, tx.bank_id);
 
           if (currentBankBalance < Number(tx.amount)) {
             await transaction.rollback();
@@ -3580,41 +3560,7 @@ app.post('/api/transactions/:id/approve', async (req, res) => {
               return res.status(400).json({ error: 'الحساب البنكي غير محدد لهذه المعاملة' });
             }
         
-        // Calculate source bank account balance inside transaction with lock
-        const depRes = await transaction.request()
-          .input('bankId', sql.Int, bankId)
-          .query(`
-            SELECT ISNULL(SUM(CASE
-              WHEN type = 'withdrawal' THEN amount
-              WHEN type = 'deposit' AND payment_method = 'bank_transfer' THEN amount
-              ELSE 0 END), 0) AS total
-            FROM transactions WITH (UPDLOCK, TABLOCKX)
-            WHERE bank_id = @bankId AND (
-              (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
-              OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
-            )
-          `);
-        const wdRes = await transaction.request()
-          .input('bankId', sql.Int, bankId)
-          .query(`
-            SELECT ISNULL(SUM(CASE 
-              WHEN type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount 
-              WHEN type = 'company_transfer' THEN amount
-              ELSE 0 END), 0) AS total
-            FROM transactions
-            WHERE bank_id = @bankId AND (
-              (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
-              OR (type = 'company_transfer' AND (status = 'approved' OR status IS NULL))
-            )
-          `);
-        const bankRes = await transaction.request()
-          .input('bankId', sql.Int, bankId)
-          .query('SELECT initial_balance FROM banks WHERE id = @bankId');
-        
-        const initialBal = Number(bankRes.recordset[0].initial_balance) || 0;
-        const totalDeposits = Number(depRes.recordset[0].total) || 0;
-        const totalWithdrawals = Number(wdRes.recordset[0].total) || 0;
-        const currentBankBalance = initialBal + totalDeposits - totalWithdrawals;
+        const currentBankBalance = await getCalculatedBankBalance(transaction, bankId);
 
         if (currentBankBalance < Number(tx.amount)) {
           await transaction.rollback();
@@ -3817,42 +3763,7 @@ app.post('/api/transactions/:id/disburse', async (req, res) => {
           await transaction.rollback();
           return res.status(400).json({ error: 'الحساب البنكي غير محدد للعملية' });
         }
-        const depRes = await transaction.request()
-          .input('bankId', sql.Int, tx.bank_id)
-          .query(`
-            SELECT ISNULL(SUM(CASE
-              WHEN type = 'withdrawal' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount
-              WHEN type = 'deposit' AND payment_method = 'bank_transfer' THEN amount
-              ELSE 0 END), 0) AS total
-            FROM transactions WITH (UPDLOCK, TABLOCKX)
-            WHERE bank_id = @bankId AND (
-              (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
-              OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
-            )
-          `);
-        const wdRes = await transaction.request()
-          .input('bankId', sql.Int, tx.bank_id)
-          .query(`
-            SELECT ISNULL(SUM(CASE 
-              WHEN type = 'deposit' AND (payment_method = 'cash' OR payment_method IS NULL) THEN amount 
-              WHEN type = 'company_transfer' THEN amount
-              WHEN type = 'withdrawal' AND payment_method = 'bank_transfer' THEN amount
-              ELSE 0 END), 0) AS total
-            FROM transactions
-            WHERE bank_id = @bankId AND (
-              (type = 'deposit' AND (status IN ('approved', 'disbursed') OR status IS NULL))
-              OR (type = 'company_transfer' AND (status = 'approved' OR status IS NULL))
-              OR (type = 'withdrawal' AND (status = 'disbursed' OR status IS NULL))
-            )
-          `);
-        const bankRes = await transaction.request()
-          .input('bankId', sql.Int, tx.bank_id)
-          .query('SELECT initial_balance FROM banks WHERE id = @bankId');
-        
-        const initialBal = Number(bankRes.recordset[0]?.initial_balance) || 0;
-        const totalDeposits = Number(depRes.recordset[0]?.total) || 0;
-        const totalWithdrawals = Number(wdRes.recordset[0]?.total) || 0;
-        const currentBankBalance = initialBal + totalDeposits - totalWithdrawals;
+        const currentBankBalance = await getCalculatedBankBalance(transaction, tx.bank_id);
 
         if (currentBankBalance < txAmount) {
           await transaction.rollback();
