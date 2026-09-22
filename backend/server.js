@@ -1723,10 +1723,10 @@ app.get('/api/banks', async (req, res) => {
     const pool = getPool();
     const result = await pool.request().query(`
       SELECT 
-        b.id, b.code, b.name, b.account_number, b.account_name, b.branch, b.initial_balance, b.created_at,
+        b.id, b.code, b.name, b.account_number, b.account_name, b.branch, b.initial_balance, b.commission_percent, b.created_at,
         ISNULL(SUM(CASE
           WHEN t.type = 'withdrawal' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND ISNULL(t.withdrawal_sub_type, '') <> 'owner_repayment' AND t.bank_id = b.id THEN t.amount
-          WHEN t.type = 'deposit' AND (t.payment_method = 'bank_transfer' OR t.withdrawal_sub_type = 'owner_funding') AND t.bank_id = b.id THEN t.amount
+          WHEN t.type = 'deposit' AND (t.payment_method = 'bank_transfer' OR t.withdrawal_sub_type = 'owner_funding') AND t.bank_id = b.id THEN ISNULL(t.net_amount, t.amount)
           WHEN t.type = 'bank_transfer' AND t.to_bank_id = b.id THEN t.amount
           ELSE 0 END), 0) AS total_deposits,
         ISNULL(SUM(CASE 
@@ -1738,7 +1738,7 @@ app.get('/api/banks', async (req, res) => {
         b.initial_balance + 
         ISNULL(SUM(CASE
           WHEN t.type = 'withdrawal' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND ISNULL(t.withdrawal_sub_type, '') <> 'owner_repayment' AND t.bank_id = b.id THEN t.amount
-          WHEN t.type = 'deposit' AND (t.payment_method = 'bank_transfer' OR t.withdrawal_sub_type = 'owner_funding') AND t.bank_id = b.id THEN t.amount
+          WHEN t.type = 'deposit' AND (t.payment_method = 'bank_transfer' OR t.withdrawal_sub_type = 'owner_funding') AND t.bank_id = b.id THEN ISNULL(t.net_amount, t.amount)
           WHEN t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND ISNULL(t.withdrawal_sub_type, '') <> 'owner_funding' AND t.bank_id = b.id THEN -t.amount
           WHEN t.type = 'company_transfer' AND t.bank_id = b.id THEN -t.amount
           WHEN t.type = 'withdrawal' AND (t.payment_method = 'bank_transfer' OR t.withdrawal_sub_type = 'owner_repayment') AND t.bank_id = b.id THEN -t.amount
@@ -1752,7 +1752,7 @@ app.get('/api/banks', async (req, res) => {
          OR (t.type = 'company_transfer' AND (t.status = 'approved' OR t.status IS NULL))
          OR (t.type = 'bank_transfer' AND (t.status IN ('approved', 'disbursed') OR t.status IS NULL))
       )
-      GROUP BY b.id, b.code, b.name, b.account_number, b.account_name, b.branch, b.initial_balance, b.created_at
+      GROUP BY b.id, b.code, b.name, b.account_number, b.account_name, b.branch, b.initial_balance, b.commission_percent, b.created_at
       ORDER BY b.name
     `);
     res.json(result.recordset);
@@ -1764,11 +1764,12 @@ app.get('/api/banks', async (req, res) => {
 
 // 1.91 POST /api/banks (Add new bank account)
 app.post('/api/banks', async (req, res) => {
-  const { code, name, account_number, account_name, branch, initial_balance } = req.body;
+  const { code, name, account_number, account_name, branch, initial_balance, commission_percent } = req.body;
   if (!code || !name || !account_number) {
     return res.status(400).json({ error: 'كود البنك، اسم البنك، ورقم الحساب مطلوبان' });
   }
   const initBal = parseFloat(initial_balance) || 0;
+  const commPercent = parseFloat(commission_percent) || 0;
   try {
     const pool = getPool();
     
@@ -1788,9 +1789,10 @@ app.post('/api/banks', async (req, res) => {
       .input('account_name', sql.NVarChar, account_name || null)
       .input('branch', sql.NVarChar, branch || null)
       .input('initial_balance', sql.Decimal(18, 2), initBal)
+      .input('commission_percent', sql.Decimal(5, 2), commPercent)
       .query(`
-        INSERT INTO banks (code, name, account_number, account_name, branch, initial_balance)
-        VALUES (@code, @name, @account_number, @account_name, @branch, @initial_balance)
+        INSERT INTO banks (code, name, account_number, account_name, branch, initial_balance, commission_percent)
+        VALUES (@code, @name, @account_number, @account_name, @branch, @initial_balance, @commission_percent)
       `);
       
     res.status(201).json({ message: 'تم إضافة البنك بنجاح' });
@@ -1881,7 +1883,7 @@ async function getCalculatedBankBalance(txContext, bankId, excludeTxId = null) {
   const txResult = await txContext.request()
     .input('bankId', sql.Int, bankId)
     .query(`
-      SELECT id, type, payment_method, amount, status, bank_id, to_bank_id
+      SELECT id, type, payment_method, amount, net_amount, status, bank_id, to_bank_id
       FROM transactions WITH (UPDLOCK)
       WHERE (bank_id = @bankId OR to_bank_id = @bankId) AND (status IS NULL OR status != 'rejected')
     `);
@@ -1907,7 +1909,8 @@ async function getCalculatedBankBalance(txContext, bankId, excludeTxId = null) {
     } else if (tx.type === 'deposit') {
       if (tx.status === 'approved' || tx.status === 'disbursed' || tx.status === null) {
         if (tx.payment_method === 'bank_transfer') {
-          totalDeposits += Number(tx.amount);
+          const effectiveNet = (tx.net_amount !== null && tx.net_amount !== undefined) ? Number(tx.net_amount) : Number(tx.amount);
+          totalDeposits += effectiveNet;
         } else if (tx.payment_method === 'cash' || !tx.payment_method) {
           totalWithdrawals += Number(tx.amount);
         }
@@ -1941,7 +1944,7 @@ app.get('/api/banks/:id/transactions', async (req, res) => {
     const txResult = await pool.request()
       .input('bankId', sql.Int, bankId)
       .query(`
-        SELECT t.id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.status, t.withdrawal_sub_type,
+        SELECT t.id, t.type, t.payment_method, t.amount, t.commission_rate, t.commission_amount, t.net_amount, t.date, t.notes, t.receipt_image, t.status, t.withdrawal_sub_type,
                t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
                t.rep_id, t.bank_id, t.to_bank_id,
                r.name AS rep_name, r.code AS rep_code,
@@ -1980,7 +1983,8 @@ app.get('/api/banks/:id/transactions', async (req, res) => {
       } else if (tx.type === 'deposit') {
         if (tx.status === 'approved' || tx.status === 'disbursed' || tx.status === null) {
           if (tx.payment_method === 'bank_transfer') {
-            totalDeposits += Number(tx.amount);
+            const effectiveNet = (tx.net_amount !== null && tx.net_amount !== undefined) ? Number(tx.net_amount) : Number(tx.amount);
+            totalDeposits += effectiveNet;
           } else if (tx.payment_method === 'cash' || !tx.payment_method) {
             totalWithdrawals += Number(tx.amount);
           }
@@ -3501,6 +3505,23 @@ app.post('/api/transactions', async (req, res) => {
 
         // Insert Bank Transfer portion if any
         if (bankAmt > 0) {
+          let bankCommRate = 0;
+          let bankCommAmt = 0;
+          let bankNetAmt = bankAmt;
+
+          if (bank_id) {
+            const bankCommCheck = await transaction.request()
+              .input('bId', sql.Int, bank_id)
+              .query('SELECT commission_percent FROM banks WHERE id = @bId');
+            if (bankCommCheck.recordset.length > 0) {
+              bankCommRate = Number(bankCommCheck.recordset[0].commission_percent) || 0;
+              if (bankCommRate > 0) {
+                bankCommAmt = Math.round((bankAmt * (bankCommRate / 100)) * 100) / 100;
+                bankNetAmt = Math.round((bankAmt - bankCommAmt) * 100) / 100;
+              }
+            }
+          }
+
           const bankNotes = notes ? `${notes} (تحويل كاش)` : 'تحويل كاش / بنكي مباشر';
           const insertBank = await transaction.request()
             .input('rep_id', sql.Int, targetRepId)
@@ -3509,6 +3530,9 @@ app.post('/api/transactions', async (req, res) => {
             .input('type', sql.VarChar, 'deposit')
             .input('payment_method', sql.VarChar, 'bank_transfer')
             .input('amount', sql.Decimal(18, 2), bankAmt)
+            .input('commission_rate', sql.Decimal(5, 2), bankCommRate)
+            .input('commission_amount', sql.Decimal(18, 2), bankCommAmt)
+            .input('net_amount', sql.Decimal(18, 2), bankNetAmt)
             .input('date', sql.DateTime, date)
             .input('notes', sql.NVarChar, bankNotes)
             .input('receipt_image', sql.NVarChar, receipt_image_bank || null)
@@ -3522,9 +3546,9 @@ app.post('/api/transactions', async (req, res) => {
             .input('created_by', sql.Int, (userRole === 'representative' || isNaN(userId)) ? null : userId)
             .input('status', sql.VarChar, statusVal)
             .query(`
-              INSERT INTO transactions (rep_id, bank_id, agency_id, type, payment_method, amount, date, notes, status, created_by, receipt_image, denom_200, denom_100, denom_50, denom_20, denom_10, denom_5, denom_1)
+              INSERT INTO transactions (rep_id, bank_id, agency_id, type, payment_method, amount, commission_rate, commission_amount, net_amount, date, notes, status, created_by, receipt_image, denom_200, denom_100, denom_50, denom_20, denom_10, denom_5, denom_1)
               OUTPUT INSERTED.id
-              VALUES (@rep_id, @bank_id, @agency_id, @type, @payment_method, @amount, @date, @notes, @status, @created_by, @receipt_image, @denom_200, @denom_100, @denom_50, @denom_20, @denom_10, @denom_5, @denom_1)
+              VALUES (@rep_id, @bank_id, @agency_id, @type, @payment_method, @amount, @commission_rate, @commission_amount, @net_amount, @date, @notes, @status, @created_by, @receipt_image, @denom_200, @denom_100, @denom_50, @denom_20, @denom_10, @denom_5, @denom_1)
             `);
           bankId = insertBank.recordset[0].id;
         }
@@ -3533,7 +3557,7 @@ app.post('/api/transactions', async (req, res) => {
 
         const createdTxs = [];
         const queryTxDetails = `
-          SELECT t.id, t.rep_id, t.bank_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.withdrawal_sub_type, t.status,
+          SELECT t.id, t.rep_id, t.bank_id, t.type, t.payment_method, t.amount, t.commission_rate, t.commission_amount, t.net_amount, t.date, t.notes, t.withdrawal_sub_type, t.status,
                  t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
                  r.name AS rep_name, r.code AS rep_code,
                  b.name AS bank_name, b.code AS bank_code,
@@ -3735,6 +3759,23 @@ app.post('/api/transactions', async (req, res) => {
       }
 
       // 3. Insert transaction
+      let singleCommRate = 0;
+      let singleCommAmt = 0;
+      let singleNetAmt = transactionAmount;
+
+      if (type === 'deposit' && txPaymentMethod === 'bank_transfer' && bank_id) {
+        const bankCommCheck = await transaction.request()
+          .input('bId', sql.Int, bank_id)
+          .query('SELECT commission_percent FROM banks WHERE id = @bId');
+        if (bankCommCheck.recordset.length > 0) {
+          singleCommRate = Number(bankCommCheck.recordset[0].commission_percent) || 0;
+          if (singleCommRate > 0) {
+            singleCommAmt = Math.round((transactionAmount * (singleCommRate / 100)) * 100) / 100;
+            singleNetAmt = Math.round((transactionAmount - singleCommAmt) * 100) / 100;
+          }
+        }
+      }
+
       const insertSingle = await transaction.request()
         .input('rep_id', sql.Int, targetRepId)
         .input('bank_id', sql.Int, bank_id || null)
@@ -3743,6 +3784,9 @@ app.post('/api/transactions', async (req, res) => {
         .input('type', sql.VarChar, type)
         .input('payment_method', sql.VarChar, txPaymentMethod)
         .input('amount', sql.Decimal(18, 2), transactionAmount)
+        .input('commission_rate', sql.Decimal(5, 2), singleCommRate)
+        .input('commission_amount', sql.Decimal(18, 2), singleCommAmt)
+        .input('net_amount', sql.Decimal(18, 2), singleNetAmt)
         .input('date', sql.DateTime, date)
         .input('notes', sql.NVarChar, notes || null)
         .input('withdrawal_sub_type', sql.NVarChar, withdrawal_sub_type || null)
@@ -3757,9 +3801,9 @@ app.post('/api/transactions', async (req, res) => {
         .input('created_by', sql.Int, (userRole === 'representative' || isNaN(userId)) ? null : userId)
         .input('car_id', sql.Int, car_id || null)
         .query(`
-          INSERT INTO transactions (rep_id, bank_id, company_id, agency_id, type, payment_method, amount, date, notes, withdrawal_sub_type, denom_200, denom_100, denom_50, denom_20, denom_10, denom_5, denom_1, status, created_by, car_id)
+          INSERT INTO transactions (rep_id, bank_id, company_id, agency_id, type, payment_method, amount, commission_rate, commission_amount, net_amount, date, notes, withdrawal_sub_type, denom_200, denom_100, denom_50, denom_20, denom_10, denom_5, denom_1, status, created_by, car_id)
           OUTPUT INSERTED.id
-          VALUES (@rep_id, @bank_id, @company_id, @agency_id, @type, @payment_method, @amount, @date, @notes, @withdrawal_sub_type, @denom_200, @denom_100, @denom_50, @denom_20, @denom_10, @denom_5, @denom_1, @status, @created_by, @car_id)
+          VALUES (@rep_id, @bank_id, @company_id, @agency_id, @type, @payment_method, @amount, @commission_rate, @commission_amount, @net_amount, @date, @notes, @withdrawal_sub_type, @denom_200, @denom_100, @denom_50, @denom_20, @denom_10, @denom_5, @denom_1, @status, @created_by, @car_id)
         `);
         
       const singleId = insertSingle.recordset[0].id;
@@ -3768,7 +3812,7 @@ app.post('/api/transactions', async (req, res) => {
       const txResult = await pool.request()
         .input('id', sql.Int, singleId)
         .query(`
-          SELECT t.id, t.rep_id, t.bank_id, t.company_id, t.type, t.payment_method, t.amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
+          SELECT t.id, t.rep_id, t.bank_id, t.company_id, t.type, t.payment_method, t.amount, t.commission_rate, t.commission_amount, t.net_amount, t.date, t.notes, t.receipt_image, t.withdrawal_sub_type, t.status,
                  t.denom_200, t.denom_100, t.denom_50, t.denom_20, t.denom_10, t.denom_5, t.denom_1,
                  r.name AS rep_name, r.code AS rep_code,
                  b.name AS bank_name, b.code AS bank_code,

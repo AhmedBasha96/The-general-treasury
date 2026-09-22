@@ -103,6 +103,18 @@ async function createTables() {
       BEGIN
         CREATE INDEX idx_banks_code ON banks(code);
       END
+
+      -- Add commission_percent column if missing in banks table
+      IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('banks') AND name = 'commission_percent')
+      BEGIN
+        ALTER TABLE banks ADD commission_percent DECIMAL(5,2) DEFAULT 0;
+      END
+
+      -- Ensure Vodafone Cash bank has default 1% commission percentage
+      UPDATE banks 
+      SET commission_percent = 1.00 
+      WHERE (name LIKE N'%فودافون%' OR name LIKE N'%vodafone%' OR name LIKE N'%Vodafone%') 
+        AND (commission_percent IS NULL OR commission_percent = 0);
     `);
 
     // 1.8. Create supervisors table if not exists
@@ -274,6 +286,9 @@ async function createTables() {
           denom_10 INT DEFAULT 0,
           denom_5 INT DEFAULT 0,
           denom_1 INT DEFAULT 0,
+          commission_rate DECIMAL(5,2) DEFAULT 0,
+          commission_amount DECIMAL(18,2) DEFAULT 0,
+          net_amount DECIMAL(18,2) NULL,
           status VARCHAR(20) DEFAULT 'approved',
           created_by INT NULL,
           approved_by INT NULL,
@@ -416,6 +431,21 @@ async function createTables() {
         IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'purpose_notes')
         BEGIN
           ALTER TABLE transactions ADD purpose_notes NVARCHAR(MAX) NULL;
+        END
+
+        -- Add commission tracking columns for bank deposits (e.g. Vodafone Cash 1%)
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'commission_rate')
+        BEGIN
+          ALTER TABLE transactions ADD commission_rate DECIMAL(5,2) DEFAULT 0;
+        END
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'commission_amount')
+        BEGIN
+          ALTER TABLE transactions ADD commission_amount DECIMAL(18,2) DEFAULT 0;
+        END
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'net_amount')
+        BEGIN
+          ALTER TABLE transactions ADD net_amount DECIMAL(18,2) NULL;
+          EXEC('UPDATE transactions SET net_amount = amount WHERE net_amount IS NULL');
         END
       END
     `);

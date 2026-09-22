@@ -6164,9 +6164,49 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                       >
                         <option value="">اختر الحساب البنكي / المحفظة...</option>
                         {banks.map(b => (
-                          <option key={b.id} value={b.id}>{b.name} ({b.code}) — {b.account_number}</option>
+                          <option key={b.id} value={b.id}>
+                            {b.name} ({b.code}) {Number(b.commission_percent) > 0 ? `— (عمولة ${b.commission_percent}%)` : ''}
+                          </option>
                         ))}
                       </select>
+
+                      {(() => {
+                        const selectedB = banks.find(b => String(b.id) === String(newTx.bankId));
+                        const commRate = Number(selectedB?.commission_percent) || 0;
+                        const bankAmtVal = parseFloat(newTx.bankTransferAmount) || 0;
+                        if (commRate > 0 && bankAmtVal > 0) {
+                          const commAmt = Math.round((bankAmtVal * (commRate / 100)) * 100) / 100;
+                          const netAmt = Math.round((bankAmtVal - commAmt) * 100) / 100;
+                          return (
+                            <div style={{
+                              marginTop: '0.75rem',
+                              padding: '0.85rem 1rem',
+                              background: 'rgba(245, 158, 11, 0.1)',
+                              border: '1px solid rgba(245, 158, 11, 0.3)',
+                              borderRadius: '10px',
+                              color: '#f59e0b',
+                              fontSize: '0.88rem'
+                            }}>
+                              <div style={{ fontWeight: 'bold', marginBottom: '0.35rem' }}>
+                                ⚡ سياسة عمولة تحويل {selectedB.name} ({commRate}%):
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem', color: 'var(--text-secondary)' }}>
+                                <span>المبلغ المورد (يُخصم من المندوب كلياً):</span>
+                                <strong>{bankAmtVal.toLocaleString()} ج.م</strong>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem', color: '#ef4444' }}>
+                                <span>عمولة المحفظة الخصم التلقائي ({commRate}%):</span>
+                                <strong>-{commAmt.toLocaleString()} ج.م</strong>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '0.35rem', borderTop: '1px dashed rgba(245, 158, 11, 0.3)', color: '#10b981', fontWeight: 'bold' }}>
+                                <span>الصافي النازل برصيد البنك:</span>
+                                <span>{netAmt.toLocaleString()} ج.م</span>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   )}
 
@@ -8075,8 +8115,13 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                                   </td>
                                   <td>
                                     <strong style={{ fontSize: '1.05rem', color: isOutflow ? 'var(--danger)' : 'var(--success)' }}>
-                                      {isOutflow ? '-' : '+'}{Number(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
+                                      {isOutflow ? '-' : '+'}{Number((!isOutflow && tx.type === 'deposit' && tx.net_amount !== null && tx.net_amount !== undefined) ? tx.net_amount : tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ج.م
                                     </strong>
+                                    {Number(tx.commission_amount) > 0 && (
+                                      <div style={{ fontSize: '0.75rem', color: '#f59e0b', marginTop: '0.2rem', fontWeight: 600 }}>
+                                        ⚡ عمولة فودافون كاش ({tx.commission_rate || 1}%): -{Number(tx.commission_amount).toLocaleString()} ج.م (المبلغ الأولي: {Number(tx.amount).toLocaleString()} ج.م)
+                                      </div>
+                                    )}
                                   </td>
                                   <td style={{ maxWidth: '220px', fontSize: '0.85rem' }}>
                                     <div>{tx.notes || '—'}</div>
