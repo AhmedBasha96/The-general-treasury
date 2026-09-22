@@ -21,7 +21,9 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
   const [editingTx, setEditingTx] = useState(null);
   const [editForm, setEditForm] = useState({
     amount: '',
-    bank_id: '',
+    source_type: 'external_owner', // external_owner, safe, bank
+    from_bank_id: '',
+    target_bank_id: '', // empty means safe (cash)
     payment_method: 'bank_transfer',
     purpose_type: 'loan_installment',
     purpose_notes: '',
@@ -33,7 +35,9 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
   // Form states
   const [depositForm, setDepositForm] = useState({
     amount: '',
-    bank_id: '', // empty means safe (cash)
+    source_type: 'external_owner', // external_owner, safe, bank
+    from_bank_id: '',
+    target_bank_id: '', // empty means safe (cash)
     payment_method: 'bank_transfer',
     purpose_type: 'loan_installment',
     purpose_notes: '',
@@ -44,7 +48,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
 
   const [repayForm, setRepayForm] = useState({
     amount: '',
-    bank_id: '', // empty means safe (cash)
+    source_bank_id: '', // empty means safe (cash)
     payment_method: 'bank_transfer',
     notes: '',
     date: new Date().toISOString().split('T')[0],
@@ -94,6 +98,8 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
       return;
     }
 
+    const bank_id = depositForm.target_bank_id || null;
+
     setSubmitting(true);
     try {
       const res = await fetch('/api/owner-account/deposit', {
@@ -101,7 +107,8 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...depositForm,
-          payment_method: depositForm.bank_id ? 'bank_transfer' : 'cash'
+          bank_id: bank_id,
+          payment_method: bank_id ? 'bank_transfer' : 'cash'
         })
       });
       const data = await res.json();
@@ -111,7 +118,9 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
         setShowDepositModal(false);
         setDepositForm({
           amount: '',
-          bank_id: '',
+          source_type: 'external_owner',
+          from_bank_id: '',
+          target_bank_id: '',
           payment_method: 'bank_transfer',
           purpose_type: 'loan_installment',
           purpose_notes: '',
@@ -147,6 +156,8 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
       return;
     }
 
+    const bank_id = repayForm.source_bank_id || null;
+
     setSubmitting(true);
     try {
       const res = await fetch('/api/owner-account/repay', {
@@ -154,7 +165,8 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...repayForm,
-          payment_method: repayForm.bank_id ? 'bank_transfer' : 'cash'
+          bank_id: bank_id,
+          payment_method: bank_id ? 'bank_transfer' : 'cash'
         })
       });
       const data = await res.json();
@@ -164,7 +176,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
         setShowRepayModal(false);
         setRepayForm({
           amount: '',
-          bank_id: '',
+          source_bank_id: '',
           payment_method: 'bank_transfer',
           notes: '',
           date: new Date().toISOString().split('T')[0],
@@ -186,7 +198,8 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
     setEditingTx(tx);
     setEditForm({
       amount: tx.amount,
-      bank_id: tx.bank_id ? String(tx.bank_id) : '',
+      source_type: 'external_owner',
+      target_bank_id: tx.bank_id ? String(tx.bank_id) : '',
       payment_method: tx.payment_method || (tx.bank_id ? 'bank_transfer' : 'cash'),
       purpose_type: tx.purpose_type || 'loan_installment',
       purpose_notes: tx.purpose_notes || '',
@@ -209,6 +222,8 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
       return;
     }
 
+    const bank_id = editForm.target_bank_id || null;
+
     setSubmitting(true);
     try {
       const res = await fetch(`/api/owner-account/transactions/${editingTx.id}`, {
@@ -216,7 +231,8 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...editForm,
-          payment_method: editForm.bank_id ? 'bank_transfer' : 'cash'
+          bank_id: bank_id,
+          payment_method: bank_id ? 'bank_transfer' : 'cash'
         })
       });
       const data = await res.json();
@@ -417,8 +433,8 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
               <tr>
                 <th>التاريخ والوقت</th>
                 <th>نوع الحركة</th>
-                <th>الجهة / البنك</th>
-                <th>المبلغ</th>
+                <th>الحساب المستلم / البنك</th>
+                <th>المبلغ المودع/المسدد</th>
                 <th>أوجه الصرف / الغرض المستهدف 🔍</th>
                 <th>الملاحظات والتفاصيل</th>
                 <th>المستند / الإيصال</th>
@@ -457,7 +473,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
                           {tx.purpose_notes && <div className="sub-text" style={{ marginTop: '0.2rem' }}>{tx.purpose_notes}</div>}
                         </div>
                       ) : (
-                        <span className="sub-text">استرداد من سيولة الشريكة</span>
+                        <span className="sub-text">سداد واسترداد لصاحب الشركة</span>
                       )}
                     </td>
                     <td>{tx.notes || '—'}</td>
@@ -528,10 +544,10 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
                 </div>
 
                 <div className="form-group">
-                  <label>الحساب / البنك:*</label>
+                  <label>الحساب المستلم / البنك (يُودع فيه ويزيد رصيده):*</label>
                   <select
-                    value={editForm.bank_id}
-                    onChange={e => setEditForm({ ...editForm, bank_id: e.target.value })}
+                    value={editForm.target_bank_id}
+                    onChange={e => setEditForm({ ...editForm, target_bank_id: e.target.value })}
                   >
                     <option value="">💵 الخزينة النقدية الرئيسية</option>
                     {banks.map(b => (
@@ -618,7 +634,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
       {/* MODAL: ADD OWNER FUNDING DEPOSIT */}
       {showDepositModal && (
         <div className="modal-overlay">
-          <div className="panel modal-content" style={{ maxWidth: '600px' }}>
+          <div className="panel modal-content" style={{ maxWidth: '620px' }}>
             <div className="panel-header">
               <h2 className="panel-title">📥 تسجيل إيداع تمويل شخصي من صاحب الشركة</h2>
               <button className="btn btn-secondary" onClick={() => setShowDepositModal(false)}>✕ إغلاق</button>
@@ -628,6 +644,34 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
 
             <form onSubmit={handleDepositSubmit}>
               <div className="form-grid">
+                <div className="form-group full-width">
+                  <label style={{ fontWeight: 'bold', color: 'var(--primary)' }}>مصدر التمويل (يتخصم منين؟):*</label>
+                  <select
+                    value={depositForm.source_type}
+                    onChange={e => setDepositForm({ ...depositForm, source_type: e.target.value })}
+                    style={{ background: 'rgba(16, 185, 129, 0.1)', borderColor: '#10b981', fontWeight: 'bold' }}
+                  >
+                    <option value="external_owner">💳 حساب شخصي خارجي للمالك (تمويل خارجي - لا يخصم من أي حساب بالشركة)</option>
+                    <option value="safe">💵 الخزينة النقدية الرئيسية للشركة (خصم من الخزنة لتمويل البنك)</option>
+                  </select>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.3rem' }}>
+                    ℹ️ اختر <strong>"حساب شخصي خارجي للمالك"</strong> لإيداع تمويل جديد يدخل لحساب الشركة مباشرة ويُسجل كدين للمالك دون خصمه من خزن التطبيق.
+                  </div>
+                </div>
+
+                <div className="form-group full-width">
+                  <label style={{ fontWeight: 'bold' }}>الحساب المستلم بالشركة (يُودع فيه ويزيد رصيده):*</label>
+                  <select
+                    value={depositForm.target_bank_id}
+                    onChange={e => setDepositForm({ ...depositForm, target_bank_id: e.target.value })}
+                  >
+                    <option value="">💵 الخزينة النقدية الرئيسية</option>
+                    {banks.map(b => (
+                      <option key={b.id} value={b.id}>🏦 {b.name} ({b.account_number})</option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="form-group">
                   <label>مبلغ التمويل (ج.م):*</label>
                   <input
@@ -641,16 +685,13 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
                 </div>
 
                 <div className="form-group">
-                  <label>إلى حساب / بنك:*</label>
-                  <select
-                    value={depositForm.bank_id}
-                    onChange={e => setDepositForm({ ...depositForm, bank_id: e.target.value })}
-                  >
-                    <option value="">💵 الخزينة النقدية الرئيسية</option>
-                    {banks.map(b => (
-                      <option key={b.id} value={b.id}>🏦 {b.name} ({b.account_number})</option>
-                    ))}
-                  </select>
+                  <label>تاريخ الإيداع:*</label>
+                  <input
+                    type="date"
+                    value={depositForm.date}
+                    onChange={e => setDepositForm({ ...depositForm, date: e.target.value })}
+                    required
+                  />
                 </div>
 
                 <div className="form-group full-width">
@@ -677,17 +718,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
                   />
                 </div>
 
-                <div className="form-group">
-                  <label>تاريخ الإيداع:*</label>
-                  <input
-                    type="date"
-                    value={depositForm.date}
-                    onChange={e => setDepositForm({ ...depositForm, date: e.target.value })}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
+                <div className="form-group full-width">
                   <label>صورة إيصال التحويل / الإيداع:</label>
                   <input
                     type="file"
@@ -718,7 +749,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
               </div>
 
               <button type="submit" disabled={submitting} className="btn btn-primary" style={{ width: '100%', marginTop: '1rem' }}>
-                {submitting ? 'جاري تسجيل التمويل...' : 'تأكيد وحفظ التمويل في الحسابات 🚀'}
+                {submitting ? 'جاري تسجيل التمويل...' : 'تأكيد وحفظ التمويل وزيادة رصيد الحساب المستلم 🚀'}
               </button>
             </form>
           </div>
@@ -728,7 +759,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
       {/* MODAL: REPAY OWNER */}
       {showRepayModal && (
         <div className="modal-overlay">
-          <div className="panel modal-content" style={{ maxWidth: '550px' }}>
+          <div className="panel modal-content" style={{ maxWidth: '580px' }}>
             <div className="panel-header">
               <h2 className="panel-title">📤 تسجيل سداد لصاحب الشركة (استرداد)</h2>
               <button className="btn btn-secondary" onClick={() => setShowRepayModal(false)}>✕ إغلاق</button>
@@ -745,6 +776,20 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
 
             <form onSubmit={handleRepaySubmit}>
               <div className="form-grid">
+                <div className="form-group full-width">
+                  <label style={{ fontWeight: 'bold', color: 'var(--danger)' }}>مصدر الخصم بالشركة (يتخصم منين؟):*</label>
+                  <select
+                    value={repayForm.source_bank_id}
+                    onChange={e => setRepayForm({ ...repayForm, source_bank_id: e.target.value })}
+                    style={{ background: 'rgba(239, 68, 68, 0.08)', borderColor: '#ef4444', fontWeight: 'bold' }}
+                  >
+                    <option value="">💵 الخزينة النقدية الرئيسية للشركة</option>
+                    {banks.map(b => (
+                      <option key={b.id} value={b.id}>🏦 {b.name} ({b.account_number})</option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="form-group">
                   <label>مبلغ السداد (ج.م):*</label>
                   <input
@@ -758,19 +803,6 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
                 </div>
 
                 <div className="form-group">
-                  <label>من حساب / بنك:*</label>
-                  <select
-                    value={repayForm.bank_id}
-                    onChange={e => setRepayForm({ ...repayForm, bank_id: e.target.value })}
-                  >
-                    <option value="">💵 الخزينة النقدية الرئيسية</option>
-                    {banks.map(b => (
-                      <option key={b.id} value={b.id}>🏦 {b.name} ({b.account_number})</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group">
                   <label>تاريخ السداد:*</label>
                   <input
                     type="date"
@@ -780,7 +812,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
                   />
                 </div>
 
-                <div className="form-group">
+                <div className="form-group full-width">
                   <label>صورة إيصال التحويل / السداد:</label>
                   <input
                     type="file"
@@ -811,7 +843,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
               </div>
 
               <button type="submit" disabled={submitting} className="btn btn-primary" style={{ width: '100%', marginTop: '1rem' }}>
-                {submitting ? 'جاري تنفيذ السداد...' : 'تأكيد السداد وتخفيض رصيد المالك ✅'}
+                {submitting ? 'جاري تنفيذ السداد...' : 'تأكيد السداد والخصم من الحساب المحدد ✅'}
               </button>
             </form>
           </div>

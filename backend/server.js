@@ -1269,25 +1269,23 @@ app.get('/api/banks', async (req, res) => {
       SELECT 
         b.id, b.code, b.name, b.account_number, b.account_name, b.branch, b.initial_balance, b.created_at,
         ISNULL(SUM(CASE
-          WHEN t.type = 'withdrawal' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) THEN t.amount
-          WHEN t.type = 'deposit' AND t.payment_method = 'bank_transfer' AND t.rep_id IS NOT NULL THEN t.amount
+          WHEN t.type = 'withdrawal' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND ISNULL(t.withdrawal_sub_type, '') <> 'owner_repayment' AND t.bank_id = b.id THEN t.amount
+          WHEN t.type = 'deposit' AND (t.payment_method = 'bank_transfer' OR t.withdrawal_sub_type = 'owner_funding') AND t.bank_id = b.id THEN t.amount
           WHEN t.type = 'bank_transfer' AND t.to_bank_id = b.id THEN t.amount
           ELSE 0 END), 0) AS total_deposits,
         ISNULL(SUM(CASE 
-          WHEN t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) THEN t.amount 
-          WHEN t.type = 'deposit' AND t.payment_method = 'bank_transfer' AND t.rep_id IS NULL THEN t.amount
-          WHEN t.type = 'company_transfer' THEN t.amount
-          WHEN t.type = 'withdrawal' AND t.payment_method = 'bank_transfer' THEN t.amount
+          WHEN t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND ISNULL(t.withdrawal_sub_type, '') <> 'owner_funding' AND t.bank_id = b.id THEN t.amount 
+          WHEN t.type = 'company_transfer' AND t.bank_id = b.id THEN t.amount
+          WHEN t.type = 'withdrawal' AND (t.payment_method = 'bank_transfer' OR t.withdrawal_sub_type = 'owner_repayment') AND t.bank_id = b.id THEN t.amount
           WHEN t.type = 'bank_transfer' AND t.bank_id = b.id THEN t.amount
           ELSE 0 END), 0) AS total_withdrawals,
         b.initial_balance + 
         ISNULL(SUM(CASE
-          WHEN t.type = 'withdrawal' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) THEN t.amount
-          WHEN t.type = 'deposit' AND t.payment_method = 'bank_transfer' AND t.rep_id IS NOT NULL THEN t.amount
-          WHEN t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) THEN -t.amount
-          WHEN t.type = 'deposit' AND t.payment_method = 'bank_transfer' AND t.rep_id IS NULL THEN -t.amount
-          WHEN t.type = 'company_transfer' THEN -t.amount
-          WHEN t.type = 'withdrawal' AND t.payment_method = 'bank_transfer' THEN -t.amount
+          WHEN t.type = 'withdrawal' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND ISNULL(t.withdrawal_sub_type, '') <> 'owner_repayment' AND t.bank_id = b.id THEN t.amount
+          WHEN t.type = 'deposit' AND (t.payment_method = 'bank_transfer' OR t.withdrawal_sub_type = 'owner_funding') AND t.bank_id = b.id THEN t.amount
+          WHEN t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND ISNULL(t.withdrawal_sub_type, '') <> 'owner_funding' AND t.bank_id = b.id THEN -t.amount
+          WHEN t.type = 'company_transfer' AND t.bank_id = b.id THEN -t.amount
+          WHEN t.type = 'withdrawal' AND (t.payment_method = 'bank_transfer' OR t.withdrawal_sub_type = 'owner_repayment') AND t.bank_id = b.id THEN -t.amount
           WHEN t.type = 'bank_transfer' AND t.to_bank_id = b.id THEN t.amount
           WHEN t.type = 'bank_transfer' AND t.bank_id = b.id THEN -t.amount
           ELSE 0 END), 0) AS balance
@@ -2711,15 +2709,14 @@ app.post('/api/transactions', async (req, res) => {
         SELECT 
           b.id, b.initial_balance,
           ISNULL(SUM(CASE
-            WHEN t.type = 'withdrawal' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) THEN t.amount
-            WHEN t.type = 'deposit' AND t.payment_method = 'bank_transfer' AND t.rep_id IS NOT NULL THEN t.amount
+            WHEN t.type = 'withdrawal' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND ISNULL(t.withdrawal_sub_type, '') <> 'owner_repayment' AND t.bank_id = b.id THEN t.amount
+            WHEN t.type = 'deposit' AND (t.payment_method = 'bank_transfer' OR t.withdrawal_sub_type = 'owner_funding') AND t.bank_id = b.id THEN t.amount
             WHEN t.type = 'bank_transfer' AND t.to_bank_id = b.id THEN t.amount
             ELSE 0 END), 0) AS total_deposits,
           ISNULL(SUM(CASE 
-            WHEN t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) THEN t.amount 
-            WHEN t.type = 'deposit' AND t.payment_method = 'bank_transfer' AND t.rep_id IS NULL THEN t.amount
-            WHEN t.type = 'company_transfer' THEN t.amount
-            WHEN t.type = 'withdrawal' AND t.payment_method = 'bank_transfer' THEN t.amount
+            WHEN t.type = 'deposit' AND (t.payment_method = 'cash' OR t.payment_method IS NULL) AND ISNULL(t.withdrawal_sub_type, '') <> 'owner_funding' AND t.bank_id = b.id THEN t.amount 
+            WHEN t.type = 'company_transfer' AND t.bank_id = b.id THEN t.amount
+            WHEN t.type = 'withdrawal' AND (t.payment_method = 'bank_transfer' OR t.withdrawal_sub_type = 'owner_repayment') AND t.bank_id = b.id THEN t.amount
             WHEN t.type = 'bank_transfer' AND t.bank_id = b.id THEN t.amount
             ELSE 0 END), 0) AS total_withdrawals
         FROM banks b
