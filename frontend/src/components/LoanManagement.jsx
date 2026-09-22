@@ -210,14 +210,15 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
   };
 
   return (
-    <div className="panel loans-panel">
-      {/* Panel Header */}
-      <div className="panel-header">
-        <h2 className="panel-title">💳 إشعارات الأقساط والقروض ومواعيد السداد</h2>
-        <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-          ➕ إضافة قرض / التزام جديد
-        </button>
-      </div>
+    <>
+      <div className="panel loans-panel">
+        {/* Panel Header */}
+        <div className="panel-header">
+          <h2 className="panel-title">💳 إشعارات الأقساط والقروض ومواعيد السداد</h2>
+          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
+            ➕ إضافة قرض / التزام جديد
+          </button>
+        </div>
 
       {successMsg && <div className="alert alert-success">{successMsg}</div>}
       {error && <div className="alert alert-error">{error}</div>}
@@ -707,6 +708,7 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
         </div>
       )}
     </div>
-  );
+  </>
+);
 }
 
