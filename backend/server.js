@@ -441,10 +441,17 @@ app.get('/api/audit-logs', async (req, res) => {
 async function seedInitialLoans() {
   try {
     const pool = getPool();
+
+    // Check if initial loans need re-syncing to match exact Excel paid amounts
+    const checkFirstLoanPaid = await pool.request().query("SELECT (SELECT ISNULL(SUM(paid_amount), 0) FROM loan_installments WHERE loan_id = l.id AND status = 'paid') AS total_paid FROM loans l WHERE title = N'ابوظبي الاسلامي'");
+    if (checkFirstLoanPaid.recordset.length > 0 && Math.abs(Number(checkFirstLoanPaid.recordset[0].total_paid) - 223408) > 1) {
+      await pool.request().query("DELETE FROM loans WHERE title IN (N'ابوظبي الاسلامي', N'ابو ظبي فاب مصر', N'ابو ظبي فاب مصر (سامة)', N'بنك siab', N'ابوظبي فاب مصر شهاده', N'بنك القاهره', N'السيارات QNB', N'بنك الاسكان والتعمير', N'بنك siab جديد', N'فاب مصر', N'بنك المصري لتنمية الصادرات', N'كريدي اجريكول')");
+    }
+
     const countRes = await pool.request().query('SELECT COUNT(*) AS total FROM loans');
     if (countRes.recordset[0].total > 0) return;
 
-    console.log('Seeding initial 12 loans from image...');
+    console.log('Seeding initial 12 loans from image with exact paid amount distribution...');
     const loansToSeed = [
       {
         title: 'ابوظبي الاسلامي',
@@ -638,25 +645,33 @@ async function seedInitialLoans() {
 
       const loanId = loanRes.recordset[0].id;
 
-      // Generate Installments
+      // Distribute paid_amount precisely across installments
+      let remainingPaidToDistribute = Number(item.paid_amount) || 0;
       const startDateObj = new Date(item.start_date);
-      const paidCount = item.installment_amount > 0 ? Math.floor(item.paid_amount / item.installment_amount) : 0;
 
       for (let i = 1; i <= item.total_installments; i++) {
         const dueDate = new Date(startDateObj);
         dueDate.setMonth(dueDate.getMonth() + (i - 1));
         const dueDateStr = dueDate.toISOString().split('T')[0];
-        const isPaid = i <= paidCount;
+
+        let instPaidAmt = 0;
+        let instStatus = 'pending';
+
+        if (remainingPaidToDistribute > 0) {
+          instPaidAmt = Math.min(remainingPaidToDistribute, Number(item.installment_amount));
+          remainingPaidToDistribute -= instPaidAmt;
+          instStatus = 'paid';
+        }
 
         await pool.request()
           .input('loanId', sql.Int, loanId)
           .input('instNum', sql.Int, i)
           .input('dueDate', sql.Date, dueDateStr)
           .input('amount', sql.Decimal(18, 2), item.installment_amount)
-          .input('status', sql.NVarChar, isPaid ? 'paid' : 'pending')
-          .input('paidAmount', sql.Decimal(18, 2), isPaid ? item.installment_amount : 0)
-          .input('paidDate', sql.DateTime, isPaid ? new Date() : null)
-          .input('paymentMethod', sql.NVarChar, isPaid ? 'external' : null)
+          .input('status', sql.NVarChar, instStatus)
+          .input('paidAmount', sql.Decimal(18, 2), instPaidAmt)
+          .input('paidDate', sql.DateTime, instStatus === 'paid' ? new Date() : null)
+          .input('paymentMethod', sql.NVarChar, instStatus === 'paid' ? 'external' : null)
           .query(`
             INSERT INTO loan_installments (loan_id, installment_number, due_date, amount, status, paid_amount, paid_date, payment_method)
             VALUES (@loanId, @instNum, @dueDate, @amount, @status, @paidAmount, @paidDate, @paymentMethod)
@@ -664,7 +679,7 @@ async function seedInitialLoans() {
       }
     }
 
-    console.log('Finished seeding 12 initial loans successfully!');
+    console.log('Finished seeding 12 initial loans with exact paid amounts!');
   } catch (err) {
     console.error('Error seeding initial loans:', err);
   }
@@ -713,7 +728,7 @@ app.get('/api/loans', async (req, res) => {
 
 // POST /api/loans - Add new loan and auto-generate installments schedule
 app.post('/api/loans', async (req, res) => {
-  const { title, loan_type, entity_name, account_number, account_holder_name, bank_id, car_id, total_amount, installment_amount, total_installments, start_date, interest_rate, due_day_text, frequency, notes } = req.body;
+  const { title, loan_type, entity_name, account_number, account_holder_name, bank_id, car_id, total_amount, installment_amount, total_installments, start_date, interest_rate, due_day_text, frequency, notes, initial_paid_amount } = req.body;
 
   if (!title || !loan_type || !entity_name || !total_amount || !installment_amount || !total_installments || !start_date) {
     return res.status(400).json({ error: 'يرجى إكمال جميع البيانات المطلوبة للقرض' });
@@ -749,6 +764,8 @@ app.post('/api/loans', async (req, res) => {
       `);
 
       const loanId = loanResult.recordset[0].id;
+      let remainingPaidToDistribute = parseFloat(initial_paid_amount) || 0;
+      const instAmt = parseFloat(installment_amount);
 
       // Auto-generate installments schedule
       const startDateObj = new Date(start_date);
@@ -765,19 +782,33 @@ app.post('/api/loans', async (req, res) => {
 
         const dueDateStr = dueDate.toISOString().split('T')[0];
 
+        let instPaid = 0;
+        let status = 'pending';
+        let paidDate = null;
+
+        if (remainingPaidToDistribute > 0) {
+          instPaid = Math.min(remainingPaidToDistribute, instAmt);
+          remainingPaidToDistribute -= instPaid;
+          status = 'paid';
+          paidDate = startDateStr;
+        }
+
         await transaction.request()
           .input('loanId', sql.Int, loanId)
           .input('instNum', sql.Int, i)
           .input('dueDate', sql.Date, dueDateStr)
           .input('amount', sql.Decimal(18, 2), installment_amount)
+          .input('paidAmount', sql.Decimal(18, 2), instPaid)
+          .input('status', sql.NVarChar, status)
+          .input('paidDate', sql.Date, paidDate)
           .query(`
-            INSERT INTO loan_installments (loan_id, installment_number, due_date, amount, status)
-            VALUES (@loanId, @instNum, @dueDate, @amount, 'pending')
+            INSERT INTO loan_installments (loan_id, installment_number, due_date, amount, paid_amount, status, paid_date, payment_method)
+            VALUES (@loanId, @instNum, @dueDate, @amount, @paidAmount, @status, @paidDate, CASE WHEN @status = 'paid' THEN 'external' ELSE NULL END)
           `);
       }
 
       await transaction.commit();
-      logAuditLog(req, 'إضافة قرض / التزام جديد', 'loan', loanId, { title, total_amount, total_installments });
+      logAuditLog(req, 'إضافة قرض / التزام جديد', 'loan', loanId, { title, total_amount, total_installments, initial_paid_amount });
 
       res.status(201).json({ message: 'تم إضافة القرض وتوليد جدول الأقساط بنجاح', loanId });
     } catch (err) {

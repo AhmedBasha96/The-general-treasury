@@ -19,6 +19,7 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
     total_amount: '',
     installment_amount: '',
     total_installments: '',
+    initial_paid_amount: '',
     start_date: new Date().toISOString().split('T')[0],
     interest_rate: '',
     due_day_text: '15 من كل شهر',
@@ -114,6 +115,7 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
           total_amount: '',
           installment_amount: '',
           total_installments: '',
+          initial_paid_amount: '',
           start_date: new Date().toISOString().split('T')[0],
           interest_rate: '',
           due_day_text: '15 من كل شهر',
@@ -193,13 +195,21 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
     }
   };
 
-  // Auto-calculate installment amount if total_amount and count change
+  // Auto-calculate installment amount or total amount dynamically
   const handleAmountOrCountChange = (field, value) => {
     const updated = { ...newLoan, [field]: value };
-    const tot = parseFloat(updated.total_amount);
-    const cnt = parseInt(updated.total_installments, 10);
-    if (tot > 0 && cnt > 0 && (field === 'total_amount' || field === 'total_installments')) {
-      updated.installment_amount = (tot / cnt).toFixed(2);
+    const tot = parseFloat(updated.total_amount) || 0;
+    const cnt = parseInt(updated.total_installments, 10) || 0;
+    const inst = parseFloat(updated.installment_amount) || 0;
+
+    if (field === 'total_amount' || field === 'total_installments') {
+      if (tot > 0 && cnt > 0) {
+        updated.installment_amount = (tot / cnt).toFixed(2);
+      }
+    } else if (field === 'installment_amount') {
+      if (inst > 0 && cnt > 0 && (!updated.total_amount || parseFloat(updated.total_amount) === 0)) {
+        updated.total_amount = (inst * cnt).toFixed(2);
+      }
     }
     setNewLoan(updated);
   };
@@ -213,6 +223,10 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
     }
   };
 
+  const totalLoanAmountSum = loansData.loans.reduce((acc, l) => acc + (Number(l.total_amount) || 0), 0);
+  const totalPaidAmountSum = loansData.loans.reduce((acc, l) => acc + (Number(l.total_paid_amount) || 0), 0);
+  const totalRemainingAmountSum = loansData.loans.reduce((acc, l) => acc + Math.max(0, (Number(l.total_amount) || 0) - (Number(l.total_paid_amount) || 0)), 0);
+
   return (
     <div className="panel loans-panel">
       {/* Panel Header */}
@@ -221,6 +235,28 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
         <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
           ➕ إضافة قرض / التزام جديد
         </button>
+      </div>
+
+      {/* Overview Stat Cards */}
+      <div className="stats-grid" style={{ marginBottom: '1.2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+        <div className="stat-card" style={{ background: 'rgba(30, 41, 59, 0.6)', border: '1px solid rgba(96, 165, 250, 0.25)', padding: '1rem', borderRadius: '12px' }}>
+          <div style={{ fontSize: '0.85rem', color: '#94a3b8' }}>💳 إجمالي التزامات القروض</div>
+          <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#60a5fa', marginTop: '0.3rem' }}>
+            {totalLoanAmountSum.toLocaleString('ar-EG')} ج.م
+          </div>
+        </div>
+        <div className="stat-card" style={{ background: 'rgba(30, 41, 59, 0.6)', border: '1px solid rgba(16, 185, 129, 0.25)', padding: '1rem', borderRadius: '12px' }}>
+          <div style={{ fontSize: '0.85rem', color: '#94a3b8' }}>🟩 إجمالي المدفوع حتى الآن</div>
+          <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#10b981', marginTop: '0.3rem' }}>
+            {totalPaidAmountSum.toLocaleString('ar-EG')} ج.م
+          </div>
+        </div>
+        <div className="stat-card" style={{ background: 'rgba(30, 41, 59, 0.6)', border: '1px solid rgba(239, 68, 68, 0.25)', padding: '1rem', borderRadius: '12px' }}>
+          <div style={{ fontSize: '0.85rem', color: '#94a3b8' }}>🟥 إجمالي المتبقي للسداد</div>
+          <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#ef4444', marginTop: '0.3rem' }}>
+            {totalRemainingAmountSum.toLocaleString('ar-EG')} ج.م
+          </div>
+        </div>
       </div>
 
       {successMsg && <div className="alert alert-success">{successMsg}</div>}
@@ -325,6 +361,15 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                 );
               })}
             </tbody>
+            <tfoot>
+              <tr style={{ background: 'rgba(30, 41, 59, 0.9)', fontWeight: 'bold', borderTop: '2px solid rgba(255, 255, 255, 0.1)' }}>
+                <td style={{ color: '#f8fafc' }}>الإجمالي الكلي</td>
+                <td style={{ color: '#60a5fa' }}>{totalLoanAmountSum.toLocaleString('ar-EG')} ج.م</td>
+                <td style={{ color: '#10b981' }}>{totalPaidAmountSum.toLocaleString('ar-EG')} ج.م</td>
+                <td style={{ color: '#ef4444' }}>{totalRemainingAmountSum.toLocaleString('ar-EG')} ج.م</td>
+                <td colSpan="8"></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}
@@ -421,8 +466,19 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                     step="any"
                     placeholder="10600"
                     value={newLoan.installment_amount}
-                    onChange={e => setNewLoan({ ...newLoan, installment_amount: e.target.value })}
+                    onChange={e => handleAmountOrCountChange('installment_amount', e.target.value)}
                     required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>المبلغ المدفوع سابقاً / سلفاً (ج.م):</label>
+                  <input
+                    type="number"
+                    step="any"
+                    placeholder="0"
+                    value={newLoan.initial_paid_amount}
+                    onChange={e => setNewLoan({ ...newLoan, initial_paid_amount: e.target.value })}
                   />
                 </div>
 
@@ -478,6 +534,18 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                     </select>
                   </div>
                 )}
+
+                {/* Live Dynamic Auto-Calculation Preview */}
+                <div className="form-group full-width" style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.9rem 1.1rem', borderRadius: '12px', border: '1px dashed rgba(96, 165, 250, 0.35)', marginTop: '0.5rem' }}>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#60a5fa', marginBottom: '0.4rem' }}>
+                    ⚡ الحساب التلقائي المباشر (المدفوع والمتبقي):
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', fontSize: '0.92rem', flexWrap: 'wrap' }}>
+                    <div>إجمالي القرض: <strong style={{ color: '#f8fafc' }}>{(parseFloat(newLoan.total_amount) || 0).toLocaleString('ar-EG')} ج.م</strong></div>
+                    <div>المدفوع (تلقائي): <strong style={{ color: '#10b981' }}>{(parseFloat(newLoan.initial_paid_amount) || 0).toLocaleString('ar-EG')} ج.م</strong></div>
+                    <div>المتبقي (تلقائي): <strong style={{ color: '#ef4444' }}>{Math.max(0, (parseFloat(newLoan.total_amount) || 0) - (parseFloat(newLoan.initial_paid_amount) || 0)).toLocaleString('ar-EG')} ج.م</strong></div>
+                  </div>
+                </div>
 
                 <div className="form-group full-width">
                   <label>ملاحظات إضافية:</label>
