@@ -340,7 +340,7 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
       {/* MODAL: ADD NEW LOAN */}
       {showAddModal && (
         <div className="modal-overlay">
-          <div className="panel modal-content" style={{ maxWidth: '650px' }}>
+          <div className="panel modal-content" style={{ maxWidth: '650px', maxHeight: '88vh', overflowY: 'auto' }}>
             <div className="panel-header">
               <h2 className="panel-title">➕ إضافة قرض / التزام مالي جديد</h2>
               <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>✕ إغلاق</button>
