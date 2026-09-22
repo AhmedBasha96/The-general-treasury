@@ -743,6 +743,89 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
     }
   };
 
+  // Bulk Pending Transactions Selection & Actions
+  const [selectedPendingTxIds, setSelectedPendingTxIds] = useState([]);
+
+  const handleToggleSelectAllPending = (e) => {
+    if (e.target.checked) {
+      setSelectedPendingTxIds(pendingTx.map(t => t.id));
+    } else {
+      setSelectedPendingTxIds([]);
+    }
+  };
+
+  const handleTogglePendingSelect = (id) => {
+    setSelectedPendingTxIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkApprovePending = async () => {
+    if (selectedPendingTxIds.length === 0) return;
+    const selectedTxs = pendingTx.filter(t => selectedPendingTxIds.includes(t.id));
+    const totalAmount = selectedTxs.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+    if (!window.confirm(`هل أنت متأكد من الموافقة الجماعية على ${selectedPendingTxIds.length} طلب صرف بقيمة إجمالية ${totalAmount.toLocaleString('ar-EG')} ج.م؟`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/transactions/bulk-approve', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': currentUser?.id ? String(currentUser.id) : ''
+        },
+        body: JSON.stringify({ ids: selectedPendingTxIds })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message || 'تمت الموافقة الجماعية بنجاح!');
+        setSelectedPendingTxIds([]);
+        loadPendingTx();
+        loadRejectedTx();
+        loadDashboard();
+        loadTransactions();
+        loadCarExpenses();
+      } else {
+        alert(data.error || 'حدث خطأ أثناء الاعتماد الجماعي');
+      }
+    } catch (err) {
+      alert('تعذر الاتصال بالسيرفر');
+    }
+  };
+
+  const handleBulkRejectPending = async () => {
+    if (selectedPendingTxIds.length === 0) return;
+    if (!window.confirm(`هل أنت متأكد من رفض ${selectedPendingTxIds.length} طلب صرف وموافاة أرشيف المرفوضات بها؟`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/transactions/bulk-reject', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': currentUser?.id ? String(currentUser.id) : ''
+        },
+        body: JSON.stringify({ ids: selectedPendingTxIds })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message || 'تم الرفض الجماعي للطلبات المحددة بنجاح!');
+        setSelectedPendingTxIds([]);
+        loadPendingTx();
+        loadRejectedTx();
+        loadDashboard();
+        loadTransactions();
+      } else {
+        alert(data.error || 'حدث خطأ أثناء الرفض الجماعي');
+      }
+    } catch (err) {
+      alert('تعذر الاتصال بالسيرفر');
+    }
+  };
+
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('activeTab') || 'dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [repsSubTab, setRepsSubTab] = useState('delegates');
@@ -3398,149 +3481,253 @@ ${tx.notes ? `<div class="notes-box"><strong>ملاحظات:</strong>${tx.notes}
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>جميع طلبات الصرف المقترحة تم البت فيها بنجاح.</div>
                 </div>
               ) : (
-                <table>
-                  <thead>
-                    <tr>
-                      <th>رقم الطلب والمحاسب المنشئ</th>
-                      <th>الجهة المستفيدة والسيارة</th>
-                      <th>طريقة الصرف ومصدر الخصم</th>
-                      <th>بند الصرف</th>
-                      <th>المبلغ المطلوب</th>
-                      <th>الملاحظات والإيصال</th>
-                      <th>الإجراءات والقرار</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pendingTx.map((tx) => {
-                      const subTypeLabel = tx.withdrawal_sub_type === 'car' ? '🚗 مصاريف سيارات'
-                        : tx.withdrawal_sub_type === 'car_gas' ? '⛽ سيارة (جاز)'
-                          : tx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)'
-                            : tx.withdrawal_sub_type === 'car_other' ? '🔧 سيارة (مصاريف أخرى)'
-                              : tx.withdrawal_sub_type === 'salary' ? '💼 راتب'
-                                : tx.withdrawal_sub_type === 'commission' ? '💰 عمولة'
-                                  : tx.withdrawal_sub_type === 'loan' ? '💸 سلفة'
-                                    : tx.withdrawal_sub_type === 'direct_rent' ? '🏢 إيجار'
-                                      : tx.withdrawal_sub_type === 'direct_operational' ? '🔧 تشغيل'
-                                        : tx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى'
-                                          : tx.withdrawal_sub_type === 'other' ? '📤 صرف عام' : '📤 صرف';
+                <>
+                  {/* Bulk Actions Bar */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '1rem',
+                    background: selectedPendingTxIds.length > 0 ? 'rgba(14, 165, 233, 0.12)' : 'var(--bg-secondary)',
+                    border: selectedPendingTxIds.length > 0 ? '1px solid #0284c7' : '1px solid var(--border-color)',
+                    padding: '0.85rem 1.25rem',
+                    borderRadius: '12px',
+                    marginBottom: '1rem',
+                    transition: 'all 0.2s ease'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem', userSelect: 'none' }}>
+                        <input
+                          type="checkbox"
+                          checked={pendingTx.length > 0 && selectedPendingTxIds.length === pendingTx.length}
+                          onChange={handleToggleSelectAllPending}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#0284c7' }}
+                        />
+                        <span>تحديد جميع الطلبات المعلقة ({pendingTx.length})</span>
+                      </label>
 
-                      return (
-                        <tr key={tx.id} style={{ background: 'rgba(245, 158, 11, 0.02)' }}>
-                          <td>
-                            <div style={{ fontWeight: 'bold', color: 'var(--warning)', fontSize: '0.95rem' }}>TX-{String(tx.id).padStart(6, '0')}</div>
-                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
-                              {new Date(tx.date).toLocaleString('ar-EG')}
-                            </div>
-                            <div style={{ fontSize: '0.78rem', color: 'var(--primary)', marginTop: '0.2rem', fontWeight: 600 }}>
-                              👤 طالب الصرف: {tx.creator_name || 'المحاسب'}
-                            </div>
-                          </td>
-                          <td>
-                            <div>
-                              <strong style={{ color: 'var(--text-primary)' }}>{tx.rep_name || tx.company_name || 'خزينة مباشرة'}</strong>
-                              {tx.rep_code && <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginRight: '0.3rem' }}>({tx.rep_code})</span>}
-                            </div>
-                            {tx.agency_name && (
-                              <div style={{ fontSize: '0.75rem', color: 'var(--primary)', marginTop: '0.15rem' }}>
-                                🏢 توكيل: {tx.agency_name}
+                      {selectedPendingTxIds.length > 0 && (
+                        <span style={{ fontSize: '0.85rem', color: '#38bdf8', fontWeight: 'bold', background: 'rgba(2, 132, 199, 0.2)', padding: '0.25rem 0.75rem', borderRadius: '8px' }}>
+                          ☑️ تم تحديد {selectedPendingTxIds.length} طلب (بإجمالي {pendingTx.filter(t => selectedPendingTxIds.includes(t.id)).reduce((sum, t) => sum + Number(t.amount || 0), 0).toLocaleString('ar-EG')} ج.م)
+                        </span>
+                      )}
+                    </div>
+
+                    {selectedPendingTxIds.length > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <button
+                          className="btn"
+                          onClick={handleBulkApprovePending}
+                          style={{
+                            padding: '0.45rem 1.1rem',
+                            fontSize: '0.85rem',
+                            background: 'linear-gradient(135deg, #10b981, #059669)',
+                            color: '#fff',
+                            border: 'none',
+                            fontWeight: 'bold',
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 8px rgba(16,185,129,0.3)'
+                          }}
+                        >
+                          ✅ موافقة واعتماد المحدد ({selectedPendingTxIds.length})
+                        </button>
+                        <button
+                          className="btn"
+                          onClick={handleBulkRejectPending}
+                          style={{
+                            padding: '0.45rem 1.1rem',
+                            fontSize: '0.85rem',
+                            background: 'rgba(239, 68, 68, 0.15)',
+                            color: '#ef4444',
+                            border: '1px solid rgba(239, 68, 68, 0.4)',
+                            fontWeight: 'bold',
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ❌ رفض الطلبات المحددة ({selectedPendingTxIds.length})
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => setSelectedPendingTxIds([])}
+                          style={{ padding: '0.45rem 0.75rem', fontSize: '0.8rem' }}
+                        >
+                          إلغاء التحديد
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <table>
+                    <thead>
+                      <tr>
+                        <th style={{ width: '40px', textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={pendingTx.length > 0 && selectedPendingTxIds.length === pendingTx.length}
+                            onChange={handleToggleSelectAllPending}
+                            style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#0284c7' }}
+                            title="تحديد / إلغاء تحديد الكل"
+                          />
+                        </th>
+                        <th>رقم الطلب والمحاسب المنشئ</th>
+                        <th>الجهة المستفيدة والسيارة</th>
+                        <th>طريقة الصرف ومصدر الخصم</th>
+                        <th>بند الصرف</th>
+                        <th>المبلغ المطلوب</th>
+                        <th>الملاحظات والإيصال</th>
+                        <th>الإجراءات والقرار</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pendingTx.map((tx) => {
+                        const isSelected = selectedPendingTxIds.includes(tx.id);
+                        const subTypeLabel = tx.withdrawal_sub_type === 'car' ? '🚗 مصاريف سيارات'
+                          : tx.withdrawal_sub_type === 'car_gas' ? '⛽ سيارة (جاز)'
+                            : tx.withdrawal_sub_type === 'car_oil' ? '🛢️ سيارة (زيت)'
+                              : tx.withdrawal_sub_type === 'car_other' ? '🔧 سيارة (مصاريف أخرى)'
+                                : tx.withdrawal_sub_type === 'salary' ? '💼 راتب'
+                                  : tx.withdrawal_sub_type === 'commission' ? '💰 عمولة'
+                                    : tx.withdrawal_sub_type === 'loan' ? '💸 سلفة'
+                                      : tx.withdrawal_sub_type === 'direct_rent' ? '🏢 إيجار'
+                                        : tx.withdrawal_sub_type === 'direct_operational' ? '🔧 تشغيل'
+                                          : tx.withdrawal_sub_type === 'direct_other' ? '📝 عامة أخرى'
+                                            : tx.withdrawal_sub_type === 'other' ? '📤 صرف عام' : '📤 صرف';
+
+                        return (
+                          <tr key={tx.id} style={{ background: isSelected ? 'rgba(14, 165, 233, 0.08)' : 'rgba(245, 158, 11, 0.02)', transition: 'background 0.2s ease' }}>
+                            <td style={{ textAlign: 'center' }}>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => handleTogglePendingSelect(tx.id)}
+                                style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#0284c7' }}
+                              />
+                            </td>
+                            <td>
+                              <div style={{ fontWeight: 'bold', color: 'var(--warning)', fontSize: '0.95rem' }}>TX-{String(tx.id).padStart(6, '0')}</div>
+                              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                                {new Date(tx.date).toLocaleString('ar-EG')}
                               </div>
-                            )}
-                            {tx.car_plate_number && (
-                              <div style={{ fontSize: '0.78rem', color: '#fb923c', marginTop: '0.25rem', background: 'rgba(245,158,11,0.1)', padding: '0.2rem 0.5rem', borderRadius: '6px', display: 'inline-block' }}>
-                                🚗 سيارة: {tx.car_plate_number} {tx.car_driver_name ? `(${tx.car_driver_name})` : ''} {tx.car_odometer_km ? `— ${tx.car_odometer_km} كم` : ''}
+                              <div style={{ fontSize: '0.78rem', color: 'var(--primary)', marginTop: '0.2rem', fontWeight: 600 }}>
+                                👤 طالب الصرف: {tx.creator_name || 'المحاسب'}
                               </div>
-                            )}
-                          </td>
-                          <td>
-                            {tx.payment_method === 'bank_transfer' ? (
+                            </td>
+                            <td>
                               <div>
-                                <span className="badge badge-company-transfer" style={{ fontSize: '0.8rem' }}>🏦 تحويل بنكي</span>
-                                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                                  {tx.bank_name || 'حساب بنكي'} {tx.bank_account_number ? `(${tx.bank_account_number})` : ''}
+                                <strong style={{ color: 'var(--text-primary)' }}>{tx.rep_name || tx.company_name || 'خزينة مباشرة'}</strong>
+                                {tx.rep_code && <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginRight: '0.3rem' }}>({tx.rep_code})</span>}
+                              </div>
+                              {tx.agency_name && (
+                                <div style={{ fontSize: '0.75rem', color: 'var(--primary)', marginTop: '0.15rem' }}>
+                                  🏢 توكيل: {tx.agency_name}
                                 </div>
-                              </div>
-                            ) : (
-                              <div>
-                                <span className="badge badge-deposit" style={{ fontSize: '0.8rem', background: 'rgba(16,185,129,0.1)', color: 'var(--success)' }}>💵 نقداً بالخزينة</span>
-                              </div>
-                            )}
-                          </td>
-                          <td>
-                            <span className="badge badge-withdrawal" style={{ background: 'rgba(245, 158, 11, 0.12)', color: 'var(--warning)', border: '1px solid rgba(245, 158, 11, 0.25)', fontSize: '0.85rem' }}>
-                              {subTypeLabel}
-                            </span>
-                          </td>
-                          <td>
-                            <strong style={{ color: 'var(--danger)', fontSize: '1.1rem', fontWeight: 900 }}>
-                              {Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
-                            </strong>
-                          </td>
-                          <td style={{ maxWidth: '200px', fontSize: '0.85rem' }}>
-                            <div>{tx.notes || '—'}</div>
-                            {tx.receipt_image && (
-                              <div style={{ marginTop: '0.3rem' }}>
-                                <a
-                                  href="#"
-                                  onClick={(e) => { e.preventDefault(); setActiveImageModal(tx.receipt_image); }}
-                                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.78rem', color: '#a78bfa', textDecoration: 'underline', fontWeight: 600 }}
+                              )}
+                              {tx.car_plate_number && (
+                                <div style={{ fontSize: '0.78rem', color: '#fb923c', marginTop: '0.25rem', background: 'rgba(245,158,11,0.1)', padding: '0.2rem 0.5rem', borderRadius: '6px', display: 'inline-block' }}>
+                                  🚗 سيارة: {tx.car_plate_number} {tx.car_driver_name ? `(${tx.car_driver_name})` : ''} {tx.car_odometer_km ? `— ${tx.car_odometer_km} كم` : ''}
+                                </div>
+                              )}
+                            </td>
+                            <td>
+                              {tx.payment_method === 'bank_transfer' ? (
+                                <div>
+                                  <span className="badge badge-company-transfer" style={{ fontSize: '0.8rem' }}>🏦 تحويل بنكي</span>
+                                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                                    {tx.bank_name || 'حساب بنكي'} {tx.bank_account_number ? `(${tx.bank_account_number})` : ''}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div>
+                                  <span className="badge badge-deposit" style={{ fontSize: '0.8rem', background: 'rgba(16,185,129,0.1)', color: 'var(--success)' }}>💵 نقداً بالخزينة</span>
+                                </div>
+                              )}
+                            </td>
+                            <td>
+                              <span className="badge badge-withdrawal" style={{ background: 'rgba(245, 158, 11, 0.12)', color: 'var(--warning)', border: '1px solid rgba(245, 158, 11, 0.25)', fontSize: '0.85rem' }}>
+                                {subTypeLabel}
+                              </span>
+                            </td>
+                            <td>
+                              <strong style={{ color: 'var(--danger)', fontSize: '1.1rem', fontWeight: 900 }}>
+                                {Number(tx.amount).toLocaleString('ar-EG', { minimumFractionDigits: 2 })} ج.م
+                              </strong>
+                            </td>
+                            <td style={{ maxWidth: '200px', fontSize: '0.85rem' }}>
+                              <div>{tx.notes || '—'}</div>
+                              {tx.receipt_image && (
+                                <div style={{ marginTop: '0.3rem' }}>
+                                  <a
+                                    href="#"
+                                    onClick={(e) => { e.preventDefault(); setActiveImageModal(tx.receipt_image); }}
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.78rem', color: '#a78bfa', textDecoration: 'underline', fontWeight: 600 }}
+                                  >
+                                    📎 عرض الإيصال المرفق
+                                  </a>
+                                </div>
+                              )}
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                <button
+                                  className="btn"
+                                  style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem', background: '#0284c7', color: '#fff', border: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
+                                  onClick={() => setPreviewingTx(tx)}
                                 >
-                                  📎 عرض الإيصال المرفق
-                                </a>
+                                  🔍 معاينة التفاصيل
+                                </button>
+                                <button
+                                  className="btn btn-primary"
+                                  style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem', background: 'linear-gradient(135deg, var(--success), #059669)', border: 'none', fontWeight: 'bold' }}
+                                  onClick={() => handleApproveTx(tx.id)}
+                                >
+                                  ✔️ موافقة
+                                </button>
+                                <button
+                                  className="btn btn-secondary"
+                                  style={{ padding: '0.4rem 0.65rem', fontSize: '0.8rem' }}
+                                  onClick={() => {
+                                    setEditingTx({
+                                      ...tx,
+                                      denominations: {
+                                        denom_200: tx.denom_200 || 0,
+                                        denom_100: tx.denom_100 || 0,
+                                        denom_50: tx.denom_50 || 0,
+                                        denom_20: tx.denom_20 || 0,
+                                        denom_10: tx.denom_10 || 0,
+                                        denom_5: tx.denom_5 || 0,
+                                        denom_1: tx.denom_1 || 0
+                                      }
+                                    });
+                                    setEditError('');
+                                    setEditSuccess('');
+                                  }}
+                                >
+                                  ✏️ تعديل
+                                </button>
+                                <button
+                                  className="btn btn-secondary"
+                                  style={{ padding: '0.4rem 0.65rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
+                                  onClick={() => handleRejectTx(tx.id)}
+                                >
+                                  ❌ رفض
+                                </button>
                               </div>
-                            )}
-                          </td>
-                          <td>
-                            <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-                              <button
-                                className="btn"
-                                style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem', background: '#0284c7', color: '#fff', border: 'none', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
-                                onClick={() => setPreviewingTx(tx)}
-                              >
-                                🔍 معاينة التفاصيل
-                              </button>
-                              <button
-                                className="btn btn-primary"
-                                style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem', background: 'linear-gradient(135deg, var(--success), #059669)', border: 'none', fontWeight: 'bold' }}
-                                onClick={() => handleApproveTx(tx.id)}
-                              >
-                                ✔️ موافقة
-                              </button>
-                              <button
-                                className="btn btn-secondary"
-                                style={{ padding: '0.4rem 0.65rem', fontSize: '0.8rem' }}
-                                onClick={() => {
-                                  setEditingTx({
-                                    ...tx,
-                                    denominations: {
-                                      denom_200: tx.denom_200 || 0,
-                                      denom_100: tx.denom_100 || 0,
-                                      denom_50: tx.denom_50 || 0,
-                                      denom_20: tx.denom_20 || 0,
-                                      denom_10: tx.denom_10 || 0,
-                                      denom_5: tx.denom_5 || 0,
-                                      denom_1: tx.denom_1 || 0
-                                    }
-                                  });
-                                  setEditError('');
-                                  setEditSuccess('');
-                                }}
-                              >
-                                ✏️ تعديل
-                              </button>
-                              <button
-                                className="btn btn-secondary"
-                                style={{ padding: '0.4rem 0.65rem', fontSize: '0.8rem', backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', borderColor: 'rgba(244, 63, 94, 0.2)' }}
-                                onClick={() => handleRejectTx(tx.id)}
-                              >
-                                ❌ رفض
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </>
               )}
             </div>
           )}

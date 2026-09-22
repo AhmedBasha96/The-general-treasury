@@ -60,6 +60,77 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
+  // Bulk Selection State for Owner Account Pending Requests
+  const [selectedPendingOwnerIds, setSelectedPendingOwnerIds] = useState([]);
+
+  const handleToggleSelectAllOwnerPending = (e) => {
+    if (e.target.checked) {
+      setSelectedPendingOwnerIds(pendingRequests.map(t => t.id));
+    } else {
+      setSelectedPendingOwnerIds([]);
+    }
+  };
+
+  const handleTogglePendingOwnerSelect = (id) => {
+    setSelectedPendingOwnerIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkApproveOwnerPending = async () => {
+    if (selectedPendingOwnerIds.length === 0) return;
+    if (!window.confirm(`هل أنت متأكد من الموافقة الجماعية على ${selectedPendingOwnerIds.length} طلب؟`)) return;
+
+    setSubmitting(true);
+    setError('');
+    setSuccessMsg('');
+    try {
+      let approvedCount = 0;
+      for (const id of selectedPendingOwnerIds) {
+        const res = await fetch(`/api/owner-account/transactions/${id}/approve`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-user-role': userRole }
+        });
+        if (res.ok) approvedCount++;
+      }
+      setSuccessMsg(`تمت الموافقة الجماعية على ${approvedCount} طلب بنجاح!`);
+      setSelectedPendingOwnerIds([]);
+      fetchData();
+      if (onRefreshDashboard) onRefreshDashboard();
+    } catch (err) {
+      setError('تعذر الاتصال بالسيرفر');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleBulkRejectOwnerPending = async () => {
+    if (selectedPendingOwnerIds.length === 0) return;
+    if (!window.confirm(`هل أنت متأكد من رفض ${selectedPendingOwnerIds.length} طلب تحديداً؟`)) return;
+
+    setSubmitting(true);
+    setError('');
+    setSuccessMsg('');
+    try {
+      let rejectedCount = 0;
+      for (const id of selectedPendingOwnerIds) {
+        const res = await fetch(`/api/owner-account/transactions/${id}/reject`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-user-role': userRole }
+        });
+        if (res.ok) rejectedCount++;
+      }
+      setSuccessMsg(`تم رفض ${rejectedCount} طلب بنجاح!`);
+      setSelectedPendingOwnerIds([]);
+      fetchData();
+      if (onRefreshDashboard) onRefreshDashboard();
+    } catch (err) {
+      setError('تعذر الاتصال بالسيرفر');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const fetchData = async () => {
     setLoading(true);
     setError('');
@@ -616,6 +687,55 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
                 </p>
               </div>
             </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', background: 'rgba(0,0,0,0.3)', padding: '0.4rem 0.8rem', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 'bold' }}>
+                <input
+                  type="checkbox"
+                  checked={pendingRequests.length > 0 && selectedPendingOwnerIds.length === pendingRequests.length}
+                  onChange={handleToggleSelectAllOwnerPending}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#f59e0b' }}
+                />
+                <span>تحديد الكل ({pendingRequests.length})</span>
+              </label>
+
+              {selectedPendingOwnerIds.length > 0 && (
+                <>
+                  <button
+                    disabled={submitting}
+                    onClick={handleBulkApproveOwnerPending}
+                    style={{
+                      background: 'linear-gradient(135deg, #10b981, #059669)',
+                      color: '#fff',
+                      border: 'none',
+                      padding: '0.45rem 0.9rem',
+                      borderRadius: '10px',
+                      fontWeight: 800,
+                      fontSize: '0.85rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ✅ موافقة على المحدد ({selectedPendingOwnerIds.length})
+                  </button>
+                  <button
+                    disabled={submitting}
+                    onClick={handleBulkRejectOwnerPending}
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.2)',
+                      color: '#ef4444',
+                      border: '1px solid rgba(239, 68, 68, 0.4)',
+                      padding: '0.45rem 0.9rem',
+                      borderRadius: '10px',
+                      fontWeight: 800,
+                      fontSize: '0.85rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ❌ رفض المحدد ({selectedPendingOwnerIds.length})
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem' }}>
@@ -636,16 +756,24 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
                 }}>
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
-                      <span style={{
-                        padding: '0.3rem 0.65rem',
-                        borderRadius: '8px',
-                        fontSize: '0.8rem',
-                        fontWeight: 800,
-                        background: isFunding ? 'rgba(16, 185, 129, 0.18)' : 'rgba(239, 68, 68, 0.18)',
-                        color: isFunding ? '#10b981' : '#ef4444'
-                      }}>
-                        {isFunding ? '📥 طلب إيداع تمويل' : '📤 طلب سداد للمالك'}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedPendingOwnerIds.includes(tx.id)}
+                          onChange={() => handleTogglePendingOwnerSelect(tx.id)}
+                          style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#f59e0b' }}
+                        />
+                        <span style={{
+                          padding: '0.3rem 0.65rem',
+                          borderRadius: '8px',
+                          fontSize: '0.8rem',
+                          fontWeight: 800,
+                          background: isFunding ? 'rgba(16, 185, 129, 0.18)' : 'rgba(239, 68, 68, 0.18)',
+                          color: isFunding ? '#10b981' : '#ef4444'
+                        }}>
+                          {isFunding ? '📥 طلب إيداع تمويل' : '📤 طلب سداد للمالك'}
+                        </span>
+                      </div>
                       <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                         📅 {new Date(tx.date).toLocaleDateString('ar-EG')}
                       </span>

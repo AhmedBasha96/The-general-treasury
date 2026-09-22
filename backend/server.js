@@ -3620,6 +3620,173 @@ app.post('/api/transactions/:id/reject', async (req, res) => {
   }
 });
 
+// POST /api/transactions/bulk-approve - Bulk approve pending transactions - Manager only
+app.post('/api/transactions/bulk-approve', async (req, res) => {
+  const { ids } = req.body;
+  const userId = parseInt(req.headers['x-user-id']);
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'لم يتم تحديد أي عمليات للاعتماد' });
+  }
+
+  try {
+    const pool = getPool();
+    let approvedCount = 0;
+    const errors = [];
+
+    for (const txId of ids) {
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      try {
+        const txResult = await transaction.request()
+          .input('txId', sql.Int, txId)
+          .query('SELECT * FROM transactions WITH (UPDLOCK) WHERE id = @txId');
+
+        if (txResult.recordset.length === 0) {
+          await transaction.rollback();
+          errors.push(`العملية رقم TX-${String(txId).padStart(6, '0')} غير موجودة`);
+          continue;
+        }
+
+        const tx = txResult.recordset[0];
+        if (tx.status !== 'pending' && tx.status !== 'rejected') {
+          await transaction.rollback();
+          errors.push(`العملية رقم TX-${String(txId).padStart(6, '0')} تم البت فيها مسبقاً`);
+          continue;
+        }
+
+        // Balance check for withdrawals
+        if (tx.type === 'withdrawal') {
+          const isBankOut = tx.payment_method === 'bank_transfer' && tx.withdrawal_sub_type !== 'bank_deposit';
+          if (isBankOut) {
+            if (!tx.bank_id) {
+              await transaction.rollback();
+              errors.push(`العملية TX-${String(txId).padStart(6, '0')}: الحساب البنكي غير محدد`);
+              continue;
+            }
+            const currentBankBalance = await getCalculatedBankBalance(transaction, tx.bank_id);
+            if (currentBankBalance < Number(tx.amount)) {
+              await transaction.rollback();
+              errors.push(`العملية TX-${String(txId).padStart(6, '0')}: رصيد الحساب البنكي غير كافٍ`);
+              continue;
+            }
+          } else {
+            const currentCashBalance = await getSafeCashBalance(transaction);
+            if (currentCashBalance < Number(tx.amount)) {
+              await transaction.rollback();
+              errors.push(`العملية TX-${String(txId).padStart(6, '0')}: رصيد الخزينة غير كافٍ`);
+              continue;
+            }
+          }
+        }
+
+        // Balance check for company transfers
+        if (tx.type === 'company_transfer') {
+          if (tx.payment_method === 'cash' || tx.payment_method === null) {
+            const currentCashBalance = await getSafeCashBalance(transaction);
+            if (currentCashBalance < Number(tx.amount)) {
+              await transaction.rollback();
+              errors.push(`العملية TX-${String(txId).padStart(6, '0')}: رصيد الخزينة غير كافٍ للتحويل للشركة`);
+              continue;
+            }
+          } else {
+            if (!tx.bank_id) {
+              await transaction.rollback();
+              errors.push(`العملية TX-${String(txId).padStart(6, '0')}: الحساب البنكي غير محدد للتحويل`);
+              continue;
+            }
+            const currentBankBalance = await getCalculatedBankBalance(transaction, tx.bank_id);
+            if (currentBankBalance < Number(tx.amount)) {
+              await transaction.rollback();
+              errors.push(`العملية TX-${String(txId).padStart(6, '0')}: رصيد الحساب البنكي غير كافٍ للتحويل`);
+              continue;
+            }
+          }
+        }
+
+        // Owner Account transactions approval handling if applicable
+        if (tx.withdrawal_sub_type === 'owner_repayment') {
+          const depRes = await transaction.request().query(`
+            SELECT ISNULL(SUM(amount), 0) AS total_deposited
+            FROM transactions WHERE withdrawal_sub_type = 'owner_funding' AND (status IN ('approved', 'disbursed') OR status IS NULL)
+          `);
+          const repRes = await transaction.request().query(`
+            SELECT ISNULL(SUM(amount), 0) AS total_repaid
+            FROM transactions WHERE withdrawal_sub_type = 'owner_repayment' AND (status IN ('approved', 'disbursed') OR status IS NULL)
+          `);
+          const netOwed = (Number(depRes.recordset[0]?.total_deposited) || 0) - (Number(repRes.recordset[0]?.total_repaid) || 0);
+
+          if (Number(tx.amount) > netOwed) {
+            await transaction.rollback();
+            errors.push(`العملية TX-${String(txId).padStart(6, '0')}: المبلغ يتجاوز صافي مستحقات المالك الحالية`);
+            continue;
+          }
+        }
+
+        await transaction.request()
+          .input('txId', sql.Int, txId)
+          .input('approvedBy', sql.Int, isNaN(userId) ? null : userId)
+          .query("UPDATE transactions SET status = 'approved', approved_by = @approvedBy WHERE id = @txId");
+
+        await transaction.commit();
+        approvedCount++;
+        try {
+          logAuditLog(req, 'موافقة جماعية على عملية', 'transaction', parseInt(txId), { status: 'approved' });
+        } catch (aErr) {}
+      } catch (err) {
+        await transaction.rollback();
+        errors.push(`العملية TX-${String(txId).padStart(6, '0')}: حدث خطأ غير متوقع`);
+      }
+    }
+
+    res.json({
+      message: `تمت الموافقة الجماعية على ${approvedCount} من أصل ${ids.length} طلب بنجاح!`,
+      approvedCount,
+      errors
+    });
+  } catch (error) {
+    console.error('Error in bulk-approve transactions:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء الاعتماد الجماعي للطلبات' });
+  }
+});
+
+// POST /api/transactions/bulk-reject - Bulk reject pending transactions - Manager only
+app.post('/api/transactions/bulk-reject', async (req, res) => {
+  const { ids } = req.body;
+  const userId = parseInt(req.headers['x-user-id']);
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'لم يتم تحديد أي عمليات للرفض' });
+  }
+
+  try {
+    const pool = getPool();
+    let rejectedCount = 0;
+
+    for (const txId of ids) {
+      const result = await pool.request()
+        .input('txId', sql.Int, txId)
+        .input('approvedBy', sql.Int, isNaN(userId) ? null : userId)
+        .query("UPDATE transactions SET status = 'rejected', approved_by = @approvedBy WHERE id = @txId AND status = 'pending'");
+
+      if (result.rowsAffected[0] > 0) {
+        rejectedCount++;
+        try {
+          logAuditLog(req, 'رفض جماعي لطلب عملية', 'transaction', parseInt(txId), { status: 'rejected' });
+        } catch (aErr) {}
+      }
+    }
+
+    res.json({
+      message: `تم رفض ${rejectedCount} طلب بنجاح ونقلها لأرشيف المرفوضات!`,
+      rejectedCount
+    });
+  } catch (error) {
+    console.error('Error in bulk-reject transactions:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء الرفض الجماعي للطلبات' });
+  }
+});
+
 // POST /api/transactions/:id/receive - Confirm receipt of a pending deposit - Accountant/Manager only
 app.post('/api/transactions/:id/receive', async (req, res) => {
   const txId = req.params.id;
