@@ -5104,6 +5104,86 @@ app.put('/api/owner-account/transactions/:id', async (req, res) => {
   }
 });
 
+// DELETE /api/owner-account/transactions/:id - Delete an owner account transaction (Manager only)
+app.delete('/api/owner-account/transactions/:id', async (req, res) => {
+  const txId = req.params.id;
+  const userRole = req.headers['x-user-role'];
+
+  if (userRole !== 'manager') {
+    return res.status(403).json({ error: 'غير مسموح لغير المدراء بحذف معاملات حساب جاري المالك' });
+  }
+
+  try {
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      // 1. Fetch transaction
+      const txCheck = await transaction.request()
+        .input('txId', sql.Int, txId)
+        .query("SELECT * FROM transactions WITH (UPDLOCK) WHERE id = @txId AND withdrawal_sub_type IN ('owner_funding', 'owner_repayment')");
+
+      if (txCheck.recordset.length === 0) {
+        await transaction.rollback();
+        return res.status(404).json({ error: 'العملية غير موجودة أو ليست تابعة لحساب المالك' });
+      }
+
+      const existingTx = txCheck.recordset[0];
+      const isFunding = existingTx.withdrawal_sub_type === 'owner_funding';
+
+      // 2. If deleting funding, validate that total remaining funding >= total repaid
+      if (isFunding) {
+        const depRes = await transaction.request()
+          .input('txId', sql.Int, txId)
+          .query(`
+            SELECT ISNULL(SUM(amount), 0) AS total_deposited
+            FROM transactions WITH (UPDLOCK)
+            WHERE withdrawal_sub_type = 'owner_funding' AND id <> @txId
+              AND (status IN ('approved', 'disbursed') OR status IS NULL)
+          `);
+        const repRes = await transaction.request().query(`
+          SELECT ISNULL(SUM(amount), 0) AS total_repaid
+          FROM transactions WITH (UPDLOCK)
+          WHERE withdrawal_sub_type = 'owner_repayment'
+            AND (status IN ('approved', 'disbursed') OR status IS NULL)
+        `);
+
+        const remainingFunding = Number(depRes.recordset[0]?.total_deposited) || 0;
+        const totalRepaid = Number(repRes.recordset[0]?.total_repaid) || 0;
+
+        if (remainingFunding < totalRepaid) {
+          await transaction.rollback();
+          return res.status(400).json({
+            error: `لا يمكن حذف إيداع التمويل هذا لأن إجمالي المسدادات الحالية للمالك (${totalRepaid.toLocaleString('ar-EG')} ج.م) أكبر من المتبقي من التمويل بعد الحذف (${remainingFunding.toLocaleString('ar-EG')} ج.م).`
+          });
+        }
+      }
+
+      // 3. Delete transaction
+      await transaction.request()
+        .input('txId', sql.Int, txId)
+        .query('DELETE FROM transactions WHERE id = @txId');
+
+      await transaction.commit();
+
+      try {
+        await logAuditLog(req, 'حذف عملية من حساب جاري المالك', 'transaction', parseInt(txId), { amount: existingTx.amount, isFunding });
+      } catch (auditErr) {
+        console.error('Audit log error:', auditErr);
+      }
+
+      res.json({ message: 'تم حذف العملية من حساب جاري المالك بنجاح' });
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+  } catch (error) {
+    console.error('Error deleting owner account transaction:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء حذف المعاملة' });
+  }
+});
+
 // Start Database connection and then Express server
 connectDB()
   .then(async (pool) => {

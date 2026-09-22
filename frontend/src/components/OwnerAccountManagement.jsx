@@ -236,6 +236,29 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
     }
   };
 
+  const handleDeleteOwnerTx = async (tx) => {
+    const typeText = tx.withdrawal_sub_type === 'owner_funding' ? 'إيداع التمويل' : 'عملية السداد';
+    if (window.confirm(`هل أنت متأكد من حذف ${typeText} بقيمة ${Number(tx.amount).toLocaleString('ar-EG')} ج.م من حساب جاري المالك؟`)) {
+      setError('');
+      setSuccessMsg('');
+      try {
+        const res = await fetch(`/api/owner-account/transactions/${tx.id}`, {
+          method: 'DELETE'
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setSuccessMsg('تم حذف العملية من حساب جاري المالك بنجاح!');
+          fetchData();
+          if (onRefreshDashboard) onRefreshDashboard();
+        } else {
+          setError(data.error || 'حدث خطأ أثناء حذف العملية');
+        }
+      } catch (err) {
+        setError('تعذر الاتصال بالسيرفر');
+      }
+    }
+  };
+
   const handleImageUpload = (e, formType) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -452,9 +475,14 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
                     </td>
                     {userRole === 'manager' && (
                       <td>
-                        <button className="btn btn-xs btn-secondary" onClick={() => handleOpenEditModal(tx)}>
-                          ✏️ تعديل
-                        </button>
+                        <div style={{ display: 'flex', gap: '0.35rem' }}>
+                          <button className="btn btn-xs btn-secondary" onClick={() => handleOpenEditModal(tx)}>
+                            ✏️ تعديل
+                          </button>
+                          <button className="btn btn-xs btn-secondary" onClick={() => handleDeleteOwnerTx(tx)} style={{ color: 'var(--danger)' }}>
+                            🗑️ حذف
+                          </button>
+                        </div>
                       </td>
                     )}
                   </tr>
