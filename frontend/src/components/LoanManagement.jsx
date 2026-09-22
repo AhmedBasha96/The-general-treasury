@@ -12,6 +12,8 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
     title: '',
     loan_type: 'bank_loan',
     entity_name: '',
+    account_number: '',
+    account_holder_name: '',
     bank_id: '',
     car_id: '',
     total_amount: '',
@@ -29,6 +31,8 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
 
   // Pay Installment Modal State
   const [payingInstallment, setPayingInstallment] = useState(null);
+  const [payPaymentMethod, setPayPaymentMethod] = useState('cash'); // 'cash' | 'bank' | 'external'
+  const [payBankId, setPayBankId] = useState('');
   const [payNotes, setPayNotes] = useState('');
   const [payLoading, setPayLoading] = useState(false);
   const [payError, setPayError] = useState('');
@@ -95,12 +99,14 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
       const data = await res.json();
 
       if (res.ok) {
-        setSuccessMsg('تم إضافة القرض وجدولة الأقساط بنجاح!');
+        setSuccessMsg('تم إضافة القرض وتوليد جدول الأقساط بنجاح!');
         setShowAddModal(false);
         setNewLoan({
           title: '',
           loan_type: 'bank_loan',
           entity_name: '',
+          account_number: '',
+          account_holder_name: '',
           bank_id: '',
           car_id: '',
           total_amount: '',
@@ -122,6 +128,12 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
   const handlePayInstallmentSubmit = async (e) => {
     e.preventDefault();
     setPayError('');
+
+    if (payPaymentMethod === 'bank' && !payBankId) {
+      setPayError('يرجى اختيار الحساب البنكي المراد الخصم منه');
+      return;
+    }
+
     setPayLoading(true);
 
     try {
@@ -129,6 +141,8 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          payment_method: payPaymentMethod,
+          bank_id: payPaymentMethod === 'bank' ? payBankId : null,
           notes: payNotes
         })
       });
@@ -137,9 +151,14 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
       if (res.ok) {
         setPayingInstallment(null);
         setPayNotes('');
+        setPayPaymentMethod('cash');
+        setPayBankId('');
         fetchLoans();
         if (selectedLoan) {
           fetchInstallments(selectedLoan.id);
+        }
+        if (onRefreshDashboard) {
+          onRefreshDashboard();
         }
       } else {
         setPayError(data.error || 'حدث خطأ أثناء تسجيل سداد القسط');
@@ -159,6 +178,9 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
           fetchLoans();
           if (selectedLoan && selectedLoan.id === loanId) {
             setSelectedLoan(null);
+          }
+          if (onRefreshDashboard) {
+            onRefreshDashboard();
           }
         }
       } catch (err) {
@@ -224,10 +246,12 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                       className="btn btn-xs btn-primary"
                       onClick={() => {
                         setPayingInstallment({ id: alert.installment_id, amount: alert.amount, installment_number: alert.installment_number, loan_title: alert.loan_title });
+                        setPayPaymentMethod('cash');
+                        setPayBankId('');
                         setPayError('');
                       }}
                     >
-                      ✅ تعليم كمسدد
+                      💳 تسجيل السداد
                     </button>
                   </div>
                 </div>
@@ -248,7 +272,7 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
             <thead>
               <tr>
                 <th>اسم القرض / الالتزام</th>
-                <th>النوع والجهة</th>
+                <th>البنك والجهة للحساب</th>
                 <th>إجمالي القرض</th>
                 <th>المسدد</th>
                 <th>المتبقي</th>
@@ -272,7 +296,14 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                     </td>
                     <td>
                       <span className="badge badge-company-transfer">{getLoanTypeLabel(loan.loan_type)}</span>
-                      <div className="sub-text">{loan.bank_name || loan.entity_name}</div>
+                      <div className="sub-text" style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px' }}>
+                        {loan.entity_name || loan.bank_name || 'جهة غير محددة'}
+                      </div>
+                      {loan.account_number && (
+                        <div className="sub-text" style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>
+                          حساب #: {loan.account_number} {loan.account_holder_name ? `(${loan.account_holder_name})` : ''}
+                        </div>
+                      )}
                     </td>
                     <td><strong>{Number(loan.total_amount).toLocaleString('ar-EG')} ج.م</strong></td>
                     <td className="amount-deposit">{paid.toLocaleString('ar-EG')} ج.م</td>
@@ -309,7 +340,7 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
       {/* MODAL: ADD NEW LOAN */}
       {showAddModal && (
         <div className="modal-overlay">
-          <div className="panel modal-content" style={{ maxWidth: '600px' }}>
+          <div className="panel modal-content" style={{ maxWidth: '650px' }}>
             <div className="panel-header">
               <h2 className="panel-title">➕ إضافة قرض / التزام مالي جديد</h2>
               <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>✕ إغلاق</button>
@@ -338,39 +369,35 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                 </div>
 
                 <div className="form-group">
-                  <label>اسم الجهة المستحقة / البنك:*</label>
+                  <label>اسم البنك / الجهة المقرضة:*</label>
                   <input
                     type="text"
-                    placeholder="مثال: البنك الأهلي المصري، شركة التيسير..."
+                    placeholder="اسم البنك أو الجهة (مثال: بنك مصر، CIB، شركة التيسير...)"
                     value={newLoan.entity_name}
                     onChange={e => setNewLoan({ ...newLoan, entity_name: e.target.value })}
                     required
                   />
                 </div>
 
-                {newLoan.loan_type === 'bank_loan' && (
-                  <div className="form-group">
-                    <label>البنك المربوط (اختياري):</label>
-                    <select value={newLoan.bank_id} onChange={e => setNewLoan({ ...newLoan, bank_id: e.target.value })}>
-                      <option value="">اختر البنك...</option>
-                      {banks.map(b => (
-                        <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                <div className="form-group">
+                  <label>رقم الحساب لدى البنك/الجهة:</label>
+                  <input
+                    type="text"
+                    placeholder="رقم حساب القرض بالبنك (مثال: 1234567890)"
+                    value={newLoan.account_number}
+                    onChange={e => setNewLoan({ ...newLoan, account_number: e.target.value })}
+                  />
+                </div>
 
-                {newLoan.loan_type === 'car_installment' && (
-                  <div className="form-group">
-                    <label>السيارة المربوطة (اختياري):</label>
-                    <select value={newLoan.car_id} onChange={e => setNewLoan({ ...newLoan, car_id: e.target.value })}>
-                      <option value="">اختر السيارة...</option>
-                      {carsList.map(c => (
-                        <option key={c.id} value={c.id}>{c.plate_number} {c.driver_name ? `(${c.driver_name})` : ''}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                <div className="form-group">
+                  <label>اسم صاحب الحساب:</label>
+                  <input
+                    type="text"
+                    placeholder="الاسم المدون بالحساب (مثال: شركة السلام لتجارة...)"
+                    value={newLoan.account_holder_name}
+                    onChange={e => setNewLoan({ ...newLoan, account_holder_name: e.target.value })}
+                  />
+                </div>
 
                 <div className="form-group">
                   <label>إجمالي مبلغ القرض (ج.م):*</label>
@@ -417,7 +444,7 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                 </div>
 
                 <div className="form-group">
-                  <label>تاريخ استحقاق أول قسط:*</label>
+                  <label>تاريخ بداية القرض / أول قسط:*</label>
                   <input
                     type="date"
                     value={newLoan.start_date}
@@ -425,6 +452,18 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                     required
                   />
                 </div>
+
+                {newLoan.loan_type === 'car_installment' && (
+                  <div className="form-group">
+                    <label>السيارة المربوطة (اختياري):</label>
+                    <select value={newLoan.car_id} onChange={e => setNewLoan({ ...newLoan, car_id: e.target.value })}>
+                      <option value="">اختر السيارة...</option>
+                      {carsList.map(c => (
+                        <option key={c.id} value={c.id}>{c.plate_number} {c.driver_name ? `(${c.driver_name})` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 <div className="form-group full-width">
                   <label>ملاحظات إضافية:</label>
@@ -448,11 +487,16 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
       {/* MODAL: VIEW LOAN INSTALLMENTS SCHEDULE */}
       {selectedLoan && (
         <div className="modal-overlay">
-          <div className="panel modal-content" style={{ maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div className="panel modal-content" style={{ maxWidth: '850px', maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="panel-header">
               <div>
                 <h2 className="panel-title">📋 جدول أقساط: {selectedLoan.title}</h2>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>الجهة: {selectedLoan.entity_name} | إجمالي القرض: {Number(selectedLoan.total_amount).toLocaleString('ar-EG')} ج.م</p>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                  البنك/الجهة: <strong>{selectedLoan.entity_name}</strong>
+                  {selectedLoan.account_number && ` | رقم الحساب: ${selectedLoan.account_number}`}
+                  {selectedLoan.account_holder_name && ` (${selectedLoan.account_holder_name})`}
+                  {` | إجمالي القرض: ${Number(selectedLoan.total_amount).toLocaleString('ar-EG')} ج.م`}
+                </div>
               </div>
               <button className="btn btn-secondary" onClick={() => setSelectedLoan(null)}>✕ إغلاق</button>
             </div>
@@ -467,7 +511,7 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                       <th>رقم القسط</th>
                       <th>تاريخ الاستحقاق</th>
                       <th>مبلغ القسط</th>
-                      <th>الحالة</th>
+                      <th>طريقة السداد / الحالة</th>
                       <th>الإجراء</th>
                     </tr>
                   </thead>
@@ -482,9 +526,15 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                           <td>{new Date(inst.due_date).toLocaleDateString('ar-EG')}</td>
                           <td><strong>{Number(inst.amount).toLocaleString('ar-EG')} ج.م</strong></td>
                           <td>
-                            <span className={`badge ${isPaid ? 'badge-deposit' : isOverdue ? 'badge-withdrawal' : 'badge-secondary'}`}>
-                              {isPaid ? 'مسدد ✅' : isOverdue ? 'مستحق / متأخر 🚨' : 'قادم ⏳'}
-                            </span>
+                            {isPaid ? (
+                              <span className="badge badge-deposit">
+                                {inst.payment_method === 'cash' ? '💵 نقداً (خزينة)' : inst.payment_method === 'bank' ? `🏦 بنكي (${inst.bank_name || ''})` : '🌐 خارجي'} ✅
+                              </span>
+                            ) : (
+                              <span className={`badge ${isOverdue ? 'badge-withdrawal' : 'badge-secondary'}`}>
+                                {isOverdue ? 'مستحق / متأخر 🚨' : 'قادم ⏳'}
+                              </span>
+                            )}
                           </td>
                           <td>
                             {!isPaid ? (
@@ -492,13 +542,17 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                                 className="btn btn-xs btn-primary"
                                 onClick={() => {
                                   setPayingInstallment({ id: inst.id, amount: inst.amount, installment_number: inst.installment_number, loan_title: selectedLoan.title });
+                                  setPayPaymentMethod('cash');
+                                  setPayBankId('');
                                   setPayError('');
                                 }}
                               >
-                                ✅ تعليم كمسدد
+                                💳 سداد القسط
                               </button>
                             ) : (
-                              <span style={{ fontSize: '0.8rem', color: 'var(--success)' }}>تم السداد في {new Date(inst.paid_date).toLocaleDateString('ar-EG')}</span>
+                              <span style={{ fontSize: '0.8rem', color: 'var(--success)' }}>
+                                تم السداد في {new Date(inst.paid_date).toLocaleDateString('ar-EG')}
+                              </span>
                             )}
                           </td>
                         </tr>
@@ -515,9 +569,9 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
       {/* MODAL: MARK INSTALLMENT AS PAID */}
       {payingInstallment && (
         <div className="modal-overlay">
-          <div className="panel modal-content" style={{ maxWidth: '480px' }}>
+          <div className="panel modal-content" style={{ maxWidth: '520px' }}>
             <div className="panel-header">
-              <h2 className="panel-title">✅ تسجيل سداد قسط رقم #{payingInstallment.installment_number}</h2>
+              <h2 className="panel-title">💳 تسجيل سداد قسط رقم #{payingInstallment.installment_number}</h2>
               <button className="btn btn-secondary" onClick={() => setPayingInstallment(null)}>✕ إغلاق</button>
             </div>
 
@@ -529,8 +583,109 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                 <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--primary)', marginTop: '0.25rem' }}>
                   مبلغ القسط: {Number(payingInstallment.amount).toLocaleString('ar-EG')} ج.م
                 </div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-                  ℹ️ ملاحظة: سداد القسط هنا للمتابعة والتنبهات فقط، ولا يخصم من رصيد الخزينة أو البنوك.
+              </div>
+
+              {/* PAYMENT SOURCE SELECTION */}
+              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                <label style={{ fontWeight: 700, marginBottom: '0.5rem', display: 'block' }}>اختر مصدر السداد:*</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                  
+                  {/* CASH SAFE OPTION */}
+                  <label 
+                    style={{ 
+                      display: 'flex', 
+                      alignItems: 'flex-start', 
+                      gap: '0.75rem', 
+                      padding: '0.85rem', 
+                      borderRadius: '10px', 
+                      border: `1.5px solid ${payPaymentMethod === 'cash' ? 'var(--primary)' : 'var(--border-color)'}`,
+                      background: payPaymentMethod === 'cash' ? 'rgba(59, 130, 246, 0.08)' : 'transparent',
+                      cursor: 'pointer' 
+                    }}
+                  >
+                    <input 
+                      type="radio" 
+                      name="payment_method" 
+                      value="cash" 
+                      checked={payPaymentMethod === 'cash'} 
+                      onChange={() => setPayPaymentMethod('cash')} 
+                      style={{ marginTop: '0.2rem' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 700 }}>💵 نقداً من الخزينة الرئيسية</div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>يخصم القسط تلقائياً من رصيد الخزينة الرئيسية وتسجل حركة سحب.</div>
+                    </div>
+                  </label>
+
+                  {/* BANK OPTION */}
+                  <label 
+                    style={{ 
+                      display: 'flex', 
+                      alignItems: 'flex-start', 
+                      gap: '0.75rem', 
+                      padding: '0.85rem', 
+                      borderRadius: '10px', 
+                      border: `1.5px solid ${payPaymentMethod === 'bank' ? 'var(--primary)' : 'var(--border-color)'}`,
+                      background: payPaymentMethod === 'bank' ? 'rgba(59, 130, 246, 0.08)' : 'transparent',
+                      cursor: 'pointer' 
+                    }}
+                  >
+                    <input 
+                      type="radio" 
+                      name="payment_method" 
+                      value="bank" 
+                      checked={payPaymentMethod === 'bank'} 
+                      onChange={() => setPayPaymentMethod('bank')} 
+                      style={{ marginTop: '0.2rem' }}
+                    />
+                    <div style={{ width: '100%' }}>
+                      <div style={{ fontWeight: 700 }}>🏦 تحويل / خصم من حساب بنكي</div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: payPaymentMethod === 'bank' ? '0.5rem' : '0' }}>
+                        يخصم القسط من رصيد الحساب البنكي المحدد بالنظام.
+                      </div>
+                      
+                      {payPaymentMethod === 'bank' && (
+                        <select 
+                          value={payBankId} 
+                          onChange={e => setPayBankId(e.target.value)}
+                          required
+                          style={{ width: '100%', marginTop: '0.4rem', padding: '0.5rem' }}
+                        >
+                          <option value="">-- اختر الحساب البنكي المراد الخصم منه --</option>
+                          {banks.map(b => (
+                            <option key={b.id} value={b.id}>{b.name} ({b.code}) - {b.account_number}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  </label>
+
+                  {/* EXTERNAL OPTION */}
+                  <label 
+                    style={{ 
+                      display: 'flex', 
+                      alignItems: 'flex-start', 
+                      gap: '0.75rem', 
+                      padding: '0.85rem', 
+                      borderRadius: '10px', 
+                      border: `1.5px solid ${payPaymentMethod === 'external' ? 'var(--primary)' : 'var(--border-color)'}`,
+                      background: payPaymentMethod === 'external' ? 'rgba(59, 130, 246, 0.08)' : 'transparent',
+                      cursor: 'pointer' 
+                    }}
+                  >
+                    <input 
+                      type="radio" 
+                      name="payment_method" 
+                      value="external" 
+                      checked={payPaymentMethod === 'external'} 
+                      onChange={() => setPayPaymentMethod('external')} 
+                      style={{ marginTop: '0.2rem' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 700 }}>🌐 سداد خارجي (متابعة وإشعارات فقط)</div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>تسجيل القسط كمسدد للتتبع والمواعيد بدون خصم من رصيد الخزينة أو البنوك.</div>
+                    </div>
+                  </label>
                 </div>
               </div>
 
@@ -545,7 +700,7 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
               </div>
 
               <button type="submit" disabled={payLoading} className="btn btn-primary" style={{ width: '100%' }}>
-                {payLoading ? 'جاري الحفظ...' : 'تأكيد تسجيل القسط كمسدد ✅'}
+                {payLoading ? 'جاري السداد وتحديث الأرصدة...' : 'تأكيد السداد وتحديث الأرصدة ✅'}
               </button>
             </form>
           </div>
@@ -554,3 +709,4 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
     </div>
   );
 }
+

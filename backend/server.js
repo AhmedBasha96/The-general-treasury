@@ -478,7 +478,7 @@ app.get('/api/loans', async (req, res) => {
 
 // POST /api/loans - Add new loan and auto-generate installments schedule
 app.post('/api/loans', async (req, res) => {
-  const { title, loan_type, entity_name, bank_id, car_id, total_amount, installment_amount, total_installments, start_date, frequency, notes } = req.body;
+  const { title, loan_type, entity_name, account_number, account_holder_name, bank_id, car_id, total_amount, installment_amount, total_installments, start_date, frequency, notes } = req.body;
 
   if (!title || !loan_type || !entity_name || !total_amount || !installment_amount || !total_installments || !start_date) {
     return res.status(400).json({ error: 'يرجى إكمال جميع البيانات المطلوبة للقرض' });
@@ -494,6 +494,8 @@ app.post('/api/loans', async (req, res) => {
         .input('title', sql.NVarChar, title)
         .input('loan_type', sql.NVarChar, loan_type)
         .input('entity_name', sql.NVarChar, entity_name)
+        .input('account_number', sql.NVarChar, account_number || null)
+        .input('account_holder_name', sql.NVarChar, account_holder_name || null)
         .input('bank_id', sql.Int, bank_id || null)
         .input('car_id', sql.Int, car_id || null)
         .input('total_amount', sql.Decimal(18, 2), total_amount)
@@ -504,9 +506,9 @@ app.post('/api/loans', async (req, res) => {
         .input('notes', sql.NVarChar, notes || null);
 
       const loanResult = await loanReq.query(`
-        INSERT INTO loans (title, loan_type, entity_name, bank_id, car_id, total_amount, installment_amount, total_installments, start_date, frequency, notes)
+        INSERT INTO loans (title, loan_type, entity_name, account_number, account_holder_name, bank_id, car_id, total_amount, installment_amount, total_installments, start_date, frequency, notes)
         OUTPUT INSERTED.id
-        VALUES (@title, @loan_type, @entity_name, @bank_id, @car_id, @total_amount, @installment_amount, @total_installments, @start_date, @frequency, @notes)
+        VALUES (@title, @loan_type, @entity_name, @account_number, @account_holder_name, @bank_id, @car_id, @total_amount, @installment_amount, @total_installments, @start_date, @frequency, @notes)
       `);
 
       const loanId = loanResult.recordset[0].id;
@@ -572,17 +574,18 @@ app.get('/api/loans/:id/installments', async (req, res) => {
   }
 });
 
-// POST /api/loans/installments/:id/pay - Mark installment as paid (reminder/tracking only, no deduction from safe/banks)
+// POST /api/loans/installments/:id/pay - Mark installment as paid (with cash, bank, or external options)
 app.post('/api/loans/installments/:id/pay', async (req, res) => {
   const installmentId = req.params.id;
-  const { notes } = req.body;
+  const { payment_method = 'external', bank_id = null, notes = null } = req.body;
+  const userId = req.headers['x-user-id'] || null;
 
   try {
     const pool = getPool();
     const instRes = await pool.request()
       .input('instId', sql.Int, installmentId)
       .query(`
-        SELECT i.*, l.title AS loan_title
+        SELECT i.*, l.title AS loan_title, l.entity_name
         FROM loan_installments i
         JOIN loans l ON i.loan_id = l.id
         WHERE i.id = @instId
@@ -597,16 +600,86 @@ app.post('/api/loans/installments/:id/pay', async (req, res) => {
       return res.status(400).json({ error: 'هذا القسط مسدد بالفعل مسبقاً' });
     }
 
-    // Update loan_installment status to paid (tracking & notification only)
+    let createdTransactionId = null;
+    const instAmount = Number(inst.amount);
+    const txNotes = notes 
+      ? `سداد قسط قرض: ${inst.loan_title} (قسط #${inst.installment_number}) - ${notes}` 
+      : `سداد قسط قرض: ${inst.loan_title} (قسط #${inst.installment_number})`;
+
+    if (payment_method === 'cash') {
+      // 1. Check Cash Safe Balance
+      const currentSafeBalance = await getSafeCashBalance(pool);
+      if (currentSafeBalance < instAmount) {
+        return res.status(400).json({ 
+          error: `رصيد الخزينة الرئيسية غير كافٍ لسداد القسط. الرصيد الحالي: ${currentSafeBalance.toLocaleString('ar-EG')} ج.م` 
+        });
+      }
+
+      // Insert Safe Cash Withdrawal Transaction
+      const txRes = await pool.request()
+        .input('type', sql.VarChar, 'withdrawal')
+        .input('paymentMethod', sql.VarChar, 'cash')
+        .input('subType', sql.NVarChar, 'loan')
+        .input('amount', sql.Decimal(18, 2), instAmount)
+        .input('notes', sql.NVarChar, txNotes)
+        .input('status', sql.VarChar, 'disbursed')
+        .input('createdBy', sql.Int, userId)
+        .query(`
+          INSERT INTO transactions (type, payment_method, withdrawal_sub_type, amount, date, notes, status, created_by)
+          OUTPUT INSERTED.id
+          VALUES (@type, @paymentMethod, @subType, @amount, GETDATE(), @notes, @status, @createdBy)
+        `);
+
+      createdTransactionId = txRes.recordset[0].id;
+    } else if (payment_method === 'bank') {
+      // 2. Check Bank Account Selection and Balance
+      if (!bank_id) {
+        return res.status(400).json({ error: 'يرجى تحديد الحساب البنكي المراد الخصم منه' });
+      }
+
+      const bankCheck = await pool.request()
+        .input('bankId', sql.Int, bank_id)
+        .query(`SELECT * FROM banks WHERE id = @bankId`);
+
+      if (bankCheck.recordset.length === 0) {
+        return res.status(404).json({ error: 'الحساب البنكي المحدد غير موجود' });
+      }
+
+      // Insert Bank Withdrawal Transaction
+      const txRes = await pool.request()
+        .input('bankId', sql.Int, bank_id)
+        .input('type', sql.VarChar, 'withdrawal')
+        .input('paymentMethod', sql.VarChar, 'bank')
+        .input('subType', sql.NVarChar, 'loan')
+        .input('amount', sql.Decimal(18, 2), instAmount)
+        .input('notes', sql.NVarChar, txNotes)
+        .input('status', sql.VarChar, 'disbursed')
+        .input('createdBy', sql.Int, userId)
+        .query(`
+          INSERT INTO transactions (bank_id, type, payment_method, withdrawal_sub_type, amount, date, notes, status, created_by)
+          OUTPUT INSERTED.id
+          VALUES (@bankId, @type, @paymentMethod, @subType, @amount, GETDATE(), @notes, @status, @createdBy)
+        `);
+
+      createdTransactionId = txRes.recordset[0].id;
+    }
+
+    // Update loan_installment status to paid with full payment details
     await pool.request()
       .input('instId', sql.Int, installmentId)
-      .input('paidAmount', sql.Decimal(18, 2), inst.amount)
+      .input('paidAmount', sql.Decimal(18, 2), instAmount)
+      .input('paymentMethod', sql.NVarChar, payment_method)
+      .input('bankId', sql.Int, payment_method === 'bank' ? bank_id : null)
+      .input('txId', sql.Int, createdTransactionId)
       .input('notes', sql.NVarChar, notes || null)
       .query(`
         UPDATE loan_installments
         SET status = 'paid',
             paid_amount = @paidAmount,
             paid_date = GETDATE(),
+            payment_method = @paymentMethod,
+            bank_id = @bankId,
+            transaction_id = @txId,
             notes = @notes
         WHERE id = @instId
       `);
@@ -622,12 +695,19 @@ app.post('/api/loans/installments/:id/pay', async (req, res) => {
         .query(`UPDATE loans SET status = 'completed' WHERE id = @loanId`);
     }
 
-    logAuditLog(req, 'تسجيل سداد قسط (متابعة وتنبيهات)', 'loan_installment', parseInt(installmentId), { loan_title: inst.loan_title, amount: inst.amount });
+    logAuditLog(req, 'تسجيل سداد قسط قرض', 'loan_installment', parseInt(installmentId), { loan_title: inst.loan_title, amount: instAmount, payment_method });
 
-    res.json({ message: 'تم تحديث حالة القسط إلى مسدد بنجاح' });
+    res.json({ 
+      message: payment_method === 'cash' 
+        ? 'تم تسجيل السداد بنجاح وخصم قيمة القسط من الخزينة الرئيسية'
+        : payment_method === 'bank'
+        ? 'تم تسجيل السداد بنجاح وخصم قيمة القسط من الحساب البنكي'
+        : 'تم تسجيل السداد بنجاح كإشعارات ومتابعة فقط (بدون خصم من الخزينة أو البنوك)',
+      transactionId: createdTransactionId
+    });
   } catch (error) {
     console.error('Error paying installment:', error);
-    res.status(500).json({ error: 'حدث خطأ أثناء تحديث حالة القسط' });
+    res.status(500).json({ error: 'حدث خطأ أثناء تسجيل سداد القسط' });
   }
 });
 

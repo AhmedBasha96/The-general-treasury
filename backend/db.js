@@ -703,6 +703,8 @@ async function createTables() {
             title NVARCHAR(255) NOT NULL,
             loan_type NVARCHAR(50) NOT NULL,
             entity_name NVARCHAR(255) NOT NULL,
+            account_number NVARCHAR(100) NULL,
+            account_holder_name NVARCHAR(255) NULL,
             bank_id INT NULL,
             car_id INT NULL,
             total_amount DECIMAL(18,2) NOT NULL,
@@ -716,6 +718,16 @@ async function createTables() {
             FOREIGN KEY (bank_id) REFERENCES banks(id) ON DELETE SET NULL,
             FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE SET NULL
           );
+        END
+
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('loans') AND name = 'account_number')
+        BEGIN
+          ALTER TABLE loans ADD account_number NVARCHAR(100) NULL;
+        END
+
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('loans') AND name = 'account_holder_name')
+        BEGIN
+          ALTER TABLE loans ADD account_holder_name NVARCHAR(255) NULL;
         END
 
         -- Create loan_installments table (جدول الأقساط المجدولة للسداد)
