@@ -4993,6 +4993,117 @@ app.post('/api/owner-account/repay', async (req, res) => {
   }
 });
 
+// PUT /api/owner-account/transactions/:id - Edit an existing owner account transaction
+app.put('/api/owner-account/transactions/:id', async (req, res) => {
+  const txId = req.params.id;
+  const { amount, bank_id, payment_method, date, notes, receipt_image, purpose_type, purpose_target_id, purpose_notes } = req.body;
+  const userRole = req.headers['x-user-role'];
+
+  if (userRole !== 'manager') {
+    return res.status(403).json({ error: 'غير مسموح لغير المدراء بتعديل معاملات حساب جاري المالك' });
+  }
+
+  const numericAmount = Number(amount);
+  if (!numericAmount || numericAmount <= 0) {
+    return res.status(400).json({ error: 'المبلغ يجب أن يكون أكبر من صفر' });
+  }
+
+  const payMethod = payment_method || (bank_id ? 'bank_transfer' : 'cash');
+
+  try {
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      // 1. Fetch current transaction
+      const txCheck = await transaction.request()
+        .input('txId', sql.Int, txId)
+        .query("SELECT * FROM transactions WITH (UPDLOCK) WHERE id = @txId AND withdrawal_sub_type IN ('owner_funding', 'owner_repayment')");
+
+      if (txCheck.recordset.length === 0) {
+        await transaction.rollback();
+        return res.status(404).json({ error: 'العملية غير موجودة أو ليست تابعة لحساب المالك' });
+      }
+
+      const existingTx = txCheck.recordset[0];
+      const isFunding = existingTx.withdrawal_sub_type === 'owner_funding';
+
+      // 2. Validation for repayments
+      if (!isFunding) {
+        // Calculate net owed excluding this transaction's old amount
+        const depRes = await transaction.request().query(`
+          SELECT ISNULL(SUM(amount), 0) AS total_deposited
+          FROM transactions WITH (UPDLOCK)
+          WHERE withdrawal_sub_type = 'owner_funding'
+            AND (status IN ('approved', 'disbursed') OR status IS NULL)
+        `);
+        const repRes = await transaction.request()
+          .input('txId', sql.Int, txId)
+          .query(`
+            SELECT ISNULL(SUM(amount), 0) AS total_repaid
+            FROM transactions WITH (UPDLOCK)
+            WHERE withdrawal_sub_type = 'owner_repayment' AND id <> @txId
+              AND (status IN ('approved', 'disbursed') OR status IS NULL)
+          `);
+
+        const totalDeposited = Number(depRes.recordset[0]?.total_deposited) || 0;
+        const totalOtherRepaid = Number(repRes.recordset[0]?.total_repaid) || 0;
+        const availableMaxRepay = totalDeposited - totalOtherRepaid;
+
+        if (numericAmount > availableMaxRepay) {
+          await transaction.rollback();
+          return res.status(400).json({
+            error: `المبلغ المعدل (${numericAmount.toLocaleString('ar-EG')} ج.م) يتجاوز الحد الأقصى للمستحقات القابلة للسداد (${availableMaxRepay.toLocaleString('ar-EG')} ج.م).`
+          });
+        }
+      }
+
+      // 3. Update transaction
+      await transaction.request()
+        .input('txId', sql.Int, txId)
+        .input('bankId', sql.Int, bank_id || null)
+        .input('paymentMethod', sql.VarChar, payMethod)
+        .input('amount', sql.Decimal(18, 2), numericAmount)
+        .input('date', sql.DateTime, date ? new Date(date) : existingTx.date)
+        .input('notes', sql.NVarChar, notes !== undefined ? notes : existingTx.notes)
+        .input('receiptImage', sql.NVarChar, receipt_image !== undefined ? receipt_image : existingTx.receipt_image)
+        .input('purposeType', sql.NVarChar, purpose_type !== undefined ? purpose_type : existingTx.purpose_type)
+        .input('purposeTargetId', sql.Int, purpose_target_id !== undefined ? purpose_target_id : existingTx.purpose_target_id)
+        .input('purposeNotes', sql.NVarChar, purpose_notes !== undefined ? purpose_notes : existingTx.purpose_notes)
+        .query(`
+          UPDATE transactions
+          SET bank_id = @bankId,
+              payment_method = @paymentMethod,
+              amount = @amount,
+              date = @date,
+              notes = @notes,
+              receipt_image = @receiptImage,
+              purpose_type = @purposeType,
+              purpose_target_id = @purposeTargetId,
+              purpose_notes = @purposeNotes
+          WHERE id = @txId
+        `);
+
+      await transaction.commit();
+
+      try {
+        await logAuditLog(req, 'تعديل عملية في حساب جاري المالك', 'transaction', parseInt(txId), { amount: numericAmount, isFunding });
+      } catch (auditErr) {
+        console.error('Audit log error:', auditErr);
+      }
+
+      res.json({ message: 'تم تعديل العملية بنجاح' });
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+  } catch (error) {
+    console.error('Error updating owner account transaction:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء تعديل المعاملة' });
+  }
+});
+
 // Start Database connection and then Express server
 connectDB()
   .then(async (pool) => {

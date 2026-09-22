@@ -17,6 +17,19 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
   const [showRepayModal, setShowRepayModal] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
 
+  // Edit State
+  const [editingTx, setEditingTx] = useState(null);
+  const [editForm, setEditForm] = useState({
+    amount: '',
+    bank_id: '',
+    payment_method: 'bank_transfer',
+    purpose_type: 'loan_installment',
+    purpose_notes: '',
+    notes: '',
+    date: '',
+    receipt_image: ''
+  });
+
   // Form states
   const [depositForm, setDepositForm] = useState({
     amount: '',
@@ -169,6 +182,60 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
     }
   };
 
+  const handleOpenEditModal = (tx) => {
+    setEditingTx(tx);
+    setEditForm({
+      amount: tx.amount,
+      bank_id: tx.bank_id ? String(tx.bank_id) : '',
+      payment_method: tx.payment_method || (tx.bank_id ? 'bank_transfer' : 'cash'),
+      purpose_type: tx.purpose_type || 'loan_installment',
+      purpose_notes: tx.purpose_notes || '',
+      notes: tx.notes || '',
+      date: tx.date ? new Date(tx.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      receipt_image: tx.receipt_image || ''
+    });
+    setFormError('');
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!editingTx) return;
+    setFormError('');
+    setSuccessMsg('');
+
+    const amt = parseFloat(editForm.amount);
+    if (!amt || amt <= 0) {
+      setFormError('يرجى إدخال مبلغ صحيح أكبر من صفر');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/owner-account/transactions/${editingTx.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...editForm,
+          payment_method: editForm.bank_id ? 'bank_transfer' : 'cash'
+        })
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        setSuccessMsg('تم تعديل العملية وتحديث حساب جاري المالك بنجاح!');
+        setEditingTx(null);
+        fetchData();
+        if (onRefreshDashboard) onRefreshDashboard();
+      } else {
+        setFormError(data.error || 'حدث خطأ أثناء تعديل العملية');
+      }
+    } catch (err) {
+      setFormError('تعذر الاتصال بالسيرفر');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleImageUpload = (e, formType) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -177,8 +244,10 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
     reader.onloadend = () => {
       if (formType === 'deposit') {
         setDepositForm(prev => ({ ...prev, receipt_image: reader.result }));
-      } else {
+      } else if (formType === 'repay') {
         setRepayForm(prev => ({ ...prev, receipt_image: reader.result }));
+      } else if (formType === 'edit') {
+        setEditForm(prev => ({ ...prev, receipt_image: reader.result }));
       }
     };
     reader.readAsDataURL(file);
@@ -331,6 +400,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
                 <th>الملاحظات والتفاصيل</th>
                 <th>المستند / الإيصال</th>
                 <th>المُدخل</th>
+                {userRole === 'manager' && <th>الإجراءات</th>}
               </tr>
             </thead>
             <tbody>
@@ -380,11 +450,140 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
                     <td>
                       <span className="sub-text">{tx.creator_name || 'المدير'}</span>
                     </td>
+                    {userRole === 'manager' && (
+                      <td>
+                        <button className="btn btn-xs btn-secondary" onClick={() => handleOpenEditModal(tx)}>
+                          ✏️ تعديل
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* MODAL: EDIT OWNER TRANSACTION */}
+      {editingTx && (
+        <div className="modal-overlay">
+          <div className="panel modal-content" style={{ maxWidth: '600px' }}>
+            <div className="panel-header">
+              <h2 className="panel-title">✏️ تعديل عملية بحساب المالك (#{editingTx.id})</h2>
+              <button className="btn btn-secondary" onClick={() => setEditingTx(null)}>✕ إغلاق</button>
+            </div>
+
+            {formError && <div className="alert alert-error">{formError}</div>}
+
+            <form onSubmit={handleEditSubmit}>
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>نوع المعاملة:</label>
+                  <input
+                    type="text"
+                    readOnly
+                    disabled
+                    value={editingTx.withdrawal_sub_type === 'owner_funding' ? '📥 إيداع تمويل شخصي' : '📤 سداد مستحقات للمالك'}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>المبلغ المعدل (ج.م):*</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={editForm.amount}
+                    onChange={e => setEditForm({ ...editForm, amount: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>الحساب / البنك:*</label>
+                  <select
+                    value={editForm.bank_id}
+                    onChange={e => setEditForm({ ...editForm, bank_id: e.target.value })}
+                  >
+                    <option value="">💵 الخزينة النقدية الرئيسية</option>
+                    {banks.map(b => (
+                      <option key={b.id} value={b.id}>🏦 {b.name} ({b.account_number})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>تاريخ الحركة:*</label>
+                  <input
+                    type="date"
+                    value={editForm.date}
+                    onChange={e => setEditForm({ ...editForm, date: e.target.value })}
+                    required
+                  />
+                </div>
+
+                {editingTx.withdrawal_sub_type === 'owner_funding' && (
+                  <>
+                    <div className="form-group full-width">
+                      <label>وجهة الصرف / الغرض المستهدف 🔍:*</label>
+                      <select
+                        value={editForm.purpose_type}
+                        onChange={e => setEditForm({ ...editForm, purpose_type: e.target.value })}
+                      >
+                        <option value="loan_installment">🏦 سداد قسط قرض / التزام بنكي</option>
+                        <option value="supplier_payment">🚚 سداد فواتير موردين / شركات</option>
+                        <option value="payroll">💵 مسير رواتب الموظفين</option>
+                        <option value="general_liquidity">🔄 تغطية سيولة عامة للبنك/الخزينة</option>
+                        <option value="custom">✍️ غرض مخصص آخر</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group full-width">
+                      <label>تفاصيل جهة الصرف:</label>
+                      <input
+                        type="text"
+                        placeholder="تفاصيل التوجيه المستهدف..."
+                        value={editForm.purpose_notes}
+                        onChange={e => setEditForm({ ...editForm, purpose_notes: e.target.value })}
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div className="form-group full-width">
+                  <label>ملاحظات الحركة:</label>
+                  <textarea
+                    rows="2"
+                    value={editForm.notes}
+                    onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group full-width">
+                  <label>تحديث صورة الإيصال (اختياري):</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={e => handleImageUpload(e, 'edit')}
+                  />
+                </div>
+
+                {editForm.receipt_image && (
+                  <div className="form-group full-width">
+                    <img
+                      src={editForm.receipt_image}
+                      alt="معاينة الإيصال"
+                      style={{ maxHeight: '120px', borderRadius: '8px', objectFit: 'contain' }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <button type="submit" disabled={submitting} className="btn btn-primary" style={{ width: '100%', marginTop: '1rem' }}>
+                {submitting ? 'جاري حفظ التعديل...' : 'تأكيد التعديل وحفظ الحركة 💾'}
+              </button>
+            </form>
+          </div>
         </div>
       )}
 
