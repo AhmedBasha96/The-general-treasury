@@ -964,6 +964,101 @@ app.post('/api/loans/installments/:id/pay', async (req, res) => {
   }
 });
 
+// PUT /api/loans/:id - Update an existing loan
+app.put('/api/loans/:id', async (req, res) => {
+  const loanId = req.params.id;
+  const {
+    title,
+    loan_type,
+    entity_name,
+    account_number,
+    account_holder_name,
+    bank_id,
+    car_id,
+    total_amount,
+    installment_amount,
+    total_installments,
+    start_date,
+    interest_rate,
+    due_day_text,
+    frequency,
+    notes
+  } = req.body;
+
+  if (!title || !loan_type || !entity_name || !total_amount || !installment_amount || !total_installments || !start_date) {
+    return res.status(400).json({ error: 'يرجى إكمال جميع البيانات المطلوبة للقرض' });
+  }
+
+  try {
+    const pool = getPool();
+
+    const existingLoanRes = await pool.request()
+      .input('loanId', sql.Int, loanId)
+      .query('SELECT * FROM loans WHERE id = @loanId');
+
+    if (existingLoanRes.recordset.length === 0) {
+      return res.status(404).json({ error: 'القرض غير موجود' });
+    }
+
+    const currentLoan = existingLoanRes.recordset[0];
+
+    await pool.request()
+      .input('loanId', sql.Int, loanId)
+      .input('title', sql.NVarChar, title)
+      .input('loan_type', sql.NVarChar, loan_type)
+      .input('entity_name', sql.NVarChar, entity_name)
+      .input('account_number', sql.NVarChar, account_number || null)
+      .input('account_holder_name', sql.NVarChar, account_holder_name || null)
+      .input('bank_id', sql.Int, bank_id || null)
+      .input('car_id', sql.Int, car_id || null)
+      .input('total_amount', sql.Decimal(18, 2), total_amount)
+      .input('installment_amount', sql.Decimal(18, 2), installment_amount)
+      .input('total_installments', sql.Int, total_installments)
+      .input('start_date', sql.Date, start_date)
+      .input('interest_rate', sql.Decimal(5, 2), interest_rate ? parseFloat(interest_rate) : null)
+      .input('due_day_text', sql.NVarChar, due_day_text || null)
+      .input('frequency', sql.NVarChar, frequency || 'monthly')
+      .input('notes', sql.NVarChar, notes || null)
+      .query(`
+        UPDATE loans
+        SET title = @title,
+            loan_type = @loan_type,
+            entity_name = @entity_name,
+            account_number = @account_number,
+            account_holder_name = @account_holder_name,
+            bank_id = @bank_id,
+            car_id = @car_id,
+            total_amount = @total_amount,
+            installment_amount = @installment_amount,
+            total_installments = @total_installments,
+            start_date = @start_date,
+            interest_rate = @interest_rate,
+            due_day_text = @due_day_text,
+            frequency = @frequency,
+            notes = @notes
+        WHERE id = @loanId
+      `);
+
+    // Update amount for pending installments if installment_amount changed
+    if (Number(currentLoan.installment_amount) !== Number(installment_amount)) {
+      await pool.request()
+        .input('loanId', sql.Int, loanId)
+        .input('newAmount', sql.Decimal(18, 2), installment_amount)
+        .query(`
+          UPDATE loan_installments
+          SET amount = @newAmount
+          WHERE loan_id = @loanId AND status = 'pending'
+        `);
+    }
+
+    logAuditLog(req, 'تعديل بيانات قرض أو التزام', 'loan', parseInt(loanId), { title, total_amount });
+    res.json({ message: 'تم تحديث بيانات القرض بنجاح' });
+  } catch (error) {
+    console.error('Error updating loan:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء تعديل بيانات القرض' });
+  }
+});
+
 // DELETE /api/loans/:id - Delete/Cancel a loan
 app.delete('/api/loans/:id', async (req, res) => {
   const loanId = req.params.id;

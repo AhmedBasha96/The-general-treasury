@@ -32,6 +32,26 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
   const [installments, setInstallments] = useState([]);
   const [loadingInstallments, setLoadingInstallments] = useState(false);
 
+  // Edit Loan Modal State
+  const [editingLoan, setEditingLoan] = useState(null);
+  const [editLoanForm, setEditLoanForm] = useState({
+    title: '',
+    loan_type: 'bank_loan',
+    entity_name: '',
+    account_number: '',
+    account_holder_name: '',
+    bank_id: '',
+    car_id: '',
+    total_amount: '',
+    installment_amount: '',
+    total_installments: '',
+    start_date: '',
+    interest_rate: '',
+    due_day_text: '15 من كل شهر',
+    frequency: 'monthly',
+    notes: ''
+  });
+
   // Pay Installment Modal State
   const [payingInstallment, setPayingInstallment] = useState(null);
   const [payPaymentMethod, setPayPaymentMethod] = useState('cash'); // 'cash' | 'bank' | 'external'
@@ -39,6 +59,58 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
   const [payNotes, setPayNotes] = useState('');
   const [payLoading, setPayLoading] = useState(false);
   const [payError, setPayError] = useState('');
+
+  const handleOpenEditModal = (loan) => {
+    setEditingLoan(loan);
+    setEditLoanForm({
+      title: loan.title || '',
+      loan_type: loan.loan_type || 'bank_loan',
+      entity_name: loan.entity_name || '',
+      account_number: loan.account_number || '',
+      account_holder_name: loan.account_holder_name || '',
+      bank_id: loan.bank_id || '',
+      car_id: loan.car_id || '',
+      total_amount: loan.total_amount || '',
+      installment_amount: loan.installment_amount || '',
+      total_installments: loan.total_installments || '',
+      start_date: loan.start_date ? new Date(loan.start_date).toISOString().split('T')[0] : '',
+      interest_rate: loan.interest_rate || '',
+      due_day_text: loan.due_day_text || '15 من كل شهر',
+      frequency: loan.frequency || 'monthly',
+      notes: loan.notes || ''
+    });
+  };
+
+  const handleEditLoanSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccessMsg('');
+
+    if (!editLoanForm.title || !editLoanForm.entity_name || !editLoanForm.total_amount || !editLoanForm.installment_amount || !editLoanForm.total_installments || !editLoanForm.start_date) {
+      setError('يرجى ملء كافة البيانات المطلوبة للقرض');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/loans/${editingLoan.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editLoanForm)
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        setSuccessMsg('تم تعديل بيانات القرض بنجاح!');
+        setEditingLoan(null);
+        fetchLoans();
+        if (onRefreshDashboard) onRefreshDashboard();
+      } else {
+        setError(data.error || 'حدث خطأ أثناء تعديل القرض');
+      }
+    } catch (err) {
+      setError('تعذر الاتصال بالسيرفر');
+    }
+  };
 
   const fetchLoans = async () => {
     setLoading(true);
@@ -348,11 +420,14 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                     <td><strong>{loan.total_installments} شهر</strong></td>
                     <td><span className="badge badge-company-transfer">{loan.due_day_text || '15 من كل شهر'}</span></td>
                     <td>
-                      <div style={{ display: 'flex', gap: '0.4rem' }}>
-                        <button className="btn btn-secondary btn-xs" onClick={() => handleOpenLoanSchedule(loan)}>
+                      <div style={{ display: 'flex', gap: '0.3rem' }}>
+                        <button className="btn btn-secondary btn-xs" onClick={() => handleOpenLoanSchedule(loan)} title="جدول الأقساط">
                           📋 الأقساط
                         </button>
-                        <button className="btn btn-secondary btn-xs" onClick={() => handleDeleteLoan(loan.id, loan.title)} style={{ color: 'var(--danger)' }}>
+                        <button className="btn btn-secondary btn-xs" onClick={() => handleOpenEditModal(loan)} title="تعديل القرض" style={{ color: '#60a5fa' }}>
+                          ✏️ تعديل
+                        </button>
+                        <button className="btn btn-secondary btn-xs" onClick={() => handleDeleteLoan(loan.id, loan.title)} title="حذف القرض" style={{ color: 'var(--danger)' }}>
                           🗑️
                         </button>
                       </div>
@@ -560,6 +635,163 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
 
               <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '1rem' }}>
                 حفظ القرض وتوليد جدول الأقساط تلقائياً 🚀
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDIT LOAN */}
+      {editingLoan && (
+        <div className="modal-overlay">
+          <div className="panel modal-content" style={{ maxWidth: '650px', maxHeight: '88vh', overflowY: 'auto' }}>
+            <div className="panel-header">
+              <h2 className="panel-title">✏️ تعديل بيانات القرض / الالتزام المالي</h2>
+              <button className="btn btn-secondary" onClick={() => setEditingLoan(null)}>✕ إغلاق</button>
+            </div>
+
+            <form onSubmit={handleEditLoanSubmit}>
+              <div className="form-grid">
+                <div className="form-group full-width">
+                  <label>اسم / عنوان القرض والالتزام:*</label>
+                  <input
+                    type="text"
+                    value={editLoanForm.title}
+                    onChange={e => setEditLoanForm({ ...editLoanForm, title: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>نوع الالتزام:*</label>
+                  <select value={editLoanForm.loan_type} onChange={e => setEditLoanForm({ ...editLoanForm, loan_type: e.target.value })}>
+                    <option value="bank_loan">🏦 قرض / تسهيل بنكي</option>
+                    <option value="car_installment">🚗 قسط سيارة / معدات</option>
+                    <option value="external_loan">🏢 التزام / قسط خارجي</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>اسم البنك / الجهة المقرضة:*</label>
+                  <input
+                    type="text"
+                    value={editLoanForm.entity_name}
+                    onChange={e => setEditLoanForm({ ...editLoanForm, entity_name: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>اسم صاحب الحساب:</label>
+                  <input
+                    type="text"
+                    value={editLoanForm.account_holder_name}
+                    onChange={e => setEditLoanForm({ ...editLoanForm, account_holder_name: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>رقم الحساب لدى البنك/الجهة:</label>
+                  <input
+                    type="text"
+                    value={editLoanForm.account_number}
+                    onChange={e => setEditLoanForm({ ...editLoanForm, account_number: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>إجمالي مبلغ القرض (ج.م):*</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={editLoanForm.total_amount}
+                    onChange={e => {
+                      const tot = parseFloat(e.target.value) || 0;
+                      const cnt = parseInt(editLoanForm.total_installments, 10) || 0;
+                      const inst = cnt > 0 && tot > 0 ? (tot / cnt).toFixed(2) : editLoanForm.installment_amount;
+                      setEditLoanForm({ ...editLoanForm, total_amount: e.target.value, installment_amount: inst });
+                    }}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>عدد الشهور / الأقساط:*</label>
+                  <input
+                    type="number"
+                    value={editLoanForm.total_installments}
+                    onChange={e => {
+                      const cnt = parseInt(e.target.value, 10) || 0;
+                      const tot = parseFloat(editLoanForm.total_amount) || 0;
+                      const inst = cnt > 0 && tot > 0 ? (tot / cnt).toFixed(2) : editLoanForm.installment_amount;
+                      setEditLoanForm({ ...editLoanForm, total_installments: e.target.value, installment_amount: inst });
+                    }}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>مبلغ القسط الشهري (ج.م):*</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={editLoanForm.installment_amount}
+                    onChange={e => setEditLoanForm({ ...editLoanForm, installment_amount: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>ميعاد / يوم السداد من كل شهر:*</label>
+                  <input
+                    type="text"
+                    value={editLoanForm.due_day_text}
+                    onChange={e => setEditLoanForm({ ...editLoanForm, due_day_text: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>تاريخ بداية القرض / أول قسط:*</label>
+                  <input
+                    type="date"
+                    value={editLoanForm.start_date}
+                    onChange={e => setEditLoanForm({ ...editLoanForm, start_date: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>نسبة الفائدة (%):</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={editLoanForm.interest_rate}
+                    onChange={e => setEditLoanForm({ ...editLoanForm, interest_rate: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>تكرار السداد:*</label>
+                  <select value={editLoanForm.frequency} onChange={e => setEditLoanForm({ ...editLoanForm, frequency: e.target.value })}>
+                    <option value="monthly">شهري</option>
+                    <option value="weekly">أسبوعي</option>
+                    <option value="quarterly">ربع سنوي (كل 3 شهور)</option>
+                  </select>
+                </div>
+
+                <div className="form-group full-width">
+                  <label>ملاحظات إضافية:</label>
+                  <textarea
+                    rows="2"
+                    value={editLoanForm.notes}
+                    onChange={e => setEditLoanForm({ ...editLoanForm, notes: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '1rem' }}>
+                💾 حفظ التعديلات
               </button>
             </form>
           </div>
