@@ -5133,6 +5133,48 @@ app.post('/api/owner-account/transactions/:id/reject', async (req, res) => {
   }
 });
 
+// POST /api/owner-account/transactions/:id/disburse - Accountant completes owner repayment delivery after manager approval
+app.post('/api/owner-account/transactions/:id/disburse', async (req, res) => {
+  const txId = req.params.id;
+  const userId = parseInt(req.headers['x-user-id']) || null;
+  const userRole = req.headers['x-user-role'];
+
+  try {
+    const pool = getPool();
+    const txRes = await pool.request()
+      .input('id', sql.Int, txId)
+      .query("SELECT * FROM transactions WHERE id = @id AND withdrawal_sub_type = 'owner_repayment'");
+
+    if (txRes.recordset.length === 0) {
+      return res.status(404).json({ error: 'عملية السداد غير موجودة' });
+    }
+
+    const tx = txRes.recordset[0];
+    if (tx.status === 'disbursed') {
+      return res.status(400).json({ error: 'تم تسليم وإتمام هذه العملية بالفعل' });
+    }
+
+    if (tx.status !== 'approved') {
+      return res.status(400).json({ error: 'لا يمكن إتمام التسليم إلا بعد موافقة المدير أولاً' });
+    }
+
+    await pool.request()
+      .input('id', sql.Int, txId)
+      .query("UPDATE transactions SET status = 'disbursed' WHERE id = @id");
+
+    try {
+      await logAuditLog(req, 'إتمام سداد وتسليم مبالغ المالك', 'transaction', txId, { amount: tx.amount, bank_id: tx.bank_id });
+    } catch (auditErr) {
+      console.error('Audit log error:', auditErr);
+    }
+
+    res.json({ message: 'تم إتمام السداد وتسليم الفلوس بنجاح! 🤝✅' });
+  } catch (error) {
+    console.error('Error completing owner repayment disbursement:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء إتمام عملية تسليم السداد' });
+  }
+});
+
 // PUT /api/owner-account/transactions/:id - Edit an existing owner account transaction
 app.put('/api/owner-account/transactions/:id', async (req, res) => {
   const txId = req.params.id;

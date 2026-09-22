@@ -257,6 +257,34 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
     }
   };
 
+  const handleDisburseOwnerTx = async (txId) => {
+    if (!window.confirm('هل قمت بتسليم المبلغ للمالك وتسديده بالفعل؟ اضغط موافقة لإتمام التسليم.')) return;
+    setSubmitting(true);
+    setError('');
+    setSuccessMsg('');
+    try {
+      const res = await fetch(`/api/owner-account/transactions/${txId}/disburse`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': userRole
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSuccessMsg(data.message || 'تم إتمام التسليم بنجاح! 🤝✅');
+        fetchData();
+        if (onRefreshDashboard) onRefreshDashboard();
+      } else {
+        setError(data.error || 'حدث خطأ أثناء إتمام تسليم العملية');
+      }
+    } catch (err) {
+      setError('تعذر الاتصال بالسيرفر');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleOpenEditModal = (tx) => {
     setEditingTx(tx);
     setEditForm({
@@ -377,10 +405,12 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
   const getStatusBadge = (status) => {
     if (status === 'pending') {
       return { label: '⏳ بانتظار موافقة المدير', bg: 'rgba(245, 158, 11, 0.15)', border: 'rgba(245, 158, 11, 0.35)', color: '#f59e0b' };
+    } else if (status === 'approved') {
+      return { label: '👍 موافق عليه (بانتظار التسليم)', bg: 'rgba(14, 165, 233, 0.15)', border: 'rgba(14, 165, 233, 0.35)', color: '#38bdf8' };
     } else if (status === 'rejected') {
       return { label: '❌ مرفوض من المدير', bg: 'rgba(239, 68, 68, 0.15)', border: 'rgba(239, 68, 68, 0.35)', color: '#ef4444' };
     } else {
-      return { label: '✅ معتمدة', bg: 'rgba(16, 185, 129, 0.15)', border: 'rgba(16, 185, 129, 0.35)', color: '#10b981' };
+      return { label: '✅ تم التسليم وإتمام السداد', bg: 'rgba(16, 185, 129, 0.15)', border: 'rgba(16, 185, 129, 0.35)', color: '#10b981' };
     }
   };
 
@@ -398,7 +428,8 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
     }
     if (filterStatus !== 'all') {
       if (filterStatus === 'pending' && tx.status !== 'pending') return false;
-      if (filterStatus === 'approved' && tx.status !== 'approved' && tx.status !== 'disbursed') return false;
+      if (filterStatus === 'approved' && tx.status !== 'approved') return false;
+      if (filterStatus === 'disbursed' && tx.status !== 'disbursed') return false;
       if (filterStatus === 'rejected' && tx.status !== 'rejected') return false;
     }
     if (searchTerm.trim()) {
@@ -581,7 +612,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
                   طلبات التمويل والسداد المعلقة بانتظار موافقتك ({pendingRequests.length} طلب)
                 </h3>
                 <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, marginTop: '0.2rem' }}>
-                  قدم المحاسب الطلبات التالية وهي بانتظار موافقتك لتطبيق التاثير المالي على الخزينة والبنوك
+                  قدم المحاسب الطلبات التالية وهي بانتظار موافقتك لتصريح الصرف وتحديث رصيد البنوك والخزينة
                 </p>
               </div>
             </div>
@@ -600,7 +631,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
                   padding: '1.2rem',
                   display: 'flex',
                   flexDirection: 'column',
-                  justify: 'space-between',
+                  justifyContent: 'space-between',
                   gap: '1rem'
                 }}>
                   <div>
@@ -640,7 +671,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
 
                     {tx.notes && (
                       <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.4rem', fontStyle: 'italic' }}>
-                        💬 M: {tx.notes}
+                        💬 البيان: {tx.notes}
                       </div>
                     )}
                   </div>
@@ -661,7 +692,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
                         cursor: 'pointer'
                       }}
                     >
-                      ✅ موافقة واعتماد
+                      ✅ موافقة وتصريح بالصرف
                     </button>
                     <button
                       disabled={submitting}
@@ -897,7 +928,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
           {/* Approval Status Filter */}
           <div>
             <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
-              حالة الاعتماد:
+              حالة الاعتماد والتسليم:
             </label>
             <select
               className="form-control"
@@ -905,9 +936,10 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
               onChange={e => setFilterStatus(e.target.value)}
               style={{ width: '100%', borderRadius: '12px', padding: '0.65rem 0.9rem', fontSize: '0.9rem' }}
             >
-              <option value="all">🌐 جميع الحالات (معتمدة ومعلقة)</option>
-              <option value="approved">✅ معتمدة فقط</option>
+              <option value="all">🌐 جميع الحالات</option>
               <option value="pending">⏳ بانتظار موافقة المدير</option>
+              <option value="approved">👍 موافق عليه (بانتظار التسليم)</option>
+              <option value="disbursed">✅ تم التسليم وإتمام السداد</option>
               <option value="rejected">❌ مرفوضة فقط</option>
             </select>
           </div>
@@ -987,14 +1019,14 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
               <tr style={{ background: 'linear-gradient(180deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95))', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
                 <th style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>التاريخ والوقت</th>
                 <th style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>نوع الحركة</th>
-                <th style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>حالة الاعتماد</th>
+                <th style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>حالة الاعتماد والتسليم</th>
                 <th style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>الحساب المستهدف / الخزنة</th>
                 <th style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>المبلغ</th>
                 <th style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>أوجه الصرف / الغرض المستهدف</th>
                 <th style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>التفاصيل والملاحظات</th>
                 <th style={{ padding: '1rem 1.25rem', textAlign: 'center' }}>المستند والإيصال</th>
                 <th style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>المُدخل والمُعتمد</th>
-                {userRole === 'manager' && <th style={{ padding: '1rem 1.25rem', textAlign: 'center' }}>الإجراءات</th>}
+                <th style={{ padding: '1rem 1.25rem', textAlign: 'center' }}>الإجراءات</th>
               </tr>
             </thead>
             <tbody>
@@ -1157,48 +1189,72 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
                     </td>
 
                     {/* Actions */}
-                    {userRole === 'manager' && (
-                      <td style={{ padding: '1rem 1.25rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
-                          {tx.status === 'pending' && (
-                            <>
-                              <button
-                                className="btn btn-xs"
-                                onClick={() => handleApproveOwnerTx(tx.id)}
-                                title="موافقة واعتماد الطلب"
-                                style={{ background: '#10b981', color: '#fff', padding: '0.4rem 0.7rem', borderRadius: '8px', fontWeight: 800, fontSize: '0.8rem' }}
-                              >
-                                ✅ موافقة
-                              </button>
-                              <button
-                                className="btn btn-xs btn-secondary"
-                                onClick={() => handleRejectOwnerTx(tx.id)}
-                                title="رفض الطلب"
-                                style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)', padding: '0.4rem 0.7rem', borderRadius: '8px', fontWeight: 700, fontSize: '0.8rem' }}
-                              >
-                                ❌ رفض
-                              </button>
-                            </>
-                          )}
+                    <td style={{ padding: '1rem 1.25rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center', alignItems: 'center' }}>
+                        {/* Complete Disbursement Button for Repayments approved by Manager */}
+                        {tx.withdrawal_sub_type === 'owner_repayment' && tx.status === 'approved' && (
                           <button
-                            className="btn btn-xs btn-secondary"
-                            onClick={() => handleOpenEditModal(tx)}
-                            title="تعديل المعاملة"
-                            style={{ padding: '0.4rem 0.7rem', borderRadius: '8px', fontWeight: 700, fontSize: '0.8rem' }}
+                            className="btn btn-xs"
+                            disabled={submitting}
+                            onClick={() => handleDisburseOwnerTx(tx.id)}
+                            title="إتمام السداد وتسليم المبلغ للمالك"
+                            style={{
+                              background: 'linear-gradient(135deg, #10b981, #059669)',
+                              color: '#ffffff',
+                              padding: '0.45rem 0.85rem',
+                              borderRadius: '8px',
+                              fontWeight: 800,
+                              fontSize: '0.82rem',
+                              boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                            }}
                           >
-                            ✏️ تعديل
+                            🤝 إتمام السداد وتسليم الفلوس
                           </button>
-                          <button
-                            className="btn btn-xs btn-secondary"
-                            onClick={() => handleDeleteOwnerTx(tx)}
-                            title="حذف المعاملة"
-                            style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)', padding: '0.4rem 0.7rem', borderRadius: '8px', fontWeight: 700, fontSize: '0.8rem' }}
-                          >
-                            🗑️ حذف
-                          </button>
-                        </div>
-                      </td>
-                    )}
+                        )}
+
+                        {userRole === 'manager' && tx.status === 'pending' && (
+                          <>
+                            <button
+                              className="btn btn-xs"
+                              onClick={() => handleApproveOwnerTx(tx.id)}
+                              title="موافقة وتصريح الصرف"
+                              style={{ background: '#10b981', color: '#fff', padding: '0.4rem 0.7rem', borderRadius: '8px', fontWeight: 800, fontSize: '0.8rem' }}
+                            >
+                              ✅ موافقة
+                            </button>
+                            <button
+                              className="btn btn-xs btn-secondary"
+                              onClick={() => handleRejectOwnerTx(tx.id)}
+                              title="رفض الطلب"
+                              style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)', padding: '0.4rem 0.7rem', borderRadius: '8px', fontWeight: 700, fontSize: '0.8rem' }}
+                            >
+                              ❌ رفض
+                            </button>
+                          </>
+                        )}
+
+                        {userRole === 'manager' && (
+                          <>
+                            <button
+                              className="btn btn-xs btn-secondary"
+                              onClick={() => handleOpenEditModal(tx)}
+                              title="تعديل المعاملة"
+                              style={{ padding: '0.4rem 0.7rem', borderRadius: '8px', fontWeight: 700, fontSize: '0.8rem' }}
+                            >
+                              ✏️ تعديل
+                            </button>
+                            <button
+                              className="btn btn-xs btn-secondary"
+                              onClick={() => handleDeleteOwnerTx(tx)}
+                              title="حذف المعاملة"
+                              style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)', padding: '0.4rem 0.7rem', borderRadius: '8px', fontWeight: 700, fontSize: '0.8rem' }}
+                            >
+                              🗑️ حذف
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
