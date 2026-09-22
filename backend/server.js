@@ -683,8 +683,10 @@ app.get('/api/loans', async (req, res) => {
         c.plate_number AS car_plate, c.driver_name AS car_driver,
         (SELECT COUNT(*) FROM loan_installments WHERE loan_id = l.id AND status = 'paid') AS paid_installments,
         (SELECT ISNULL(SUM(paid_amount), 0) FROM loan_installments WHERE loan_id = l.id AND status = 'paid') AS total_paid_amount,
+        (SELECT TOP 1 due_date FROM loan_installments WHERE loan_id = l.id AND status = 'pending' ORDER BY installment_number ASC) AS next_due_date,
+        (SELECT TOP 1 DATEDIFF(day, CAST(GETDATE() AS DATE), due_date) FROM loan_installments WHERE loan_id = l.id AND status = 'pending' ORDER BY installment_number ASC) AS next_due_days,
         (SELECT COUNT(*) FROM loan_installments WHERE loan_id = l.id AND status = 'pending' AND due_date <= GETDATE()) AS overdue_installments,
-        (SELECT COUNT(*) FROM loan_installments WHERE loan_id = l.id AND status = 'pending' AND due_date BETWEEN GETDATE() AND DATEADD(day, 7, GETDATE())) AS upcoming_installments
+        (SELECT COUNT(*) FROM loan_installments WHERE loan_id = l.id AND status = 'pending' AND due_date BETWEEN GETDATE() AND DATEADD(day, 14, GETDATE())) AS upcoming_installments
       FROM loans l
       LEFT JOIN banks b ON l.bank_id = b.id
       LEFT JOIN cars c ON l.car_id = c.id
@@ -694,10 +696,11 @@ app.get('/api/loans', async (req, res) => {
     const dueAlertsRes = await pool.request().query(`
       SELECT 
         i.id AS installment_id, i.installment_number, i.due_date, i.amount, i.status AS installment_status,
-        l.id AS loan_id, l.title AS loan_title, l.loan_type, l.entity_name
+        DATEDIFF(day, CAST(GETDATE() AS DATE), i.due_date) AS days_until_due,
+        l.id AS loan_id, l.title AS loan_title, l.loan_type, l.entity_name, l.due_day_text, l.due_day
       FROM loan_installments i
       JOIN loans l ON i.loan_id = l.id
-      WHERE i.status = 'pending' AND i.due_date <= DATEADD(day, 7, GETDATE())
+      WHERE i.status = 'pending' AND i.due_date <= DATEADD(day, 14, GETDATE())
       ORDER BY i.due_date ASC
     `);
 
@@ -713,7 +716,7 @@ app.get('/api/loans', async (req, res) => {
 
 // POST /api/loans - Add new loan and auto-generate installments schedule
 app.post('/api/loans', async (req, res) => {
-  const { title, loan_type, entity_name, account_number, account_holder_name, bank_id, car_id, total_amount, installment_amount, total_installments, start_date, interest_rate, due_day_text, frequency, notes, initial_paid_amount } = req.body;
+  const { title, loan_type, entity_name, account_number, account_holder_name, bank_id, car_id, total_amount, installment_amount, total_installments, start_date, interest_rate, due_day, due_day_text, frequency, notes, initial_paid_amount } = req.body;
 
   if (!title || !loan_type || !entity_name || !total_amount || !installment_amount || !total_installments || !start_date) {
     return res.status(400).json({ error: 'يرجى إكمال جميع البيانات المطلوبة للقرض' });
@@ -725,6 +728,14 @@ app.post('/api/loans', async (req, res) => {
     await transaction.begin();
 
     try {
+      const startDateObj = new Date(start_date);
+      let targetDueDay = parseInt(due_day, 10);
+      if (isNaN(targetDueDay) || targetDueDay < 1 || targetDueDay > 31) {
+        const match = due_day_text ? due_day_text.match(/\d+/) : null;
+        targetDueDay = match ? parseInt(match[0], 10) : startDateObj.getDate();
+      }
+      const formattedDueDayText = due_day_text || `يوم ${targetDueDay} من كل شهر`;
+
       const loanReq = transaction.request()
         .input('title', sql.NVarChar, title)
         .input('loan_type', sql.NVarChar, loan_type)
@@ -738,31 +749,38 @@ app.post('/api/loans', async (req, res) => {
         .input('total_installments', sql.Int, total_installments)
         .input('start_date', sql.Date, start_date)
         .input('interest_rate', sql.Decimal(5, 2), interest_rate ? parseFloat(interest_rate) : null)
-        .input('due_day_text', sql.NVarChar, due_day_text || null)
+        .input('due_day', sql.Int, targetDueDay)
+        .input('due_day_text', sql.NVarChar, formattedDueDayText)
         .input('frequency', sql.NVarChar, frequency || 'monthly')
         .input('notes', sql.NVarChar, notes || null);
 
       const loanResult = await loanReq.query(`
-        INSERT INTO loans (title, loan_type, entity_name, account_number, account_holder_name, bank_id, car_id, total_amount, installment_amount, total_installments, start_date, interest_rate, due_day_text, frequency, notes)
+        INSERT INTO loans (title, loan_type, entity_name, account_number, account_holder_name, bank_id, car_id, total_amount, installment_amount, total_installments, start_date, interest_rate, due_day, due_day_text, frequency, notes)
         OUTPUT INSERTED.id
-        VALUES (@title, @loan_type, @entity_name, @account_number, @account_holder_name, @bank_id, @car_id, @total_amount, @installment_amount, @total_installments, @start_date, @interest_rate, @due_day_text, @frequency, @notes)
+        VALUES (@title, @loan_type, @entity_name, @account_number, @account_holder_name, @bank_id, @car_id, @total_amount, @installment_amount, @total_installments, @start_date, @interest_rate, @due_day, @due_day_text, @frequency, @notes)
       `);
 
       const loanId = loanResult.recordset[0].id;
       let remainingPaidToDistribute = parseFloat(initial_paid_amount) || 0;
       const instAmt = parseFloat(installment_amount);
 
-      // Auto-generate installments schedule
-      const startDateObj = new Date(start_date);
+      // Auto-generate installments schedule based on exact due_day
       for (let i = 1; i <= total_installments; i++) {
         const dueDate = new Date(startDateObj);
         if (frequency === 'weekly') {
           dueDate.setDate(dueDate.getDate() + (i - 1) * 7);
         } else if (frequency === 'quarterly') {
           dueDate.setMonth(dueDate.getMonth() + (i - 1) * 3);
+          const year = dueDate.getFullYear();
+          const month = dueDate.getMonth();
+          const daysInMonth = new Date(year, month + 1, 0).getDate();
+          dueDate.setDate(Math.min(targetDueDay, daysInMonth));
         } else {
-          // monthly default
           dueDate.setMonth(dueDate.getMonth() + (i - 1));
+          const year = dueDate.getFullYear();
+          const month = dueDate.getMonth();
+          const daysInMonth = new Date(year, month + 1, 0).getDate();
+          dueDate.setDate(Math.min(targetDueDay, daysInMonth));
         }
 
         const dueDateStr = dueDate.toISOString().split('T')[0];
@@ -980,6 +998,7 @@ app.put('/api/loans/:id', async (req, res) => {
     total_installments,
     start_date,
     interest_rate,
+    due_day,
     due_day_text,
     frequency,
     notes
@@ -1001,6 +1020,13 @@ app.put('/api/loans/:id', async (req, res) => {
     }
 
     const currentLoan = existingLoanRes.recordset[0];
+    const startDateObj = new Date(start_date);
+    let targetDueDay = parseInt(due_day, 10);
+    if (isNaN(targetDueDay) || targetDueDay < 1 || targetDueDay > 31) {
+      const match = due_day_text ? due_day_text.match(/\d+/) : null;
+      targetDueDay = match ? parseInt(match[0], 10) : startDateObj.getDate();
+    }
+    const formattedDueDayText = due_day_text || `يوم ${targetDueDay} من كل شهر`;
 
     await pool.request()
       .input('loanId', sql.Int, loanId)
@@ -1016,7 +1042,8 @@ app.put('/api/loans/:id', async (req, res) => {
       .input('total_installments', sql.Int, total_installments)
       .input('start_date', sql.Date, start_date)
       .input('interest_rate', sql.Decimal(5, 2), interest_rate ? parseFloat(interest_rate) : null)
-      .input('due_day_text', sql.NVarChar, due_day_text || null)
+      .input('due_day', sql.Int, targetDueDay)
+      .input('due_day_text', sql.NVarChar, formattedDueDayText)
       .input('frequency', sql.NVarChar, frequency || 'monthly')
       .input('notes', sql.NVarChar, notes || null)
       .query(`
@@ -1033,6 +1060,7 @@ app.put('/api/loans/:id', async (req, res) => {
             total_installments = @total_installments,
             start_date = @start_date,
             interest_rate = @interest_rate,
+            due_day = @due_day,
             due_day_text = @due_day_text,
             frequency = @frequency,
             notes = @notes

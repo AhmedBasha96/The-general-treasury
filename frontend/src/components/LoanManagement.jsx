@@ -22,6 +22,7 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
     initial_paid_amount: '',
     start_date: new Date().toISOString().split('T')[0],
     interest_rate: '',
+    due_day: '15',
     due_day_text: '15 من كل شهر',
     frequency: 'monthly',
     notes: ''
@@ -47,6 +48,7 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
     total_installments: '',
     start_date: '',
     interest_rate: '',
+    due_day: '15',
     due_day_text: '15 من كل شهر',
     frequency: 'monthly',
     notes: ''
@@ -75,6 +77,7 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
       total_installments: loan.total_installments || '',
       start_date: loan.start_date ? new Date(loan.start_date).toISOString().split('T')[0] : '',
       interest_rate: loan.interest_rate || '',
+      due_day: loan.due_day ? loan.due_day.toString() : (loan.due_day_text && loan.due_day_text.match(/\d+/) ? loan.due_day_text.match(/\d+/)[0] : '15'),
       due_day_text: loan.due_day_text || '15 من كل شهر',
       frequency: loan.frequency || 'monthly',
       notes: loan.notes || ''
@@ -336,24 +339,39 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
 
       {/* Due Date Alerts Banner */}
       {loansData.dueAlerts && loansData.dueAlerts.length > 0 && (
-        <div className="due-alerts-box">
-          <div className="due-alerts-header">
-            <span className="due-bell">⏰</span>
-            <h3>تنبيهات مواعيد السداد المستحقة والقادمة (خلال 7 أيام)</h3>
+        <div className="due-alerts-box" style={{ background: 'rgba(15, 23, 42, 0.75)', border: '1px solid rgba(239, 68, 68, 0.4)', borderRadius: '12px', padding: '1rem', marginBottom: '1.2rem' }}>
+          <div className="due-alerts-header" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.8rem' }}>
+            <span className="due-bell" style={{ fontSize: '1.4rem' }}>⏰</span>
+            <h3 style={{ margin: 0, fontSize: '1.05rem', color: '#f8fafc' }}>
+              تنبيهات مواعيد السداد المستحقة والقادمة (التزام مواعيد السداد)
+            </h3>
           </div>
-          <div className="due-alerts-list">
+          <div className="due-alerts-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
             {loansData.dueAlerts.map(alert => {
-              const isOverdue = new Date(alert.due_date) <= new Date();
+              const days = alert.days_until_due;
+              let alertStyle = { bg: 'rgba(239, 68, 68, 0.2)', border: '1px solid #ef4444', icon: '🚨', label: `متأخر منذ ${Math.abs(days)} يوم!` };
+              if (days === 0) {
+                alertStyle = { bg: 'rgba(239, 68, 68, 0.3)', border: '1px solid #ef4444', icon: '⏰', label: 'مستحق السداد اليوم!' };
+              } else if (days > 0 && days <= 3) {
+                alertStyle = { bg: 'rgba(245, 158, 11, 0.2)', border: '1px solid #f59e0b', icon: '⚡', label: `قريب جداً (متبقي ${days} أيام)` };
+              } else if (days > 3) {
+                alertStyle = { bg: 'rgba(59, 130, 246, 0.15)', border: '1px solid #3b82f6', icon: '🔵', label: `قادم قريباً (متبقي ${days} يوم)` };
+              }
+
               return (
-                <div key={alert.installment_id} className={`due-alert-item ${isOverdue ? 'overdue' : 'upcoming'}`}>
-                  <div className="due-info">
-                    <span className="due-title">
-                      {isOverdue ? '🚨 قسط مستحق السداد / متأخر' : '🟡 قسط قادم قريبًا'}: {alert.loan_title} (قسط #{alert.installment_number})
+                <div key={alert.installment_id} className="due-alert-item" style={{ background: alertStyle.bg, border: alertStyle.border, padding: '0.7rem 1rem', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div className="due-info" style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                    <span className="due-title" style={{ fontWeight: 700, color: '#f8fafc' }}>
+                      {alertStyle.icon} [{alertStyle.label}] : {alert.loan_title} (قسط #{alert.installment_number})
                     </span>
-                    <span className="due-date">تاريخ الاستحقاق: {new Date(alert.due_date).toLocaleDateString('ar-EG')}</span>
+                    <span className="due-date" style={{ fontSize: '0.82rem', color: '#cbd5e1' }}>
+                      تاريخ الاستحقاق المحدد: <strong>{new Date(alert.due_date).toLocaleDateString('ar-EG')}</strong> ({alert.due_day_text || `يوم ${alert.due_day || 15} من الشهر`})
+                    </span>
                   </div>
-                  <div className="due-actions">
-                    <span className="due-amount">{Number(alert.amount).toLocaleString('ar-EG')} ج.م</span>
+                  <div className="due-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <span className="due-amount" style={{ fontWeight: 700, fontSize: '1.05rem', color: '#f59e0b' }}>
+                      {Number(alert.amount).toLocaleString('ar-EG')} ج.م
+                    </span>
                     <button 
                       className="btn btn-xs btn-primary"
                       onClick={() => {
@@ -363,7 +381,7 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                         setPayError('');
                       }}
                     >
-                      💳 تسجيل السداد
+                      💳 تسجيل السداد الفوري
                     </button>
                   </div>
                 </div>
@@ -393,7 +411,7 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                 <th>بداية المدة</th>
                 <th>الفائدة</th>
                 <th>عدد الشهور</th>
-                <th>مواعيد الأقساط</th>
+                <th>مواعيد الأقساط والتنبيهات</th>
                 <th>الإجراءات</th>
               </tr>
             </thead>
@@ -418,7 +436,32 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                     <td>{loan.start_date ? new Date(loan.start_date).toLocaleDateString('ar-EG') : '—'}</td>
                     <td>{loan.interest_rate ? `${loan.interest_rate}%` : '—'}</td>
                     <td><strong>{loan.total_installments} شهر</strong></td>
-                    <td><span className="badge badge-company-transfer">{loan.due_day_text || '15 من كل شهر'}</span></td>
+                    <td>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        <span className="badge badge-company-transfer">{loan.due_day_text || `يوم ${loan.due_day || 15} من كل شهر`}</span>
+                        {loan.next_due_days !== null && loan.next_due_days !== undefined ? (
+                          loan.next_due_days < 0 ? (
+                            <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.5)', fontSize: '0.75rem' }}>
+                              🚨 متأخر ({Math.abs(loan.next_due_days)} يوم)
+                            </span>
+                          ) : loan.next_due_days === 0 ? (
+                            <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.3)', color: '#f87171', border: '1px solid #ef4444', fontSize: '0.75rem' }}>
+                              ⏰ مستحق اليوم!
+                            </span>
+                          ) : loan.next_due_days <= 7 ? (
+                            <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.5)', fontSize: '0.75rem' }}>
+                              ⏰ متبقي {loan.next_due_days} يوم
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                              القادمة: {new Date(loan.next_due_date).toLocaleDateString('ar-EG')}
+                            </span>
+                          )
+                        ) : (
+                          <span className="badge badge-success" style={{ fontSize: '0.75rem' }}>✅ مسدد بالكامل</span>
+                        )}
+                      </div>
+                    </td>
                     <td>
                       <div style={{ display: 'flex', gap: '0.3rem' }}>
                         <button className="btn btn-secondary btn-xs" onClick={() => handleOpenLoanSchedule(loan)} title="جدول الأقساط">
@@ -557,15 +600,42 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                   />
                 </div>
 
-                <div className="form-group">
-                  <label>ميعاد / يوم السداد من كل شهر:*</label>
-                  <input
-                    type="text"
-                    placeholder="مثال: 5 من كل شهر، 15 من كل شهر، يوم 17..."
-                    value={newLoan.due_day_text}
-                    onChange={e => setNewLoan({ ...newLoan, due_day_text: e.target.value })}
-                    required
-                  />
+                <div className="form-group full-width" style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '0.8rem 1rem', borderRadius: '10px', border: '1px solid rgba(96, 165, 250, 0.2)' }}>
+                  <label style={{ fontWeight: 700, color: '#60a5fa' }}>🗓️ ميعاد / يوم السداد من كل شهر (التزام موعد السداد):*</label>
+                  <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap', marginTop: '0.4rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <span style={{ fontSize: '0.85rem' }}>يوم:</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="31"
+                        style={{ width: '80px', fontWeight: 'bold', textAlign: 'center' }}
+                        value={newLoan.due_day}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setNewLoan({ ...newLoan, due_day: val, due_day_text: val ? `يوم ${val} من كل شهر` : newLoan.due_day_text });
+                        }}
+                        required
+                      />
+                      <span style={{ fontSize: '0.85rem' }}>من الشهر</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>اختيار سريع:</span>
+                      {[1, 5, 10, 15, 20, 25].map(day => (
+                        <button
+                          key={day}
+                          type="button"
+                          className={`btn btn-xs ${Number(newLoan.due_day) === day ? 'btn-primary' : 'btn-secondary'}`}
+                          onClick={() => setNewLoan({ ...newLoan, due_day: day.toString(), due_day_text: `يوم ${day} من كل شهر` })}
+                        >
+                          يوم {day}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '0.4rem' }}>
+                    🔔 يتم جدولة كافة أقساط هذا القرض تلقائياً يوم <strong>{newLoan.due_day || 15}</strong> من كل شهر، وتصلك إشعارات تنبيه مسبقة ومستمرة لضمان السداد في الموعد.
+                  </div>
                 </div>
 
                 <div className="form-group">
@@ -741,14 +811,42 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                   />
                 </div>
 
-                <div className="form-group">
-                  <label>ميعاد / يوم السداد من كل شهر:*</label>
-                  <input
-                    type="text"
-                    value={editLoanForm.due_day_text}
-                    onChange={e => setEditLoanForm({ ...editLoanForm, due_day_text: e.target.value })}
-                    required
-                  />
+                <div className="form-group full-width" style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '0.8rem 1rem', borderRadius: '10px', border: '1px solid rgba(96, 165, 250, 0.2)' }}>
+                  <label style={{ fontWeight: 700, color: '#60a5fa' }}>🗓️ ميعاد / يوم السداد من كل شهر (التزام موعد السداد):*</label>
+                  <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap', marginTop: '0.4rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <span style={{ fontSize: '0.85rem' }}>يوم:</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="31"
+                        style={{ width: '80px', fontWeight: 'bold', textAlign: 'center' }}
+                        value={editLoanForm.due_day}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setEditLoanForm({ ...editLoanForm, due_day: val, due_day_text: val ? `يوم ${val} من كل شهر` : editLoanForm.due_day_text });
+                        }}
+                        required
+                      />
+                      <span style={{ fontSize: '0.85rem' }}>من الشهر</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>اختيار سريع:</span>
+                      {[1, 5, 10, 15, 20, 25].map(day => (
+                        <button
+                          key={day}
+                          type="button"
+                          className={`btn btn-xs ${Number(editLoanForm.due_day) === day ? 'btn-primary' : 'btn-secondary'}`}
+                          onClick={() => setEditLoanForm({ ...editLoanForm, due_day: day.toString(), due_day_text: `يوم ${day} من كل شهر` })}
+                        >
+                          يوم {day}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '0.4rem' }}>
+                    🔔 يتم جدولة كافة أقساط هذا القرض تلقائياً يوم <strong>{editLoanForm.due_day || 15}</strong> من كل شهر، وتصلك إشعارات تنبيه مسبقة ومستمرة لضمان السداد في الموعد.
+                  </div>
                 </div>
 
                 <div className="form-group">

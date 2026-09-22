@@ -742,6 +742,11 @@ async function createTables() {
           ALTER TABLE loans ADD due_day_text NVARCHAR(100) NULL;
         END
 
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('loans') AND name = 'due_day')
+        BEGIN
+          ALTER TABLE loans ADD due_day INT NULL;
+        END
+
         -- Create loan_installments table (جدول الأقساط المجدولة للسداد)
         IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'loan_installments')
         BEGIN
