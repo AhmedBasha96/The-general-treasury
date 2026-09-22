@@ -1,6 +1,7 @@
 const sql = require('mssql');
 const bcrypt = require('bcryptjs');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const baseConfig = {
   user: process.env.DB_USER,
@@ -111,10 +112,7 @@ async function createTables() {
       END
 
       -- Ensure Vodafone Cash bank has default 1% commission percentage
-      UPDATE banks 
-      SET commission_percent = 1.00 
-      WHERE (name LIKE N'%فودافون%' OR name LIKE N'%vodafone%' OR name LIKE N'%Vodafone%') 
-        AND (commission_percent IS NULL OR commission_percent = 0);
+      EXEC('UPDATE banks SET commission_percent = 1.00 WHERE (name LIKE N''%فودافون%'' OR name LIKE N''%vodafone%'' OR name LIKE N''%Vodafone%'') AND (commission_percent IS NULL OR commission_percent = 0)');
     `);
 
     // 1.8. Create supervisors table if not exists

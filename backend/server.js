@@ -1,12 +1,12 @@
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const { connectDB, getPool, logAuditLog, sql } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const path = require('path');
 app.use(cors());
 
 // Serve uploaded car images statically with CORS support
