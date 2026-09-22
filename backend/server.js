@@ -4788,10 +4788,12 @@ app.get('/api/owner-account/transactions', async (req, res) => {
         t.id, t.type, t.payment_method, t.withdrawal_sub_type, t.amount, t.date, t.notes, t.receipt_image,
         t.bank_id, t.status, t.purpose_type, t.purpose_target_id, t.purpose_notes, t.created_at,
         b.name AS bank_name, b.account_number AS bank_account_number,
-        u.username AS creator_name
+        u.username AS creator_name,
+        u2.username AS approver_name
       FROM transactions t
       LEFT JOIN banks b ON t.bank_id = b.id
       LEFT JOIN users u ON t.created_by = u.id
+      LEFT JOIN users u2 ON t.approved_by = u2.id
       WHERE t.withdrawal_sub_type IN ('owner_funding', 'owner_repayment')
       ORDER BY t.date DESC, t.id DESC
     `);
@@ -4806,6 +4808,7 @@ app.get('/api/owner-account/transactions', async (req, res) => {
 app.post('/api/owner-account/deposit', async (req, res) => {
   const { amount, bank_id, payment_method, date, notes, receipt_image, purpose_type, purpose_target_id, purpose_notes } = req.body;
   const userId = parseInt(req.headers['x-user-id']) || null;
+  const userRole = req.headers['x-user-role'] || 'manager';
 
   const numericAmount = Number(amount);
   if (!numericAmount || numericAmount <= 0) {
@@ -4813,6 +4816,7 @@ app.post('/api/owner-account/deposit', async (req, res) => {
   }
 
   const payMethod = payment_method || (bank_id ? 'bank_transfer' : 'cash');
+  const targetStatus = userRole === 'accountant' ? 'pending' : 'approved';
 
   try {
     const pool = getPool();
@@ -4828,43 +4832,44 @@ app.post('/api/owner-account/deposit', async (req, res) => {
       .input('purposeType', sql.NVarChar, purpose_type || null)
       .input('purposeTargetId', sql.Int, purpose_target_id || null)
       .input('purposeNotes', sql.NVarChar, purpose_notes || null)
-      .input('status', sql.VarChar, 'approved')
+      .input('status', sql.VarChar, targetStatus)
       .input('createdBy', sql.Int, userId)
+      .input('approvedBy', sql.Int, userRole === 'manager' ? userId : null)
       .query(`
         INSERT INTO transactions (
           bank_id, type, payment_method, withdrawal_sub_type, amount, date, notes, 
-          receipt_image, purpose_type, purpose_target_id, purpose_notes, status, created_by
+          receipt_image, purpose_type, purpose_target_id, purpose_notes, status, created_by, approved_by
         )
         OUTPUT INSERTED.id
         VALUES (
           @bankId, @type, @paymentMethod, @subType, @amount, @date, @notes, 
-          @receiptImage, @purposeType, @purposeTargetId, @purposeNotes, @status, @createdBy
+          @receiptImage, @purposeType, @purposeTargetId, @purposeNotes, @status, @createdBy, @approvedBy
         )
       `);
 
     const insertedId = result.recordset[0].id;
     try {
-      await logAuditLog(req, 'إيداع تمويل من صاحب الشركة', 'transaction', insertedId, { amount: numericAmount, purpose_type, bank_id });
+      await logAuditLog(req, userRole === 'accountant' ? 'طلب إيداع تمويل من صاحب الشركة' : 'إيداع تمويل من صاحب الشركة', 'transaction', insertedId, { amount: numericAmount, purpose_type, bank_id, status: targetStatus });
     } catch (auditErr) {
       console.error('Audit log error:', auditErr);
     }
 
-    res.status(201).json({ message: 'تم تسجيل إيداع التمويل الشخصي بنجاح', transactionId: insertedId });
+    const message = userRole === 'accountant'
+      ? 'تم إرسال طلب إيداع التمويل الشخصي بنجاح وهو بانتظار موافقة المدير ⏳'
+      : 'تم تسجيل إيداع التمويل الشخصي بنجاح!';
+
+    res.status(201).json({ message, transactionId: insertedId, status: targetStatus });
   } catch (error) {
     console.error('Error adding owner funding deposit:', error);
     res.status(500).json({ error: 'حدث خطأ أثناء تسجيل إيداع تمويل المالك' });
   }
 });
 
-// POST /api/owner-account/repay - Repay owner from safe or bank (validates repayment <= net_owed)
+// POST /api/owner-account/repay - Repay owner from safe or bank
 app.post('/api/owner-account/repay', async (req, res) => {
   const { amount, bank_id, payment_method, date, notes, receipt_image } = req.body;
   const userId = parseInt(req.headers['x-user-id']) || null;
-  const userRole = req.headers['x-user-role'];
-
-  if (userRole !== 'manager') {
-    return res.status(403).json({ error: 'غير مسموح لغير المدراء بإجراء عمليات سداد لصاحب الشركة' });
-  }
+  const userRole = req.headers['x-user-role'] || 'manager';
 
   const numericAmount = Number(amount);
   if (!numericAmount || numericAmount <= 0) {
@@ -4875,6 +4880,43 @@ app.post('/api/owner-account/repay', async (req, res) => {
 
   try {
     const pool = getPool();
+
+    if (userRole === 'accountant') {
+      // Accountants submit as pending requests (no immediate funds deduction)
+      const result = await pool.request()
+        .input('bankId', sql.Int, bank_id || null)
+        .input('type', sql.VarChar, 'withdrawal')
+        .input('paymentMethod', sql.VarChar, payMethod)
+        .input('subType', sql.NVarChar, 'owner_repayment')
+        .input('amount', sql.Decimal(18, 2), numericAmount)
+        .input('date', sql.DateTime, date ? new Date(date) : new Date())
+        .input('notes', sql.NVarChar, notes || 'طلب سداد مستحقات لصاحب الشركة')
+        .input('receiptImage', sql.NVarChar, receipt_image || null)
+        .input('status', sql.VarChar, 'pending')
+        .input('createdBy', sql.Int, userId)
+        .query(`
+          INSERT INTO transactions (
+            bank_id, type, payment_method, withdrawal_sub_type, amount, date, notes, 
+            receipt_image, status, created_by
+          )
+          OUTPUT INSERTED.id
+          VALUES (
+            @bankId, @type, @paymentMethod, @subType, @amount, @date, @notes, 
+            @receiptImage, @status, @createdBy
+          )
+        `);
+
+      const insertedId = result.recordset[0].id;
+      try {
+        await logAuditLog(req, 'طلب سداد مستحقات صاحب الشركة', 'transaction', insertedId, { amount: numericAmount, bank_id, status: 'pending' });
+      } catch (auditErr) {
+        console.error('Audit log error:', auditErr);
+      }
+
+      return res.status(201).json({ message: 'تم إرسال طلب سداد مستحقات صاحب الشركة بنجاح وهو بانتظار موافقة المدير ⏳', transactionId: insertedId, status: 'pending' });
+    }
+
+    // Manager direct approval submission
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
@@ -4946,7 +4988,7 @@ app.post('/api/owner-account/repay', async (req, res) => {
         }
       }
 
-      // 3. Insert repayment transaction
+      // 3. Insert repayment transaction as approved
       const result = await transaction.request()
         .input('bankId', sql.Int, bank_id || null)
         .input('type', sql.VarChar, 'withdrawal')
@@ -4956,17 +4998,18 @@ app.post('/api/owner-account/repay', async (req, res) => {
         .input('date', sql.DateTime, date ? new Date(date) : new Date())
         .input('notes', sql.NVarChar, notes || 'سداد مستحقات لصاحب الشركة')
         .input('receiptImage', sql.NVarChar, receipt_image || null)
-        .input('status', sql.VarChar, 'disbursed')
+        .input('status', sql.VarChar, 'approved')
         .input('createdBy', sql.Int, userId)
+        .input('approvedBy', sql.Int, userId)
         .query(`
           INSERT INTO transactions (
             bank_id, type, payment_method, withdrawal_sub_type, amount, date, notes, 
-            receipt_image, status, created_by
+            receipt_image, status, created_by, approved_by
           )
           OUTPUT INSERTED.id
           VALUES (
             @bankId, @type, @paymentMethod, @subType, @amount, @date, @notes, 
-            @receiptImage, @status, @createdBy
+            @receiptImage, @status, @createdBy, @approvedBy
           )
         `);
 
@@ -4987,6 +5030,106 @@ app.post('/api/owner-account/repay', async (req, res) => {
   } catch (error) {
     console.error('Error adding owner repayment:', error);
     res.status(500).json({ error: 'حدث خطأ أثناء تسجيل سداد مستحقات المالك' });
+  }
+});
+
+// POST /api/owner-account/transactions/:id/approve - Approve pending owner funding/repayment (Manager only)
+app.post('/api/owner-account/transactions/:id/approve', async (req, res) => {
+  const txId = req.params.id;
+  const userId = parseInt(req.headers['x-user-id']) || null;
+  const userRole = req.headers['x-user-role'];
+
+  if (userRole !== 'manager') {
+    return res.status(403).json({ error: 'غير مسموح لغير المدراء باعتماء الطلبات المعلقة' });
+  }
+
+  try {
+    const pool = getPool();
+    const txRes = await pool.request()
+      .input('id', sql.Int, txId)
+      .query("SELECT * FROM transactions WHERE id = @id AND withdrawal_sub_type IN ('owner_funding', 'owner_repayment')");
+
+    if (txRes.recordset.length === 0) {
+      return res.status(404).json({ error: 'العملية غير موجودة أو غير مسجلة بحساب المالك' });
+    }
+
+    const tx = txRes.recordset[0];
+    if (tx.status === 'approved' || tx.status === 'disbursed') {
+      return res.status(400).json({ error: 'هذه العملية معتمدة بالفعل' });
+    }
+
+    // If approving repayment, check balance and net owed
+    if (tx.withdrawal_sub_type === 'owner_repayment') {
+      const depRes = await pool.request().query(`
+        SELECT ISNULL(SUM(amount), 0) AS total_deposited
+        FROM transactions WHERE withdrawal_sub_type = 'owner_funding' AND (status IN ('approved', 'disbursed') OR status IS NULL)
+      `);
+      const repRes = await pool.request().query(`
+        SELECT ISNULL(SUM(amount), 0) AS total_repaid
+        FROM transactions WHERE withdrawal_sub_type = 'owner_repayment' AND (status IN ('approved', 'disbursed') OR status IS NULL)
+      `);
+      const netOwed = (Number(depRes.recordset[0]?.total_deposited) || 0) - (Number(repRes.recordset[0]?.total_repaid) || 0);
+
+      if (Number(tx.amount) > netOwed) {
+        return res.status(400).json({
+          error: `تعذر اعتماد السداد: مبلغ العملية (${Number(tx.amount).toLocaleString('ar-EG')} ج.م) يتجاوز صافي مستحقات المالك الحالية (${netOwed.toLocaleString('ar-EG')} ج.م).`
+        });
+      }
+    }
+
+    await pool.request()
+      .input('id', sql.Int, txId)
+      .input('approvedBy', sql.Int, userId)
+      .query("UPDATE transactions SET status = 'approved', approved_by = @approvedBy WHERE id = @id");
+
+    try {
+      await logAuditLog(req, 'موافقة واعتماد طلب حساب المالك', 'transaction', txId, { amount: tx.amount, sub_type: tx.withdrawal_sub_type });
+    } catch (auditErr) {
+      console.error('Audit log error:', auditErr);
+    }
+
+    res.json({ message: 'تمت الموافقة على الطلب واعتما ده بنجاح وتحديث كشف حساب المالك! ✅' });
+  } catch (error) {
+    console.error('Error approving owner account transaction:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء اعتماد العملية' });
+  }
+});
+
+// POST /api/owner-account/transactions/:id/reject - Reject pending owner funding/repayment (Manager only)
+app.post('/api/owner-account/transactions/:id/reject', async (req, res) => {
+  const txId = req.params.id;
+  const userId = parseInt(req.headers['x-user-id']) || null;
+  const userRole = req.headers['x-user-role'];
+
+  if (userRole !== 'manager') {
+    return res.status(403).json({ error: 'غير مسموح لغير المدراء برفض الطلبات' });
+  }
+
+  try {
+    const pool = getPool();
+    const txRes = await pool.request()
+      .input('id', sql.Int, txId)
+      .query("SELECT * FROM transactions WHERE id = @id AND withdrawal_sub_type IN ('owner_funding', 'owner_repayment')");
+
+    if (txRes.recordset.length === 0) {
+      return res.status(404).json({ error: 'العملية غير موجودة أو غير مسجلة بحساب المالك' });
+    }
+
+    await pool.request()
+      .input('id', sql.Int, txId)
+      .input('approvedBy', sql.Int, userId)
+      .query("UPDATE transactions SET status = 'rejected', approved_by = @approvedBy WHERE id = @id");
+
+    try {
+      await logAuditLog(req, 'رفض طلب حساب المالك', 'transaction', txId, { sub_type: txRes.recordset[0]?.withdrawal_sub_type });
+    } catch (auditErr) {
+      console.error('Audit log error:', auditErr);
+    }
+
+    res.json({ message: 'تم رفض الطلب بنجاح ❌' });
+  } catch (error) {
+    console.error('Error rejecting owner account transaction:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء رفض العملية' });
   }
 });
 

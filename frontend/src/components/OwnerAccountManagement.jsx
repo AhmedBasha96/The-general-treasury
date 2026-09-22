@@ -11,6 +11,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
   const [filterType, setFilterType] = useState('all'); // all, owner_funding, owner_repayment
   const [filterBank, setFilterBank] = useState('all');
   const [filterPurpose, setFilterPurpose] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
 
   // Modals state
@@ -105,7 +106,10 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
     try {
       const res = await fetch('/api/owner-account/deposit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': userRole
+        },
         body: JSON.stringify({
           ...depositForm,
           bank_id: bank_id,
@@ -115,7 +119,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
       const data = await res.json();
 
       if (res.ok) {
-        setSuccessMsg('تم تسجيل إيداع التمويل الشخصي بنجاح!');
+        setSuccessMsg(data.message || 'تم تسجيل إيداع التمويل بنجاح!');
         setShowDepositModal(false);
         setDepositForm({
           amount: '',
@@ -152,7 +156,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
       return;
     }
 
-    if (amt > summary.net_owed) {
+    if (userRole === 'manager' && amt > summary.net_owed) {
       setFormError(`المبلغ المطلوب سداده (${amt.toLocaleString('ar-EG')} ج.م) يتجاوز إجمالي مستحقات المالك الحالية (${summary.net_owed.toLocaleString('ar-EG')} ج.م)`);
       return;
     }
@@ -163,7 +167,10 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
     try {
       const res = await fetch('/api/owner-account/repay', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': userRole
+        },
         body: JSON.stringify({
           ...repayForm,
           bank_id: bank_id,
@@ -173,7 +180,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
       const data = await res.json();
 
       if (res.ok) {
-        setSuccessMsg('تم تسجيل سداد مستحقات صاحب الشركة بنجاح!');
+        setSuccessMsg(data.message || 'تم تسجيل سداد مستحقات صاحب الشركة بنجاح!');
         setShowRepayModal(false);
         setRepayForm({
           amount: '',
@@ -190,6 +197,61 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
       }
     } catch (err) {
       setFormError('تعذر الاتصال بالسيرفر');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleApproveOwnerTx = async (txId) => {
+    setSubmitting(true);
+    setError('');
+    setSuccessMsg('');
+    try {
+      const res = await fetch(`/api/owner-account/transactions/${txId}/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': userRole
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSuccessMsg(data.message || 'تمت الموافقة على الطلب بنجاح!');
+        fetchData();
+        if (onRefreshDashboard) onRefreshDashboard();
+      } else {
+        setError(data.error || 'حدث خطأ أثناء اعتماد الطلب');
+      }
+    } catch (err) {
+      setError('تعذر الاتصال بالسيرفر');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRejectOwnerTx = async (txId) => {
+    if (!window.confirm('هل أنت متأكد من رفض هذا الطلب؟')) return;
+    setSubmitting(true);
+    setError('');
+    setSuccessMsg('');
+    try {
+      const res = await fetch(`/api/owner-account/transactions/${txId}/reject`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': userRole
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSuccessMsg(data.message || 'تم رفض الطلب بنجاح');
+        fetchData();
+        if (onRefreshDashboard) onRefreshDashboard();
+      } else {
+        setError(data.error || 'حدث خطأ أثناء رفض الطلب');
+      }
+    } catch (err) {
+      setError('تعذر الاتصال بالسيرفر');
     } finally {
       setSubmitting(false);
     }
@@ -229,7 +291,10 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
     try {
       const res = await fetch(`/api/owner-account/transactions/${editingTx.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': userRole
+        },
         body: JSON.stringify({
           ...editForm,
           bank_id: bank_id,
@@ -260,7 +325,8 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
       setSuccessMsg('');
       try {
         const res = await fetch(`/api/owner-account/transactions/${tx.id}`, {
-          method: 'DELETE'
+          method: 'DELETE',
+          headers: { 'x-user-role': userRole }
         });
         const data = await res.json();
         if (res.ok) {
@@ -308,6 +374,18 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
     }
   };
 
+  const getStatusBadge = (status) => {
+    if (status === 'pending') {
+      return { label: '⏳ بانتظار موافقة المدير', bg: 'rgba(245, 158, 11, 0.15)', border: 'rgba(245, 158, 11, 0.35)', color: '#f59e0b' };
+    } else if (status === 'rejected') {
+      return { label: '❌ مرفوض من المدير', bg: 'rgba(239, 68, 68, 0.15)', border: 'rgba(239, 68, 68, 0.35)', color: '#ef4444' };
+    } else {
+      return { label: '✅ معتمدة', bg: 'rgba(16, 185, 129, 0.15)', border: 'rgba(16, 185, 129, 0.35)', color: '#10b981' };
+    }
+  };
+
+  const pendingRequests = transactions.filter(tx => tx.status === 'pending');
+
   const filteredTransactions = transactions.filter(tx => {
     if (filterType !== 'all' && tx.withdrawal_sub_type !== filterType) return false;
     if (filterBank !== 'all') {
@@ -318,13 +396,19 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
       if (filterPurpose === 'custom' && ['loan_installment', 'supplier_payment', 'payroll', 'general_liquidity'].includes(tx.purpose_type)) return false;
       if (filterPurpose !== 'custom' && tx.purpose_type !== filterPurpose) return false;
     }
+    if (filterStatus !== 'all') {
+      if (filterStatus === 'pending' && tx.status !== 'pending') return false;
+      if (filterStatus === 'approved' && tx.status !== 'approved' && tx.status !== 'disbursed') return false;
+      if (filterStatus === 'rejected' && tx.status !== 'rejected') return false;
+    }
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       const notesMatch = tx.notes?.toLowerCase().includes(term);
       const purposeMatch = tx.purpose_notes?.toLowerCase().includes(term);
       const bankMatch = tx.bank_name?.toLowerCase().includes(term);
       const amountMatch = String(tx.amount).includes(term);
-      return notesMatch || purposeMatch || bankMatch || amountMatch;
+      const creatorMatch = tx.creator_name?.toLowerCase().includes(term);
+      return notesMatch || purposeMatch || bankMatch || amountMatch || creatorMatch;
     }
     return true;
   });
@@ -333,10 +417,11 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
     setFilterType('all');
     setFilterBank('all');
     setFilterPurpose('all');
+    setFilterStatus('all');
     setSearchTerm('');
   };
 
-  const hasActiveFilters = filterType !== 'all' || filterBank !== 'all' || filterPurpose !== 'all' || searchTerm.trim() !== '';
+  const hasActiveFilters = filterType !== 'all' || filterBank !== 'all' || filterPurpose !== 'all' || filterStatus !== 'all' || searchTerm.trim() !== '';
 
   const handlePrintLedger = () => {
     window.print();
@@ -414,27 +499,25 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
             <span>📥</span> تسجيل تمويل جديد
           </button>
 
-          {userRole === 'manager' && (
-            <button
-              className="btn"
-              onClick={() => { setShowRepayModal(true); setFormError(''); }}
-              style={{
-                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                color: '#ffffff',
-                padding: '0.75rem 1.35rem',
-                boxShadow: '0 6px 20px rgba(245, 158, 11, 0.35)',
-                borderRadius: '14px',
-                fontWeight: 800,
-                fontSize: '0.95rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <span>📤</span> سداد لصاحب الشركة
-            </button>
-          )}
+          <button
+            className="btn"
+            onClick={() => { setShowRepayModal(true); setFormError(''); }}
+            style={{
+              background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+              color: '#ffffff',
+              padding: '0.75rem 1.35rem',
+              boxShadow: '0 6px 20px rgba(245, 158, 11, 0.35)',
+              borderRadius: '14px',
+              fontWeight: 800,
+              fontSize: '0.95rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <span>📤</span> سداد لصاحب الشركة
+          </button>
 
           <button
             className="btn btn-secondary"
@@ -467,7 +550,144 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
         </div>
       )}
 
-      {/* 2. KPI SUMMARY DASHBOARD CARDS */}
+      {/* 2. MANAGER PENDING APPROVAL REQUESTS SECTION */}
+      {userRole === 'manager' && pendingRequests.length > 0 && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(15, 23, 42, 0.9))',
+          backdropFilter: 'blur(16px)',
+          border: '1px solid rgba(245, 158, 11, 0.45)',
+          borderRadius: '20px',
+          padding: '1.5rem 1.75rem',
+          marginBottom: '2rem',
+          boxShadow: '0 8px 30px rgba(245, 158, 11, 0.18)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '12px',
+                background: 'rgba(245, 158, 11, 0.25)',
+                color: '#f59e0b',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.3rem'
+              }}>
+                📩
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 900, color: '#f59e0b', margin: 0 }}>
+                  طلبات التمويل والسداد المعلقة بانتظار موافقتك ({pendingRequests.length} طلب)
+                </h3>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0, marginTop: '0.2rem' }}>
+                  قدم المحاسب الطلبات التالية وهي بانتظار موافقتك لتطبيق التاثير المالي على الخزينة والبنوك
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem' }}>
+            {pendingRequests.map(tx => {
+              const isFunding = tx.withdrawal_sub_type === 'owner_funding';
+              const purposeInfo = getPurposeLabel(tx.purpose_type, tx.purpose_notes);
+
+              return (
+                <div key={tx.id} style={{
+                  background: 'rgba(15, 23, 42, 0.8)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '16px',
+                  padding: '1.2rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justify: 'space-between',
+                  gap: '1rem'
+                }}>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                      <span style={{
+                        padding: '0.3rem 0.65rem',
+                        borderRadius: '8px',
+                        fontSize: '0.8rem',
+                        fontWeight: 800,
+                        background: isFunding ? 'rgba(16, 185, 129, 0.18)' : 'rgba(239, 68, 68, 0.18)',
+                        color: isFunding ? '#10b981' : '#ef4444'
+                      }}>
+                        {isFunding ? '📥 طلب إيداع تمويل' : '📤 طلب سداد للمالك'}
+                      </span>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                        📅 {new Date(tx.date).toLocaleDateString('ar-EG')}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: '1.4rem', fontWeight: 900, color: isFunding ? '#10b981' : '#ef4444', marginBottom: '0.5rem' }}>
+                      {Number(tx.amount).toLocaleString('ar-EG')} <span style={{ fontSize: '0.85rem' }}>ج.م</span>
+                    </div>
+
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', marginBottom: '0.35rem', fontWeight: 700 }}>
+                      {tx.bank_name ? `🏦 ${tx.bank_name}` : '💵 الخزينة النقدية الرئيسية'}
+                    </div>
+
+                    {isFunding && (
+                      <div style={{ fontSize: '0.8rem', color: purposeInfo.color, marginBottom: '0.35rem' }}>
+                        {purposeInfo.label} {tx.purpose_notes ? `(${tx.purpose_notes})` : ''}
+                      </div>
+                    )}
+
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                      👤 مقدم الطلب: <strong>{tx.creator_name || 'المحاسب'}</strong>
+                    </div>
+
+                    {tx.notes && (
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.4rem', fontStyle: 'italic' }}>
+                        💬 M: {tx.notes}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.6rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.75rem' }}>
+                    <button
+                      disabled={submitting}
+                      onClick={() => handleApproveOwnerTx(tx.id)}
+                      style={{
+                        flex: 1,
+                        background: 'linear-gradient(135deg, #10b981, #059669)',
+                        color: '#fff',
+                        border: 'none',
+                        padding: '0.55rem',
+                        borderRadius: '10px',
+                        fontWeight: 800,
+                        fontSize: '0.85rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ✅ موافقة واعتماد
+                    </button>
+                    <button
+                      disabled={submitting}
+                      onClick={() => handleRejectOwnerTx(tx.id)}
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        color: '#ef4444',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        padding: '0.55rem 0.9rem',
+                        borderRadius: '10px',
+                        fontWeight: 800,
+                        fontSize: '0.85rem',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ❌ رفض
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 3. KPI SUMMARY DASHBOARD CARDS */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))',
@@ -508,7 +728,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
             {summary.total_deposited.toLocaleString('ar-EG')} <span style={{ fontSize: '0.95rem', color: 'var(--text-muted)', fontWeight: 600 }}>ج.م</span>
           </div>
           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <span>💰</span> إجمالي ما ضخه صاحب الشركة بحسابات وخزن الشركة
+            <span>💰</span> إجمالي ما ضخه صاحب الشركة (المعتمد)
           </div>
         </div>
 
@@ -546,7 +766,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
             {summary.total_repaid.toLocaleString('ar-EG')} <span style={{ fontSize: '0.95rem', color: 'var(--text-muted)', fontWeight: 600 }}>ج.م</span>
           </div>
           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <span>🔄</span> إجمالي المبالغ التي تم ردها وسدادها للمالك
+            <span>🔄</span> إجمالي المبالغ المستردة للمالك (المعتمدة)
           </div>
         </div>
 
@@ -589,7 +809,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
         </div>
       </div>
 
-      {/* 3. STRUCTURED TOOLBAR & SEARCH / FILTER SECTION */}
+      {/* 4. STRUCTURED TOOLBAR & SEARCH / FILTER SECTION */}
       <div style={{
         background: 'rgba(15, 23, 42, 0.65)',
         backdropFilter: 'blur(16px)',
@@ -639,18 +859,18 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
 
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
           gap: '1rem'
         }}>
           {/* Search Box */}
-          <div style={{ gridColumn: 'span 1' }}>
+          <div>
             <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
               كلمة البحث:
             </label>
             <input
               type="text"
               className="form-control"
-              placeholder="🔍 ابحث بملاحظة، غرض، أو مبلغ..."
+              placeholder="🔍 ابحث بملاحظة، غرض، أو مُدخل..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               style={{ width: '100%', borderRadius: '12px', padding: '0.65rem 0.9rem', fontSize: '0.9rem' }}
@@ -671,6 +891,24 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
               <option value="all">📊 جميع المعاملات (إيداعات وسدادات)</option>
               <option value="owner_funding">📥 إيداعات التمويل فقط</option>
               <option value="owner_repayment">📤 المسدادات للمالك فقط</option>
+            </select>
+          </div>
+
+          {/* Approval Status Filter */}
+          <div>
+            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
+              حالة الاعتماد:
+            </label>
+            <select
+              className="form-control"
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value)}
+              style={{ width: '100%', borderRadius: '12px', padding: '0.65rem 0.9rem', fontSize: '0.9rem' }}
+            >
+              <option value="all">🌐 جميع الحالات (معتمدة ومعلقة)</option>
+              <option value="approved">✅ معتمدة فقط</option>
+              <option value="pending">⏳ بانتظار موافقة المدير</option>
+              <option value="rejected">❌ مرفوضة فقط</option>
             </select>
           </div>
 
@@ -715,7 +953,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
         </div>
       </div>
 
-      {/* 4. TRANSACTIONS LEDGER TABLE */}
+      {/* 5. TRANSACTIONS LEDGER TABLE */}
       {loading ? (
         <div className="no-data-msg" style={{ padding: '4rem 2rem', textAlign: 'center', color: 'var(--text-secondary)', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '20px', border: '1px dashed var(--border-color)' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🔄</div>
@@ -749,12 +987,13 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
               <tr style={{ background: 'linear-gradient(180deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95))', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
                 <th style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>التاريخ والوقت</th>
                 <th style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>نوع الحركة</th>
+                <th style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>حالة الاعتماد</th>
                 <th style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>الحساب المستهدف / الخزنة</th>
                 <th style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>المبلغ</th>
                 <th style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>أوجه الصرف / الغرض المستهدف</th>
                 <th style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>التفاصيل والملاحظات</th>
                 <th style={{ padding: '1rem 1.25rem', textAlign: 'center' }}>المستند والإيصال</th>
-                <th style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>المُدخل</th>
+                <th style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>المُدخل والمُعتمد</th>
                 {userRole === 'manager' && <th style={{ padding: '1rem 1.25rem', textAlign: 'center' }}>الإجراءات</th>}
               </tr>
             </thead>
@@ -762,6 +1001,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
               {filteredTransactions.map((tx, index) => {
                 const isFunding = tx.withdrawal_sub_type === 'owner_funding';
                 const purposeInfo = getPurposeLabel(tx.purpose_type, tx.purpose_notes);
+                const statusInfo = getStatusBadge(tx.status);
 
                 return (
                   <tr
@@ -769,6 +1009,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
                     style={{
                       background: index % 2 === 0 ? 'rgba(30, 41, 59, 0.35)' : 'rgba(15, 23, 42, 0.45)',
                       borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+                      opacity: tx.status === 'rejected' ? 0.6 : 1,
                       transition: 'background 0.2s ease'
                     }}
                   >
@@ -803,6 +1044,26 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
                       </span>
                     </td>
 
+                    {/* Approval Status Badge */}
+                    <td style={{ padding: '1rem 1.25rem', whiteSpace: 'nowrap' }}>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          padding: '0.35rem 0.75rem',
+                          borderRadius: '8px',
+                          fontSize: '0.8rem',
+                          fontWeight: 800,
+                          background: statusInfo.bg,
+                          color: statusInfo.color,
+                          border: `1px solid ${statusInfo.border}`
+                        }}
+                      >
+                        {statusInfo.label}
+                      </span>
+                    </td>
+
                     {/* Target Bank / Safe */}
                     <td style={{ padding: '1rem 1.25rem' }}>
                       <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -823,7 +1084,8 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
                           fontSize: '1.15rem',
                           fontWeight: 900,
                           color: isFunding ? '#10b981' : '#ef4444',
-                          letterSpacing: '-0.3px'
+                          letterSpacing: '-0.3px',
+                          textDecoration: tx.status === 'rejected' ? 'line-through' : 'none'
                         }}
                       >
                         {isFunding ? '+' : '-'}{Number(tx.amount).toLocaleString('ar-EG')}{' '}
@@ -882,17 +1144,42 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
                       )}
                     </td>
 
-                    {/* Creator */}
+                    {/* Creator & Approver */}
                     <td style={{ padding: '1rem 1.25rem', whiteSpace: 'nowrap' }}>
-                      <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                        👤 {tx.creator_name || 'المدير'}
-                      </span>
+                      <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                        👤 {tx.creator_name || 'المستخدم'}
+                      </div>
+                      {tx.approver_name && (
+                        <div style={{ fontSize: '0.75rem', color: '#10b981', marginTop: '0.2rem' }}>
+                          ✓ اعتمده: {tx.approver_name}
+                        </div>
+                      )}
                     </td>
 
                     {/* Actions */}
                     {userRole === 'manager' && (
                       <td style={{ padding: '1rem 1.25rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
+                          {tx.status === 'pending' && (
+                            <>
+                              <button
+                                className="btn btn-xs"
+                                onClick={() => handleApproveOwnerTx(tx.id)}
+                                title="موافقة واعتماد الطلب"
+                                style={{ background: '#10b981', color: '#fff', padding: '0.4rem 0.7rem', borderRadius: '8px', fontWeight: 800, fontSize: '0.8rem' }}
+                              >
+                                ✅ موافقة
+                              </button>
+                              <button
+                                className="btn btn-xs btn-secondary"
+                                onClick={() => handleRejectOwnerTx(tx.id)}
+                                title="رفض الطلب"
+                                style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)', padding: '0.4rem 0.7rem', borderRadius: '8px', fontWeight: 700, fontSize: '0.8rem' }}
+                              >
+                                ❌ رفض
+                              </button>
+                            </>
+                          )}
                           <button
                             className="btn btn-xs btn-secondary"
                             onClick={() => handleOpenEditModal(tx)}
@@ -920,7 +1207,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
         </div>
       )}
 
-      {/* 5. MODAL: EDIT OWNER TRANSACTION */}
+      {/* 6. MODAL: EDIT OWNER TRANSACTION */}
       {editingTx && (
         <div className="modal-overlay">
           <div className="panel modal-content" style={{ maxWidth: '640px', borderRadius: '24px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
@@ -1051,7 +1338,7 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
         </div>
       )}
 
-      {/* 6. MODAL: ADD OWNER FUNDING DEPOSIT */}
+      {/* 7. MODAL: ADD OWNER FUNDING DEPOSIT */}
       {showDepositModal && (
         <div className="modal-overlay">
           <div className="panel modal-content" style={{ maxWidth: '660px', borderRadius: '24px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
@@ -1061,6 +1348,13 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
               </h2>
               <button className="btn btn-secondary" onClick={() => setShowDepositModal(false)} style={{ borderRadius: '10px' }}>✕ إغلاق</button>
             </div>
+
+            {userRole === 'accountant' && (
+              <div style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.35)', color: '#f59e0b', padding: '0.8rem 1rem', borderRadius: '12px', marginTop: '1rem', fontSize: '0.88rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span>ℹ️</span>
+                <span>بصفتك محاسباً، سيتم تسليم طلب التمويل بحالة <strong>"معلقة بانتظار موافقة المدير"</strong> ولن يزيد رصيد البنك حتى يوافق المدير.</span>
+              </div>
+            )}
 
             {formError && <div className="alert alert-error" style={{ borderRadius: '12px', marginTop: '1rem' }}>{formError}</div>}
 
@@ -1199,14 +1493,14 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
                   boxShadow: '0 6px 20px rgba(16, 185, 129, 0.35)'
                 }}
               >
-                {submitting ? 'جاري تسجيل التمويل...' : 'تأكيد وحفظ التمويل وزيادة رصيد الحساب المستلم 🚀'}
+                {submitting ? 'جاري إرسال التمويل...' : userRole === 'accountant' ? 'إرسال طلب التمويل للمدير للإعتماد ⏳' : 'تأكيد وحفظ التمويل وزيادة رصيد الحساب المستلم 🚀'}
               </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* 7. MODAL: REPAY OWNER */}
+      {/* 8. MODAL: REPAY OWNER */}
       {showRepayModal && (
         <div className="modal-overlay">
           <div className="panel modal-content" style={{ maxWidth: '600px', borderRadius: '24px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
@@ -1216,6 +1510,13 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
               </h2>
               <button className="btn btn-secondary" onClick={() => setShowRepayModal(false)} style={{ borderRadius: '10px' }}>✕ إغلاق</button>
             </div>
+
+            {userRole === 'accountant' && (
+              <div style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.35)', color: '#f59e0b', padding: '0.8rem 1rem', borderRadius: '12px', marginTop: '1rem', fontSize: '0.88rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span>ℹ️</span>
+                <span>بصفتك محاسباً، سيتم تسليم طلب السداد بحالة <strong>"معلقة بانتظار موافقة المدير"</strong> ولن يخصم من الحساب حتى يوافق المدير.</span>
+              </div>
+            )}
 
             {formError && <div className="alert alert-error" style={{ borderRadius: '12px', marginTop: '1rem' }}>{formError}</div>}
 
@@ -1316,14 +1617,14 @@ export default function OwnerAccountManagement({ banks = [], userRole = 'manager
                   boxShadow: '0 6px 20px rgba(245, 158, 11, 0.35)'
                 }}
               >
-                {submitting ? 'جاري تنفيذ السداد...' : 'تأكيد السداد والخصم من الحساب المحدد ✅'}
+                {submitting ? 'جاري التنفيذ...' : userRole === 'accountant' ? 'إرسال طلب السداد للمدير للإعتماد ⏳' : 'تأكيد السداد والخصم من الحساب المحدد ✅'}
               </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* 8. MODAL: IMAGE PREVIEW */}
+      {/* 9. MODAL: IMAGE PREVIEW */}
       {previewImage && (
         <div className="modal-overlay" onClick={() => setPreviewImage(null)}>
           <div className="panel modal-content" style={{ maxWidth: '720px', textAlign: 'center', borderRadius: '24px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }} onClick={e => e.stopPropagation()}>
