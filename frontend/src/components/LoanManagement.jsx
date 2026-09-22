@@ -20,6 +20,8 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
     installment_amount: '',
     total_installments: '',
     start_date: new Date().toISOString().split('T')[0],
+    interest_rate: '',
+    due_day_text: '15 من كل شهر',
     frequency: 'monthly',
     notes: ''
   });
@@ -113,6 +115,8 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
           installment_amount: '',
           total_installments: '',
           start_date: new Date().toISOString().split('T')[0],
+          interest_rate: '',
+          due_day_text: '15 من كل شهر',
           frequency: 'monthly',
           notes: ''
         });
@@ -202,23 +206,22 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
 
   const getLoanTypeLabel = (type) => {
     switch (type) {
-      case 'bank_loan': return '🏦 قرض / تسهيل بنكي';
-      case 'car_installment': return '🚗 قسط سيارة / معدات';
-      case 'external_loan': return '🏢 التزام / قسط خارجي';
+      case 'bank_loan': return '🏦 قرض بنكي';
+      case 'car_installment': return '🚗 قسط سيارات';
+      case 'external_loan': return '🏢 التزام خارجي';
       default: return '💳 التزام مالي';
     }
   };
 
   return (
-    <>
-      <div className="panel loans-panel">
-        {/* Panel Header */}
-        <div className="panel-header">
-          <h2 className="panel-title">💳 إشعارات الأقساط والقروض ومواعيد السداد</h2>
-          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-            ➕ إضافة قرض / التزام جديد
-          </button>
-        </div>
+    <div className="panel loans-panel">
+      {/* Panel Header */}
+      <div className="panel-header">
+        <h2 className="panel-title">💳 إشعارات الأقساط والقروض ومواعيد السداد</h2>
+        <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
+          ➕ إضافة قرض / التزام جديد
+        </button>
+      </div>
 
       {successMsg && <div className="alert alert-success">{successMsg}</div>}
       {error && <div className="alert alert-error">{error}</div>}
@@ -271,59 +274,47 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
         <div className="table-container">
           <table>
             <thead>
-              <tr>
-                <th>اسم القرض / الالتزام</th>
-                <th>البنك والجهة للحساب</th>
-                <th>إجمالي القرض</th>
-                <th>المسدد</th>
-                <th>المتبقي</th>
-                <th>نسبة الإنجاز</th>
-                <th>الأقساط (المدفوع / المتبقي)</th>
+              <tr style={{ background: 'rgba(15, 23, 42, 0.6)' }}>
+                <th>اسم البنك</th>
+                <th>قيمة القرض</th>
+                <th>المدفوع</th>
+                <th>الباقي</th>
+                <th>اسم الحساب</th>
+                <th>رقم الحساب</th>
+                <th>مبلغ القسط الشهري</th>
+                <th>بداية المدة</th>
+                <th>الفائدة</th>
+                <th>عدد الشهور</th>
+                <th>مواعيد الأقساط</th>
                 <th>الإجراءات</th>
               </tr>
             </thead>
             <tbody>
               {loansData.loans.map(loan => {
-                const total = Number(loan.total_amount) || 1;
+                const total = Number(loan.total_amount) || 0;
                 const paid = Number(loan.total_paid_amount) || 0;
                 const remaining = Math.max(0, total - paid);
-                const pct = Math.min(100, Math.round((paid / total) * 100));
 
                 return (
                   <tr key={loan.id}>
                     <td>
-                      <strong>{loan.title}</strong>
-                      {loan.car_plate && <div className="sub-text">سيارة: {loan.car_plate}</div>}
-                    </td>
-                    <td>
-                      <span className="badge badge-company-transfer">{getLoanTypeLabel(loan.loan_type)}</span>
-                      <div className="sub-text" style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px' }}>
-                        {loan.entity_name || loan.bank_name || 'جهة غير محددة'}
-                      </div>
-                      {loan.account_number && (
-                        <div className="sub-text" style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>
-                          حساب #: {loan.account_number} {loan.account_holder_name ? `(${loan.account_holder_name})` : ''}
-                        </div>
-                      )}
+                      <strong style={{ fontSize: '0.95rem', color: '#60a5fa' }}>{loan.entity_name || loan.title}</strong>
+                      {loan.title && loan.title !== loan.entity_name && <div className="sub-text">{loan.title}</div>}
                     </td>
                     <td><strong>{Number(loan.total_amount).toLocaleString('ar-EG')} ج.م</strong></td>
-                    <td className="amount-deposit">{paid.toLocaleString('ar-EG')} ج.م</td>
-                    <td className="amount-withdrawal">{remaining.toLocaleString('ar-EG')} ج.م</td>
-                    <td>
-                      <div className="progress-bar-wrapper">
-                        <div className="progress-bar-fill" style={{ width: `${pct}%` }}></div>
-                        <span className="progress-pct">{pct}%</span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="badge badge-secondary">
-                        {loan.paid_installments} مدفوع / {loan.total_installments - loan.paid_installments} متبقي
-                      </span>
-                    </td>
+                    <td className="amount-deposit"><strong>{paid.toLocaleString('ar-EG')} ج.م</strong></td>
+                    <td className="amount-withdrawal"><strong>{remaining.toLocaleString('ar-EG')} ج.م</strong></td>
+                    <td><span className="badge badge-secondary">{loan.account_holder_name || '—'}</span></td>
+                    <td><code style={{ fontSize: '0.85rem', color: 'var(--primary)' }}>{loan.account_number || '—'}</code></td>
+                    <td style={{ fontWeight: 700, color: '#f59e0b' }}>{Number(loan.installment_amount).toLocaleString('ar-EG')} ج.م</td>
+                    <td>{loan.start_date ? new Date(loan.start_date).toLocaleDateString('ar-EG') : '—'}</td>
+                    <td>{loan.interest_rate ? `${loan.interest_rate}%` : '—'}</td>
+                    <td><strong>{loan.total_installments} شهر</strong></td>
+                    <td><span className="badge badge-company-transfer">{loan.due_day_text || '15 من كل شهر'}</span></td>
                     <td>
                       <div style={{ display: 'flex', gap: '0.4rem' }}>
                         <button className="btn btn-secondary btn-xs" onClick={() => handleOpenLoanSchedule(loan)}>
-                          📋 جدول الأقساط
+                          📋 الأقساط
                         </button>
                         <button className="btn btn-secondary btn-xs" onClick={() => handleDeleteLoan(loan.id, loan.title)} style={{ color: 'var(--danger)' }}>
                           🗑️
@@ -353,9 +344,9 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                   <label>اسم / عنوان القرض والالتزام:*</label>
                   <input
                     type="text"
-                    placeholder="مثال: قرض توسعات البنك الأهلي، قسط سيارة جامبو 2026..."
+                    placeholder="مثال: قرض ابوظبي الاسلامي، قرض بنك مصر..."
                     value={newLoan.title}
-                    onChange={e => setNewLoan({ ...newLoan, title: e.target.value })}
+                    onChange={e => setNewLoan({ ...newLoan, title: e.target.value, entity_name: newLoan.entity_name || e.target.value })}
                     required
                   />
                 </div>
@@ -373,7 +364,7 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                   <label>اسم البنك / الجهة المقرضة:*</label>
                   <input
                     type="text"
-                    placeholder="اسم البنك أو الجهة (مثال: بنك مصر، CIB، شركة التيسير...)"
+                    placeholder="اسم البنك (مثال: ابوظبي الاسلامي، CIB، فاب مصر...)"
                     value={newLoan.entity_name}
                     onChange={e => setNewLoan({ ...newLoan, entity_name: e.target.value })}
                     required
@@ -381,22 +372,22 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                 </div>
 
                 <div className="form-group">
-                  <label>رقم الحساب لدى البنك/الجهة:</label>
+                  <label>اسم صاحب الحساب:</label>
                   <input
                     type="text"
-                    placeholder="رقم حساب القرض بالبنك (مثال: 1234567890)"
-                    value={newLoan.account_number}
-                    onChange={e => setNewLoan({ ...newLoan, account_number: e.target.value })}
+                    placeholder="الاسم المدون بالحساب (مثال: ابراهيم، اسامه...)"
+                    value={newLoan.account_holder_name}
+                    onChange={e => setNewLoan({ ...newLoan, account_holder_name: e.target.value })}
                   />
                 </div>
 
                 <div className="form-group">
-                  <label>اسم صاحب الحساب:</label>
+                  <label>رقم الحساب لدى البنك/الجهة:</label>
                   <input
                     type="text"
-                    placeholder="الاسم المدون بالحساب (مثال: شركة السلام لتجارة...)"
-                    value={newLoan.account_holder_name}
-                    onChange={e => setNewLoan({ ...newLoan, account_holder_name: e.target.value })}
+                    placeholder="رقم حساب القرض بالبنك (مثال: 100000861748)"
+                    value={newLoan.account_number}
+                    onChange={e => setNewLoan({ ...newLoan, account_number: e.target.value })}
                   />
                 </div>
 
@@ -405,7 +396,7 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                   <input
                     type="number"
                     step="any"
-                    placeholder="100000"
+                    placeholder="632640"
                     value={newLoan.total_amount}
                     onChange={e => handleAmountOrCountChange('total_amount', e.target.value)}
                     required
@@ -413,10 +404,10 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                 </div>
 
                 <div className="form-group">
-                  <label>عدد الأقساط:*</label>
+                  <label>عدد الشهور / الأقساط:*</label>
                   <input
                     type="number"
-                    placeholder="12"
+                    placeholder="60"
                     value={newLoan.total_installments}
                     onChange={e => handleAmountOrCountChange('total_installments', e.target.value)}
                     required
@@ -424,11 +415,11 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                 </div>
 
                 <div className="form-group">
-                  <label>قيمة القسط الواحد (ج.م):*</label>
+                  <label>مبلغ القسط الشهري (ج.م):*</label>
                   <input
                     type="number"
                     step="any"
-                    placeholder="8333.33"
+                    placeholder="10600"
                     value={newLoan.installment_amount}
                     onChange={e => setNewLoan({ ...newLoan, installment_amount: e.target.value })}
                     required
@@ -436,12 +427,14 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                 </div>
 
                 <div className="form-group">
-                  <label>تكرار السداد:*</label>
-                  <select value={newLoan.frequency} onChange={e => setNewLoan({ ...newLoan, frequency: e.target.value })}>
-                    <option value="monthly">شهري</option>
-                    <option value="weekly">أسبوعي</option>
-                    <option value="quarterly">ربع سنوي (كل 3 شهور)</option>
-                  </select>
+                  <label>ميعاد / يوم السداد من كل شهر:*</label>
+                  <input
+                    type="text"
+                    placeholder="مثال: 5 من كل شهر، 15 من كل شهر، يوم 17..."
+                    value={newLoan.due_day_text}
+                    onChange={e => setNewLoan({ ...newLoan, due_day_text: e.target.value })}
+                    required
+                  />
                 </div>
 
                 <div className="form-group">
@@ -452,6 +445,26 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
                     onChange={e => setNewLoan({ ...newLoan, start_date: e.target.value })}
                     required
                   />
+                </div>
+
+                <div className="form-group">
+                  <label>نسبة الفائدة (%):</label>
+                  <input
+                    type="number"
+                    step="any"
+                    placeholder="16.40 أو 15"
+                    value={newLoan.interest_rate}
+                    onChange={e => setNewLoan({ ...newLoan, interest_rate: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>تكرار السداد:*</label>
+                  <select value={newLoan.frequency} onChange={e => setNewLoan({ ...newLoan, frequency: e.target.value })}>
+                    <option value="monthly">شهري</option>
+                    <option value="weekly">أسبوعي</option>
+                    <option value="quarterly">ربع سنوي (كل 3 شهور)</option>
+                  </select>
                 </div>
 
                 {newLoan.loan_type === 'car_installment' && (
@@ -708,7 +721,6 @@ export default function LoanManagement({ banks = [], carsList = [], onRefreshDas
         </div>
       )}
     </div>
-  </>
-);
+  );
 }
 

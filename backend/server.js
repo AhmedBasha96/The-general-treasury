@@ -437,10 +437,245 @@ app.get('/api/audit-logs', async (req, res) => {
 // LOANS & INSTALLMENTS API ROUTES
 // ==========================================================================
 
+// Helper function to seed initial 12 loans from image if DB is empty
+async function seedInitialLoans() {
+  try {
+    const pool = getPool();
+    const countRes = await pool.request().query('SELECT COUNT(*) AS total FROM loans');
+    if (countRes.recordset[0].total > 0) return;
+
+    console.log('Seeding initial 12 loans from image...');
+    const loansToSeed = [
+      {
+        title: 'ابوظبي الاسلامي',
+        loan_type: 'bank_loan',
+        entity_name: 'ابوظبي الاسلامي',
+        account_number: '100000861748',
+        account_holder_name: 'ابراهيم',
+        total_amount: 632640,
+        paid_amount: 223408,
+        installment_amount: 10600,
+        total_installments: 60,
+        start_date: '2023-12-01',
+        interest_rate: 16.40,
+        due_day_text: '5 من كل شهر'
+      },
+      {
+        title: 'ابو ظبي فاب مصر',
+        loan_type: 'bank_loan',
+        entity_name: 'ابو ظبي فاب مصر',
+        account_number: '00-8190530001',
+        account_holder_name: 'ابراهيم',
+        total_amount: 2312640,
+        paid_amount: 161500,
+        installment_amount: 32300,
+        total_installments: 72,
+        start_date: '2024-01-15',
+        interest_rate: null,
+        due_day_text: '15 من كل شهر'
+      },
+      {
+        title: 'ابو ظبي فاب مصر (سامة)',
+        loan_type: 'bank_loan',
+        entity_name: 'ابو ظبي فاب مصر',
+        account_number: '00/8238040001',
+        account_holder_name: 'اسامه',
+        total_amount: 2056500,
+        paid_amount: 139300,
+        installment_amount: 34300,
+        total_installments: 60,
+        start_date: '2024-01-15',
+        interest_rate: null,
+        due_day_text: '15 من كل شهر'
+      },
+      {
+        title: 'بنك siab',
+        loan_type: 'bank_loan',
+        entity_name: 'بنك siab',
+        account_number: '4120149908110040',
+        account_holder_name: 'ابراهيم',
+        total_amount: 2233600,
+        paid_amount: 123974,
+        installment_amount: 31000,
+        total_installments: 72,
+        start_date: '2025-04-15',
+        interest_rate: null,
+        due_day_text: '15 من كل شهر'
+      },
+      {
+        title: 'ابوظبي فاب مصر شهاده',
+        loan_type: 'bank_loan',
+        entity_name: 'ابوظبي فاب مصر شهاده',
+        account_number: '',
+        account_holder_name: 'ابراهيم',
+        total_amount: 1000000,
+        paid_amount: 0,
+        installment_amount: 50000,
+        total_installments: 20,
+        start_date: '2025-01-15',
+        interest_rate: null,
+        due_day_text: '15 من كل شهر'
+      },
+      {
+        title: 'بنك القاهره',
+        loan_type: 'bank_loan',
+        entity_name: 'بنك القاهره',
+        account_number: '0-1954090476542',
+        account_holder_name: 'ابراهيم',
+        total_amount: 1392000,
+        paid_amount: 87000,
+        installment_amount: 29000,
+        total_installments: 48,
+        start_date: '2025-01-03',
+        interest_rate: null,
+        due_day_text: '3 من كل شهر'
+      },
+      {
+        title: 'السيارات QNB',
+        loan_type: 'car_installment',
+        entity_name: 'السيارات QNB',
+        account_number: '',
+        account_holder_name: 'ابراهيم',
+        total_amount: 4000000,
+        paid_amount: 73000,
+        installment_amount: 69000,
+        total_installments: 58,
+        start_date: '2025-01-22',
+        interest_rate: null,
+        due_day_text: '22 شهريا'
+      },
+      {
+        title: 'بنك الاسكان والتعمير',
+        loan_type: 'bank_loan',
+        entity_name: 'بنك الاسكان والتعمير',
+        account_number: '0-240001398255',
+        account_holder_name: 'ابراهيم',
+        total_amount: 1000000,
+        paid_amount: 70000,
+        installment_amount: 35000,
+        total_installments: 60,
+        start_date: '2025-04-13',
+        interest_rate: null,
+        due_day_text: '13 من كل شهر'
+      },
+      {
+        title: 'بنك siab جديد',
+        loan_type: 'bank_loan',
+        entity_name: 'بنك siab جديد',
+        account_number: '4120149908110040',
+        account_holder_name: 'ابراهيم',
+        total_amount: 1000000,
+        paid_amount: 0,
+        installment_amount: 36230,
+        total_installments: 48,
+        start_date: '2025-11-01',
+        interest_rate: null,
+        due_day_text: '1 من كل شهر'
+      },
+      {
+        title: 'فاب مصر',
+        loan_type: 'bank_loan',
+        entity_name: 'فاب مصر',
+        account_number: '',
+        account_holder_name: 'ابراهيم',
+        total_amount: 445000,
+        paid_amount: 0,
+        installment_amount: 11233,
+        total_installments: 40,
+        start_date: '2025-01-05',
+        interest_rate: null,
+        due_day_text: '5 من كل شهر'
+      },
+      {
+        title: 'بنك المصري لتنمية الصادرات',
+        loan_type: 'bank_loan',
+        entity_name: 'بنك المصري لتنمية الصادرات',
+        account_number: '203042138133260-1',
+        account_holder_name: 'ابراهيم',
+        total_amount: 1680000,
+        paid_amount: 0,
+        installment_amount: 49000,
+        total_installments: 60,
+        start_date: '2026-01-17',
+        interest_rate: 15.00,
+        due_day_text: 'من كل شهر 17'
+      },
+      {
+        title: 'كريدي اجريكول',
+        loan_type: 'bank_loan',
+        entity_name: 'كريدي اجريكول',
+        account_number: '11088180879448',
+        account_holder_name: 'ابراهيم',
+        total_amount: 1500000,
+        paid_amount: 51000,
+        installment_amount: 50300,
+        total_installments: 48,
+        start_date: '2026-04-03',
+        interest_rate: 15.00,
+        due_day_text: 'من كل شهر 3'
+      }
+    ];
+
+    for (const item of loansToSeed) {
+      const loanRes = await pool.request()
+        .input('title', sql.NVarChar, item.title)
+        .input('loan_type', sql.NVarChar, item.loan_type)
+        .input('entity_name', sql.NVarChar, item.entity_name)
+        .input('account_number', sql.NVarChar, item.account_number || null)
+        .input('account_holder_name', sql.NVarChar, item.account_holder_name || null)
+        .input('total_amount', sql.Decimal(18, 2), item.total_amount)
+        .input('installment_amount', sql.Decimal(18, 2), item.installment_amount)
+        .input('total_installments', sql.Int, item.total_installments)
+        .input('start_date', sql.Date, item.start_date)
+        .input('interest_rate', sql.Decimal(5, 2), item.interest_rate || null)
+        .input('due_day_text', sql.NVarChar, item.due_day_text || null)
+        .input('frequency', sql.NVarChar, 'monthly')
+        .query(`
+          INSERT INTO loans (title, loan_type, entity_name, account_number, account_holder_name, total_amount, installment_amount, total_installments, start_date, interest_rate, due_day_text, frequency)
+          OUTPUT INSERTED.id
+          VALUES (@title, @loan_type, @entity_name, @account_number, @account_holder_name, @total_amount, @installment_amount, @total_installments, @start_date, @interest_rate, @due_day_text, @frequency)
+        `);
+
+      const loanId = loanRes.recordset[0].id;
+
+      // Generate Installments
+      const startDateObj = new Date(item.start_date);
+      const paidCount = item.installment_amount > 0 ? Math.floor(item.paid_amount / item.installment_amount) : 0;
+
+      for (let i = 1; i <= item.total_installments; i++) {
+        const dueDate = new Date(startDateObj);
+        dueDate.setMonth(dueDate.getMonth() + (i - 1));
+        const dueDateStr = dueDate.toISOString().split('T')[0];
+        const isPaid = i <= paidCount;
+
+        await pool.request()
+          .input('loanId', sql.Int, loanId)
+          .input('instNum', sql.Int, i)
+          .input('dueDate', sql.Date, dueDateStr)
+          .input('amount', sql.Decimal(18, 2), item.installment_amount)
+          .input('status', sql.NVarChar, isPaid ? 'paid' : 'pending')
+          .input('paidAmount', sql.Decimal(18, 2), isPaid ? item.installment_amount : 0)
+          .input('paidDate', sql.DateTime, isPaid ? new Date() : null)
+          .input('paymentMethod', sql.NVarChar, isPaid ? 'external' : null)
+          .query(`
+            INSERT INTO loan_installments (loan_id, installment_number, due_date, amount, status, paid_amount, paid_date, payment_method)
+            VALUES (@loanId, @instNum, @dueDate, @amount, @status, @paidAmount, @paidDate, @paymentMethod)
+          `);
+      }
+    }
+
+    console.log('Finished seeding 12 initial loans successfully!');
+  } catch (err) {
+    console.error('Error seeding initial loans:', err);
+  }
+}
+
 // GET /api/loans - List all loans with progress and due stats
 app.get('/api/loans', async (req, res) => {
   try {
     const pool = getPool();
+    await seedInitialLoans();
+
     const loansRes = await pool.request().query(`
       SELECT 
         l.*,
@@ -453,7 +688,7 @@ app.get('/api/loans', async (req, res) => {
       FROM loans l
       LEFT JOIN banks b ON l.bank_id = b.id
       LEFT JOIN cars c ON l.car_id = c.id
-      ORDER BY l.created_at DESC
+      ORDER BY l.id ASC
     `);
 
     const dueAlertsRes = await pool.request().query(`
@@ -478,7 +713,7 @@ app.get('/api/loans', async (req, res) => {
 
 // POST /api/loans - Add new loan and auto-generate installments schedule
 app.post('/api/loans', async (req, res) => {
-  const { title, loan_type, entity_name, account_number, account_holder_name, bank_id, car_id, total_amount, installment_amount, total_installments, start_date, frequency, notes } = req.body;
+  const { title, loan_type, entity_name, account_number, account_holder_name, bank_id, car_id, total_amount, installment_amount, total_installments, start_date, interest_rate, due_day_text, frequency, notes } = req.body;
 
   if (!title || !loan_type || !entity_name || !total_amount || !installment_amount || !total_installments || !start_date) {
     return res.status(400).json({ error: 'يرجى إكمال جميع البيانات المطلوبة للقرض' });
@@ -502,13 +737,15 @@ app.post('/api/loans', async (req, res) => {
         .input('installment_amount', sql.Decimal(18, 2), installment_amount)
         .input('total_installments', sql.Int, total_installments)
         .input('start_date', sql.Date, start_date)
+        .input('interest_rate', sql.Decimal(5, 2), interest_rate ? parseFloat(interest_rate) : null)
+        .input('due_day_text', sql.NVarChar, due_day_text || null)
         .input('frequency', sql.NVarChar, frequency || 'monthly')
         .input('notes', sql.NVarChar, notes || null);
 
       const loanResult = await loanReq.query(`
-        INSERT INTO loans (title, loan_type, entity_name, account_number, account_holder_name, bank_id, car_id, total_amount, installment_amount, total_installments, start_date, frequency, notes)
+        INSERT INTO loans (title, loan_type, entity_name, account_number, account_holder_name, bank_id, car_id, total_amount, installment_amount, total_installments, start_date, interest_rate, due_day_text, frequency, notes)
         OUTPUT INSERTED.id
-        VALUES (@title, @loan_type, @entity_name, @account_number, @account_holder_name, @bank_id, @car_id, @total_amount, @installment_amount, @total_installments, @start_date, @frequency, @notes)
+        VALUES (@title, @loan_type, @entity_name, @account_number, @account_holder_name, @bank_id, @car_id, @total_amount, @installment_amount, @total_installments, @start_date, @interest_rate, @due_day_text, @frequency, @notes)
       `);
 
       const loanId = loanResult.recordset[0].id;

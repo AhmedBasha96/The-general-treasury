@@ -711,6 +711,8 @@ async function createTables() {
             installment_amount DECIMAL(18,2) NOT NULL,
             total_installments INT NOT NULL,
             start_date DATE NOT NULL,
+            interest_rate DECIMAL(5,2) NULL,
+            due_day_text NVARCHAR(100) NULL,
             frequency NVARCHAR(20) DEFAULT 'monthly',
             status NVARCHAR(20) DEFAULT 'active',
             notes NVARCHAR(MAX) NULL,
@@ -728,6 +730,16 @@ async function createTables() {
         IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('loans') AND name = 'account_holder_name')
         BEGIN
           ALTER TABLE loans ADD account_holder_name NVARCHAR(255) NULL;
+        END
+
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('loans') AND name = 'interest_rate')
+        BEGIN
+          ALTER TABLE loans ADD interest_rate DECIMAL(5,2) NULL;
+        END
+
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('loans') AND name = 'due_day_text')
+        BEGIN
+          ALTER TABLE loans ADD due_day_text NVARCHAR(100) NULL;
         END
 
         -- Create loan_installments table (جدول الأقساط المجدولة للسداد)
