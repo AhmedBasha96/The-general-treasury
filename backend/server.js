@@ -4748,6 +4748,251 @@ app.delete('/api/payroll/runs/:id', async (req, res) => {
   }
 });
 
+// ==================== OWNER ACCOUNT (جاري المالك / التمويل الشخصي) API ENDPOINTS ====================
+
+// GET /api/owner-account/summary - Get total owner deposits, total repayments, and net balance owed to owner
+app.get('/api/owner-account/summary', async (req, res) => {
+  try {
+    const pool = getPool();
+    const depRes = await pool.request().query(`
+      SELECT ISNULL(SUM(amount), 0) AS total_deposited
+      FROM transactions
+      WHERE withdrawal_sub_type = 'owner_funding'
+        AND (status IN ('approved', 'disbursed') OR status IS NULL)
+    `);
+    const repRes = await pool.request().query(`
+      SELECT ISNULL(SUM(amount), 0) AS total_repaid
+      FROM transactions
+      WHERE withdrawal_sub_type = 'owner_repayment'
+        AND (status IN ('approved', 'disbursed') OR status IS NULL)
+    `);
+
+    const total_deposited = Number(depRes.recordset[0]?.total_deposited) || 0;
+    const total_repaid = Number(repRes.recordset[0]?.total_repaid) || 0;
+    const net_owed = total_deposited - total_repaid;
+
+    res.json({
+      total_deposited,
+      total_repaid,
+      net_owed
+    });
+  } catch (error) {
+    console.error('Error fetching owner account summary:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء جلب ملخص حساب جاري المالك' });
+  }
+});
+
+// GET /api/owner-account/transactions - List all owner funding and repayment transactions with purpose tracking
+app.get('/api/owner-account/transactions', async (req, res) => {
+  try {
+    const pool = getPool();
+    const result = await pool.request().query(`
+      SELECT 
+        t.id, t.type, t.payment_method, t.withdrawal_sub_type, t.amount, t.date, t.notes, t.receipt_image,
+        t.bank_id, t.status, t.purpose_type, t.purpose_target_id, t.purpose_notes, t.created_at,
+        b.name AS bank_name, b.account_number AS bank_account_number,
+        u.username AS creator_name
+      FROM transactions t
+      LEFT JOIN banks b ON t.bank_id = b.id
+      LEFT JOIN users u ON t.created_by = u.id
+      WHERE t.withdrawal_sub_type IN ('owner_funding', 'owner_repayment')
+      ORDER BY t.date DESC, t.id DESC
+    `);
+    res.json(result.recordset);
+  } catch (error) {
+    console.error('Error fetching owner account transactions:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء جلب سجل كشف حساب جاري المالك' });
+  }
+});
+
+// POST /api/owner-account/deposit - Add owner funding deposit (with purpose/allocation tracking)
+app.post('/api/owner-account/deposit', async (req, res) => {
+  const { amount, bank_id, payment_method, date, notes, receipt_image, purpose_type, purpose_target_id, purpose_notes } = req.body;
+  const userId = parseInt(req.headers['x-user-id']) || null;
+
+  const numericAmount = Number(amount);
+  if (!numericAmount || numericAmount <= 0) {
+    return res.status(400).json({ error: 'المبلغ يجب أن يكون أكبر من صفر' });
+  }
+
+  const payMethod = payment_method || (bank_id ? 'bank_transfer' : 'cash');
+
+  try {
+    const pool = getPool();
+    const result = await pool.request()
+      .input('bankId', sql.Int, bank_id || null)
+      .input('type', sql.VarChar, 'deposit')
+      .input('paymentMethod', sql.VarChar, payMethod)
+      .input('subType', sql.NVarChar, 'owner_funding')
+      .input('amount', sql.Decimal(18, 2), numericAmount)
+      .input('date', sql.DateTime, date ? new Date(date) : new Date())
+      .input('notes', sql.NVarChar, notes || 'إيداع تمويل شخصي من صاحب الشركة')
+      .input('receiptImage', sql.NVarChar, receipt_image || null)
+      .input('purposeType', sql.NVarChar, purpose_type || null)
+      .input('purposeTargetId', sql.Int, purpose_target_id || null)
+      .input('purposeNotes', sql.NVarChar, purpose_notes || null)
+      .input('status', sql.VarChar, 'approved')
+      .input('createdBy', sql.Int, userId)
+      .query(`
+        INSERT INTO transactions (
+          bank_id, type, payment_method, withdrawal_sub_type, amount, date, notes, 
+          receipt_image, purpose_type, purpose_target_id, purpose_notes, status, created_by
+        )
+        OUTPUT INSERTED.id
+        VALUES (
+          @bankId, @type, @paymentMethod, @subType, @amount, @date, @notes, 
+          @receiptImage, @purposeType, @purposeTargetId, @purposeNotes, @status, @createdBy
+        )
+      `);
+
+    const insertedId = result.recordset[0].id;
+    try {
+      await logAuditLog(req, 'إيداع تمويل من صاحب الشركة', 'transaction', insertedId, { amount: numericAmount, purpose_type, bank_id });
+    } catch (auditErr) {
+      console.error('Audit log error:', auditErr);
+    }
+
+    res.status(201).json({ message: 'تم تسجيل إيداع التمويل الشخصي بنجاح', transactionId: insertedId });
+  } catch (error) {
+    console.error('Error adding owner funding deposit:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء تسجيل إيداع تمويل المالك' });
+  }
+});
+
+// POST /api/owner-account/repay - Repay owner from safe or bank (validates repayment <= net_owed)
+app.post('/api/owner-account/repay', async (req, res) => {
+  const { amount, bank_id, payment_method, date, notes, receipt_image } = req.body;
+  const userId = parseInt(req.headers['x-user-id']) || null;
+  const userRole = req.headers['x-user-role'];
+
+  if (userRole !== 'manager') {
+    return res.status(403).json({ error: 'غير مسموح لغير المدراء بإجراء عمليات سداد لصاحب الشركة' });
+  }
+
+  const numericAmount = Number(amount);
+  if (!numericAmount || numericAmount <= 0) {
+    return res.status(400).json({ error: 'المبلغ يجب أن يكون أكبر من صفر' });
+  }
+
+  const payMethod = payment_method || (bank_id ? 'bank_transfer' : 'cash');
+
+  try {
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      // 1. Calculate current net owed to owner
+      const depRes = await transaction.request().query(`
+        SELECT ISNULL(SUM(amount), 0) AS total_deposited
+        FROM transactions WITH (UPDLOCK)
+        WHERE withdrawal_sub_type = 'owner_funding'
+          AND (status IN ('approved', 'disbursed') OR status IS NULL)
+      `);
+      const repRes = await transaction.request().query(`
+        SELECT ISNULL(SUM(amount), 0) AS total_repaid
+        FROM transactions WITH (UPDLOCK)
+        WHERE withdrawal_sub_type = 'owner_repayment'
+          AND (status IN ('approved', 'disbursed') OR status IS NULL)
+      `);
+
+      const totalDeposited = Number(depRes.recordset[0]?.total_deposited) || 0;
+      const totalRepaid = Number(repRes.recordset[0]?.total_repaid) || 0;
+      const netOwed = totalDeposited - totalRepaid;
+
+      if (numericAmount > netOwed) {
+        await transaction.rollback();
+        return res.status(400).json({
+          error: `المبلغ المطلوب سداده (${numericAmount.toLocaleString('ar-EG')} ج.م) أكبر من إجمالي مستحقات المالك الحالية (${netOwed.toLocaleString('ar-EG')} ج.م).`
+        });
+      }
+
+      // 2. Check source balance (Bank or Safe)
+      if (payMethod === 'bank_transfer') {
+        if (!bank_id) {
+          await transaction.rollback();
+          return res.status(400).json({ error: 'يرجى اختيار البنك المراد السداد منه' });
+        }
+
+        const bDepRes = await transaction.request()
+          .input('bankId', sql.Int, bank_id)
+          .query(`
+            SELECT ISNULL(SUM(CASE WHEN type = 'deposit' THEN amount ELSE 0 END), 0) AS total
+            FROM transactions WHERE bank_id = @bankId AND (status IN ('approved', 'disbursed') OR status IS NULL)
+          `);
+        const bWdRes = await transaction.request()
+          .input('bankId', sql.Int, bank_id)
+          .query(`
+            SELECT ISNULL(SUM(CASE WHEN type IN ('withdrawal', 'company_transfer') THEN amount ELSE 0 END), 0) AS total
+            FROM transactions WHERE bank_id = @bankId AND (status IN ('approved', 'disbursed') OR status IS NULL)
+          `);
+        const bankRes = await transaction.request()
+          .input('bankId', sql.Int, bank_id)
+          .query('SELECT initial_balance FROM banks WHERE id = @bankId');
+
+        const initialBal = Number(bankRes.recordset[0]?.initial_balance) || 0;
+        const currentBankBal = initialBal + Number(bDepRes.recordset[0]?.total || 0) - Number(bWdRes.recordset[0]?.total || 0);
+
+        if (currentBankBal < numericAmount) {
+          await transaction.rollback();
+          return res.status(400).json({
+            error: `رصيد البنك الحالي (${currentBankBal.toLocaleString('ar-EG')} ج.م) غير كافٍ لإتمام عملية السداد (${numericAmount.toLocaleString('ar-EG')} ج.م).`
+          });
+        }
+      } else {
+        const currentCashBalance = await getSafeCashBalance(transaction);
+        if (currentCashBalance < numericAmount) {
+          await transaction.rollback();
+          return res.status(400).json({
+            error: `رصيد الخزينة الحالي (${currentCashBalance.toLocaleString('ar-EG')} ج.م) غير كافٍ لإتمام عملية السداد (${numericAmount.toLocaleString('ar-EG')} ج.م).`
+          });
+        }
+      }
+
+      // 3. Insert repayment transaction
+      const result = await transaction.request()
+        .input('bankId', sql.Int, bank_id || null)
+        .input('type', sql.VarChar, 'withdrawal')
+        .input('paymentMethod', sql.VarChar, payMethod)
+        .input('subType', sql.NVarChar, 'owner_repayment')
+        .input('amount', sql.Decimal(18, 2), numericAmount)
+        .input('date', sql.DateTime, date ? new Date(date) : new Date())
+        .input('notes', sql.NVarChar, notes || 'سداد مستحقات لصاحب الشركة')
+        .input('receiptImage', sql.NVarChar, receipt_image || null)
+        .input('status', sql.VarChar, 'disbursed')
+        .input('createdBy', sql.Int, userId)
+        .query(`
+          INSERT INTO transactions (
+            bank_id, type, payment_method, withdrawal_sub_type, amount, date, notes, 
+            receipt_image, status, created_by
+          )
+          OUTPUT INSERTED.id
+          VALUES (
+            @bankId, @type, @paymentMethod, @subType, @amount, @date, @notes, 
+            @receiptImage, @status, @createdBy
+          )
+        `);
+
+      const insertedId = result.recordset[0].id;
+      await transaction.commit();
+
+      try {
+        await logAuditLog(req, 'سداد مستحقات صاحب الشركة', 'transaction', insertedId, { amount: numericAmount, bank_id });
+      } catch (auditErr) {
+        console.error('Audit log error:', auditErr);
+      }
+
+      res.status(201).json({ message: 'تم تسجيل سداد مستحقات صاحب الشركة بنجاح', transactionId: insertedId });
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
+  } catch (error) {
+    console.error('Error adding owner repayment:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء تسجيل سداد مستحقات المالك' });
+  }
+});
+
 // Start Database connection and then Express server
 connectDB()
   .then(async (pool) => {

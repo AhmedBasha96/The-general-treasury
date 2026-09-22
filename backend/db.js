@@ -403,6 +403,20 @@ async function createTables() {
                 ALTER TABLE transactions ADD CONSTRAINT CK_transactions_type CHECK (type IN ('deposit', 'withdrawal', 'exchange', 'company_transfer', 'bank_transfer'))
             END
         END
+
+        -- Add purpose tracking columns for owner funding / traceability if missing
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'purpose_type')
+        BEGIN
+          ALTER TABLE transactions ADD purpose_type NVARCHAR(100) NULL;
+        END
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'purpose_target_id')
+        BEGIN
+          ALTER TABLE transactions ADD purpose_target_id INT NULL;
+        END
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('transactions') AND name = 'purpose_notes')
+        BEGIN
+          ALTER TABLE transactions ADD purpose_notes NVARCHAR(MAX) NULL;
+        END
       END
     `);
 
