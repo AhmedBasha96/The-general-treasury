@@ -442,16 +442,17 @@ async function seedInitialLoans() {
   try {
     const pool = getPool();
 
-    // Check if initial loans need re-syncing to match exact Excel paid amounts
-    const checkFirstLoanPaid = await pool.request().query("SELECT (SELECT ISNULL(SUM(paid_amount), 0) FROM loan_installments WHERE loan_id = l.id AND status = 'paid') AS total_paid FROM loans l WHERE title = N'ابوظبي الاسلامي'");
-    if (checkFirstLoanPaid.recordset.length > 0 && Math.abs(Number(checkFirstLoanPaid.recordset[0].total_paid) - 223408) > 1) {
-      await pool.request().query("DELETE FROM loans WHERE title IN (N'ابوظبي الاسلامي', N'ابو ظبي فاب مصر', N'ابو ظبي فاب مصر (سامة)', N'بنك siab', N'ابوظبي فاب مصر شهاده', N'بنك القاهره', N'السيارات QNB', N'بنك الاسكان والتعمير', N'بنك siab جديد', N'فاب مصر', N'بنك المصري لتنمية الصادرات', N'كريدي اجريكول')");
-    }
+    // Reset any previously seeded installments to pending (0 paid amount) so loans start with 0 paid and full remaining
+    await pool.request().query(`
+      UPDATE loan_installments 
+      SET status = 'pending', paid_amount = 0, paid_date = NULL, payment_method = NULL, bank_id = NULL
+      WHERE status = 'paid' AND transaction_id IS NULL;
+    `);
 
     const countRes = await pool.request().query('SELECT COUNT(*) AS total FROM loans');
     if (countRes.recordset[0].total > 0) return;
 
-    console.log('Seeding initial 12 loans from image with exact paid amount distribution...');
+    console.log('Seeding initial 12 loans...');
     const loansToSeed = [
       {
         title: 'ابوظبي الاسلامي',
@@ -460,7 +461,7 @@ async function seedInitialLoans() {
         account_number: '100000861748',
         account_holder_name: 'ابراهيم',
         total_amount: 632640,
-        paid_amount: 223408,
+        paid_amount: 0,
         installment_amount: 10600,
         total_installments: 60,
         start_date: '2023-12-01',
@@ -474,7 +475,7 @@ async function seedInitialLoans() {
         account_number: '00-8190530001',
         account_holder_name: 'ابراهيم',
         total_amount: 2312640,
-        paid_amount: 161500,
+        paid_amount: 0,
         installment_amount: 32300,
         total_installments: 72,
         start_date: '2024-01-15',
@@ -488,7 +489,7 @@ async function seedInitialLoans() {
         account_number: '00/8238040001',
         account_holder_name: 'اسامه',
         total_amount: 2056500,
-        paid_amount: 139300,
+        paid_amount: 0,
         installment_amount: 34300,
         total_installments: 60,
         start_date: '2024-01-15',
@@ -502,7 +503,7 @@ async function seedInitialLoans() {
         account_number: '4120149908110040',
         account_holder_name: 'ابراهيم',
         total_amount: 2233600,
-        paid_amount: 123974,
+        paid_amount: 0,
         installment_amount: 31000,
         total_installments: 72,
         start_date: '2025-04-15',
@@ -530,7 +531,7 @@ async function seedInitialLoans() {
         account_number: '0-1954090476542',
         account_holder_name: 'ابراهيم',
         total_amount: 1392000,
-        paid_amount: 87000,
+        paid_amount: 0,
         installment_amount: 29000,
         total_installments: 48,
         start_date: '2025-01-03',
@@ -544,7 +545,7 @@ async function seedInitialLoans() {
         account_number: '',
         account_holder_name: 'ابراهيم',
         total_amount: 4000000,
-        paid_amount: 73000,
+        paid_amount: 0,
         installment_amount: 69000,
         total_installments: 58,
         start_date: '2025-01-22',
@@ -558,7 +559,7 @@ async function seedInitialLoans() {
         account_number: '0-240001398255',
         account_holder_name: 'ابراهيم',
         total_amount: 1000000,
-        paid_amount: 70000,
+        paid_amount: 0,
         installment_amount: 35000,
         total_installments: 60,
         start_date: '2025-04-13',
@@ -614,7 +615,7 @@ async function seedInitialLoans() {
         account_number: '11088180879448',
         account_holder_name: 'ابراهيم',
         total_amount: 1500000,
-        paid_amount: 51000,
+        paid_amount: 0,
         installment_amount: 50300,
         total_installments: 48,
         start_date: '2026-04-03',
@@ -644,9 +645,6 @@ async function seedInitialLoans() {
         `);
 
       const loanId = loanRes.recordset[0].id;
-
-      // Distribute paid_amount precisely across installments
-      let remainingPaidToDistribute = Number(item.paid_amount) || 0;
       const startDateObj = new Date(item.start_date);
 
       for (let i = 1; i <= item.total_installments; i++) {
@@ -654,32 +652,19 @@ async function seedInitialLoans() {
         dueDate.setMonth(dueDate.getMonth() + (i - 1));
         const dueDateStr = dueDate.toISOString().split('T')[0];
 
-        let instPaidAmt = 0;
-        let instStatus = 'pending';
-
-        if (remainingPaidToDistribute > 0) {
-          instPaidAmt = Math.min(remainingPaidToDistribute, Number(item.installment_amount));
-          remainingPaidToDistribute -= instPaidAmt;
-          instStatus = 'paid';
-        }
-
         await pool.request()
           .input('loanId', sql.Int, loanId)
           .input('instNum', sql.Int, i)
           .input('dueDate', sql.Date, dueDateStr)
           .input('amount', sql.Decimal(18, 2), item.installment_amount)
-          .input('status', sql.NVarChar, instStatus)
-          .input('paidAmount', sql.Decimal(18, 2), instPaidAmt)
-          .input('paidDate', sql.DateTime, instStatus === 'paid' ? new Date() : null)
-          .input('paymentMethod', sql.NVarChar, instStatus === 'paid' ? 'external' : null)
           .query(`
             INSERT INTO loan_installments (loan_id, installment_number, due_date, amount, status, paid_amount, paid_date, payment_method)
-            VALUES (@loanId, @instNum, @dueDate, @amount, @status, @paidAmount, @paidDate, @paymentMethod)
+            VALUES (@loanId, @instNum, @dueDate, @amount, 'pending', 0, NULL, NULL)
           `);
       }
     }
 
-    console.log('Finished seeding 12 initial loans with exact paid amounts!');
+    console.log('Finished seeding 12 initial loans starting with 0 paid amount!');
   } catch (err) {
     console.error('Error seeding initial loans:', err);
   }
